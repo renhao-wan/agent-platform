@@ -1,0 +1,155 @@
+package io.github.renhaowan.platform.agent.loop;
+
+import io.github.renhaowan.platform.agent.AgentProperties;
+import io.github.renhaowan.platform.agent.confirm.ConfirmManager;
+import io.github.renhaowan.platform.agent.context.ContextTrimmer;
+import io.github.renhaowan.platform.agent.memory.AgentSessionService;
+import io.github.renhaowan.platform.agent.memory.ChatMessage;
+import io.github.renhaowan.platform.agent.memory.TokenRecorder;
+import io.github.renhaowan.platform.agent.sse.AgentEventEmitter;
+import io.github.renhaowan.platform.agent.tool.DynamicToolRegistry;
+import io.github.renhaowan.platform.agent.tool.McpGatewayClient;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.stereotype.Service;
+
+/**
+ * ReAct 显式循环（规划 → 工具执行 → 观察 → 反思 → 回答）。
+ * 与 OpenAiPlanner 的隐式执行相反，这里每一步都被显式驱动：
+ * SSE 分阶段事件、敏感操作确认挂起、步数上限、轨迹落库全部发生在循环内。
+ */
+@Service
+public class AgentRunner {
+
+    private static final String SYSTEM_PROMPT = loadPrompt();
+
+    private final Planner planner;
+    private final DynamicToolRegistry toolRegistry;
+    private final McpGatewayClient gatewayClient;
+    private final AgentSessionService sessionService;
+    private final ContextTrimmer contextTrimmer;
+    private final ConfirmManager confirmManager;
+    private final TokenRecorder tokenRecorder;
+    private final IntentClassifier intentClassifier;
+    private final AgentProperties properties;
+
+    public AgentRunner(Planner planner, DynamicToolRegistry toolRegistry, McpGatewayClient gatewayClient,
+                       AgentSessionService sessionService, ContextTrimmer contextTrimmer,
+                       ConfirmManager confirmManager, TokenRecorder tokenRecorder,
+                       IntentClassifier intentClassifier, AgentProperties properties) {
+        this.planner = planner;
+        this.toolRegistry = toolRegistry;
+        this.gatewayClient = gatewayClient;
+        this.sessionService = sessionService;
+        this.contextTrimmer = contextTrimmer;
+        this.confirmManager = confirmManager;
+        this.tokenRecorder = tokenRecorder;
+        this.intentClassifier = intentClassifier;
+        this.properties = properties;
+    }
+
+    public void run(String sessionKey, String userText, AgentEventEmitter events) {
+        events.intent(intentClassifier.classify(userText));
+
+        List<Message> history = new ArrayList<>();
+        history.add(new SystemMessage(SYSTEM_PROMPT));
+        for (ChatMessage message : sessionService.loadHistory(sessionKey)) {
+            history.add(toSpringMessage(message));
+        }
+        history.add(new UserMessage(userText));
+        sessionService.appendMessage(sessionKey, ChatMessage.ROLE_USER, userText, null);
+
+        ContextTrimmer.TrimResult trim = contextTrimmer.trim(history);
+        history = new ArrayList<>(trim.messages());
+        if (trim.trimmed() && trim.summary() != null) {
+            sessionService.saveCheckpoint(sessionKey, trim.summary());
+        }
+
+        List<ToolCallback> tools = toolRegistry.callbacks();
+
+        for (int step = 0; step < properties.getMaxSteps(); step++) {
+            ChatResponse response = planner.decide(history, tools);
+            var usage = response.getMetadata() == null ? null : response.getMetadata().getUsage();
+            tokenRecorder.record(sessionKey, "decide",
+                    response.getMetadata() == null ? "unknown" : "openai-compatible",
+                    usage == null ? 0 : usage.getPromptTokens(),
+                    usage == null ? 0 : usage.getCompletionTokens());
+
+            AssistantMessage output = response.getResult() == null ? null : response.getResult().getOutput();
+            if (output == null) {
+                events.error("model returned empty response");
+                events.done();
+                return;
+            }
+
+            if (!output.hasToolCalls()) {
+                String answer = output.getText() == null ? "" : output.getText();
+                events.answer(answer);
+                sessionService.appendMessage(sessionKey, ChatMessage.ROLE_ASSISTANT, answer, null);
+                events.done();
+                return;
+            }
+
+            List<AssistantMessage.ToolCall> calls = output.getToolCalls();
+            if (step == 0) {
+                events.plan(calls.stream().map(AssistantMessage.ToolCall::name).toList());
+            }
+            history.add(output);
+
+            List<ToolResponseMessage.ToolResponse> responses = new ArrayList<>();
+            for (AssistantMessage.ToolCall call : calls) {
+                boolean approved = true;
+                if (toolRegistry.requireConfirm(call.name())) {
+                    String token = confirmManager.request(sessionKey, call.name(), call.arguments());
+                    events.confirmRequest(token, "即将执行敏感操作：" + call.name() + "，请确认");
+                    approved = Boolean.TRUE.equals(confirmManager.await(token, properties.getConfirmTimeoutSeconds()));
+                }
+
+                String resultText;
+                if (!approved) {
+                    resultText = "用户拒绝了该操作";
+                } else {
+                    events.toolCall(call.name(), call.arguments() == null ? "{}" : call.arguments());
+                    resultText = gatewayClient.callTool(call.name(), call.arguments());
+                    events.toolResult(call.name(), summarize(resultText));
+                }
+                responses.add(new ToolResponseMessage.ToolResponse(call.id(), call.name(), resultText));
+                sessionService.appendMessage(sessionKey, ChatMessage.ROLE_TOOL, resultText, call.name());
+            }
+            history.add(ToolResponseMessage.builder().responses(responses).build());
+        }
+
+        events.error("已达最大推理步数 " + properties.getMaxSteps() + "，对话终止");
+        events.done();
+    }
+
+    private String summarize(String resultText) {
+        String flat = resultText.replaceAll("\\s+", " ").trim();
+        return flat.length() <= 120 ? flat : flat.substring(0, 120) + "…";
+    }
+
+    private Message toSpringMessage(ChatMessage message) {
+        return switch (message.getRole()) {
+            case ChatMessage.ROLE_USER -> new UserMessage(message.getContent());
+            case ChatMessage.ROLE_ASSISTANT -> new AssistantMessage(message.getContent());
+            default -> new SystemMessage("工具 " + message.getToolName() + " 结果：" + message.getContent());
+        };
+    }
+
+    private static String loadPrompt() {
+        try {
+            return new String(AgentRunner.class.getResourceAsStream("/prompts/system.md")
+                    .readAllBytes(), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            throw new IllegalStateException("system prompt missing", e);
+        }
+    }
+}

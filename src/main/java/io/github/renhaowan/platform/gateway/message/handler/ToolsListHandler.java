@@ -42,6 +42,8 @@ public class ToolsListHandler implements MessageHandler {
             node.put("name", tool.getName());
             node.put("description", tool.getDescription() == null ? "" : tool.getDescription());
             node.set("inputSchema", parseSchema(tool.getInputSchema()));
+            // 平台扩展字段（非 MCP 规范）：敏感工具标记，Agent 侧据此触发人工确认
+            node.put("x-require-confirm", tool.getRequireConfirm() != null && tool.getRequireConfirm() == 1);
         }
         return JsonRpcResponse.success(request.id(), result);
     }

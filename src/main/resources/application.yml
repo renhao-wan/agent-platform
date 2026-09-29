@@ -4,6 +4,14 @@ server:
 spring:
   application:
     name: agent-platform
+  ai:
+    openai:
+      base-url: ${LLM_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      api-key: ${LLM_API_KEY:missing-key}
+      model: ${LLM_MODEL:qwen-plus}
+      chat:
+        options:
+          temperature: 0.2
   datasource:
     url: jdbc:mysql://localhost:3306/agent_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: ${MYSQL_USERNAME:root}
@@ -26,3 +34,10 @@ platform:
     instance-id: ${INSTANCE_ID:local-1}
     rate-limit:
       permits-per-minute: 60
+  agent:
+    gateway-base-url: ${GATEWAY_BASE_URL:http://localhost:8000}
+    gateway-id: ${AGENT_GATEWAY_ID:gw1}
+    gateway-api-key: ${GATEWAY_API_KEY:}
+    max-steps: 8
+    context-threshold: 6000
+    confirm-timeout-seconds: 300
