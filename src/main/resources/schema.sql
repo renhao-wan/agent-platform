@@ -21,3 +21,20 @@ CREATE TABLE IF NOT EXISTS gateway_session (
     expired_at DATETIME    NULL,
     UNIQUE KEY uk_session_key (session_key)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'MCP 网关会话审计';
+
+-- M1.6：工具注册表（OpenAPI 导入产物，Agent 经 tools.list 发现）
+CREATE TABLE IF NOT EXISTS tool_definition (
+    id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id    BIGINT       NOT NULL,
+    gateway_id   VARCHAR(64)  NOT NULL,
+    name         VARCHAR(128) NOT NULL,
+    description  VARCHAR(512) NULL,
+    http_method  VARCHAR(8)   NOT NULL,
+    url_template VARCHAR(512) NOT NULL,
+    input_schema JSON         NULL,
+    sensitive    TINYINT      NOT NULL DEFAULT 0,
+    enabled      TINYINT      NOT NULL DEFAULT 1,
+    created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   DATETIME     NULL,
+    UNIQUE KEY uk_gw_name (gateway_id, name)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'MCP 网关工具定义';

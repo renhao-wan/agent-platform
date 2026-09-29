@@ -33,7 +33,7 @@ public class ApiKeyFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        if (!MCP_PATH.matcher(request.getRequestURI()).matches()) {
+        if (!requiresAuth(request.getRequestURI())) {
             chain.doFilter(request, response);
             return;
         }
@@ -65,5 +65,16 @@ public class ApiKeyFilter extends OncePerRequestFilter {
         } finally {
             TenantContext.clear();
         }
+    }
+
+    /**
+     * 鉴权范围：MCP 端点（/{gw}/mcp/**）与租户级管理端点（/admin/tools、/admin/protocols）。
+     * /admin/tenants 是租户自助开通入口，保持开放。
+     */
+    static boolean requiresAuth(String uri) {
+        if (MCP_PATH.matcher(uri).matches()) {
+            return true;
+        }
+        return uri.startsWith("/admin/") && !uri.startsWith("/admin/tenants");
     }
 }

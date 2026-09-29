@@ -29,6 +29,9 @@ class ApiKeyFilterTest {
     @MockitoBean
     private TenantMapper tenantMapper;
 
+    @MockitoBean
+    private io.github.renhaowan.platform.gateway.registry.ToolDefinitionMapper toolDefinitionMapper;
+
     @Test
     void missingApiKeyRejectedWith401() throws Exception {
         mockMvc.perform(get("/demo-gateway/mcp/sse"))
@@ -61,9 +64,28 @@ class ApiKeyFilterTest {
     }
 
     @Test
-    void adminEndpointsSkipApiKeyFilter() throws Exception {
-        // /admin/** 不在鉴权范围：TenantAdminController 存在，返回 200 而非 401
+    void adminTenantsOpenWithoutKey() throws Exception {
+        // /admin/tenants 是租户自助开通入口，保持开放
         mockMvc.perform(get("/admin/tenants"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void adminToolEndpointsRequireApiKey() throws Exception {
+        mockMvc.perform(get("/admin/tools").param("gatewayId", "gw1"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void adminToolEndpointsPassWithValidKey() throws Exception {
+        Tenant tenant = new Tenant();
+        tenant.setId(1L);
+        tenant.setName("demo");
+        tenant.setApiKey("valid-key");
+        tenant.setStatus(Tenant.STATUS_ENABLED);
+        when(tenantMapper.selectOne(any())).thenReturn(tenant);
+
+        mockMvc.perform(get("/admin/tools").param("gatewayId", "gw1").header("X-Api-Key", "valid-key"))
                 .andExpect(status().isOk());
     }
 }
