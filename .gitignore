@@ -1,0 +1,25 @@
+# Build
+target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# Logs
+logs/
+*.log
+
+# Local secrets (never commit)
+application-local.yml
+.env
+
+# OS
+.DS_Store
+Thumbs.db
