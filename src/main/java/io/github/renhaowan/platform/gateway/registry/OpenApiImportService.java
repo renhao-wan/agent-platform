@@ -76,6 +76,12 @@ public class OpenApiImportService {
         tool.setHttpMethod(method.toUpperCase());
         tool.setUrlTemplate(join(baseUrl, path));
         tool.setRequireConfirm("DELETE".equalsIgnoreCase(tool.getHttpMethod()) ? 1 : 0);
+        // 敏感规则扩展：取消类操作（取消/退订/cancel）即使不是 DELETE 也需人工确认
+        String sensitiveText = (operation.path("summary").asText() + " " + operation.path("description").asText())
+                .toLowerCase();
+        if (sensitiveText.contains("取消") || sensitiveText.contains("退订") || sensitiveText.contains("cancel")) {
+            tool.setRequireConfirm(1);
+        }
         tool.setEnabled(1);
         tool.setInputSchema(buildInputSchema(operation).toString());
         tool.setCreatedAt(LocalDateTime.now());

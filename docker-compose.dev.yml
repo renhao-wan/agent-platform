@@ -11,6 +11,8 @@ services:
       - "3307:3306"
     volumes:
       - mysql-data:/var/lib/mysql
+      # meeting-booking 业务库初始化（仅首次空数据目录时执行）
+      - ../meeting-booking/docker/mysql-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-uroot", "-proot"]
       interval: 5s

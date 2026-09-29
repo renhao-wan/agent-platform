@@ -65,6 +65,9 @@ public class GenericHttpForwarder {
                 spec.contentType(MediaType.APPLICATION_JSON)
                         .body(remaining.toString().getBytes(StandardCharsets.UTF_8));
             }
+            if (tool.getAuthHeaderName() != null && !tool.getAuthHeaderName().isBlank()) {
+                spec.header(tool.getAuthHeaderName(), tool.getAuthHeaderValue() == null ? "" : tool.getAuthHeaderValue());
+            }
 
             return spec.exchange((request, response) -> {
                 int status = response.getStatusCode().value();

@@ -30,6 +30,12 @@ public class ToolDefinition {
 
     private Integer enabled;
 
+    /** 转发时附带的服务凭证 header 名（如 X-Service-Key），导入时配置 */
+    private String authHeaderName;
+
+    /** 转发时附带的服务凭证 header 值 */
+    private String authHeaderValue;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
@@ -88,6 +94,22 @@ public class ToolDefinition {
 
     public void setUrlTemplate(String urlTemplate) {
         this.urlTemplate = urlTemplate;
+    }
+
+    public String getAuthHeaderName() {
+        return authHeaderName;
+    }
+
+    public void setAuthHeaderName(String authHeaderName) {
+        this.authHeaderName = authHeaderName;
+    }
+
+    public String getAuthHeaderValue() {
+        return authHeaderValue;
+    }
+
+    public void setAuthHeaderValue(String authHeaderValue) {
+        this.authHeaderValue = authHeaderValue;
     }
 
     public String getInputSchema() {

@@ -77,3 +77,8 @@ CREATE TABLE IF NOT EXISTS llm_usage (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_usage_session (session_key)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'LLM 用量打点';
+
+-- M3.6：工具级服务凭证（网关转发时自动附带，解决"业务接口自身有鉴权"的接入问题）
+ALTER TABLE tool_definition
+    ADD COLUMN auth_header_name  VARCHAR(64)  NULL AFTER input_schema,
+    ADD COLUMN auth_header_value VARCHAR(256) NULL AFTER auth_header_name;

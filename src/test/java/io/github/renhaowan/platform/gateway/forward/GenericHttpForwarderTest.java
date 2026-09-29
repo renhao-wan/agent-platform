@@ -119,4 +119,24 @@ class GenericHttpForwarderTest {
         assertThat(result.success()).isFalse();
         assertThat(result.error()).isNotBlank();
     }
+
+    @Test
+    void authHeaderAttachedWhenConfigured() {
+        AtomicReference<String> receivedKey = new AtomicReference<>();
+        server.createContext("/secure", exchange -> {
+            receivedKey.set(exchange.getRequestHeaders().getFirst("X-Service-Key"));
+            byte[] body = "{\"ok\":true}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        ToolDefinition secureTool = tool("GET", "http://localhost:" + port + "/secure");
+        secureTool.setAuthHeaderName("X-Service-Key");
+        secureTool.setAuthHeaderValue("booking-service-key");
+
+        var result = forwarder.forward(secureTool, null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(receivedKey.get()).isEqualTo("booking-service-key");
+    }
 }

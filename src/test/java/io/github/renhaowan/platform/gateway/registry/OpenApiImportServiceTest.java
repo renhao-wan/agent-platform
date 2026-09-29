@@ -98,6 +98,19 @@ class OpenApiImportServiceTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void cancelLikeOperationsMarkedSensitiveEvenIfNotDelete() {
+        String openapi = """
+                {"openapi":"3.0.0","servers":[{"url":"http://h"}],
+                 "paths":{"/api/v1/bookings/{id}/cancel":{"post":{"summary":"取消指定预订",
+                   "parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"integer"}}]}}}}
+                """;
+        var tools = service.parse("gw1", 7L, openapi, null);
+
+        assertThat(tools.get(0).getHttpMethod()).isEqualTo("POST");
+        assertThat(tools.get(0).getRequireConfirm()).isEqualTo(1);
+    }
+
     private JsonNode json(String raw) {
         try {
             return new com.fasterxml.jackson.databind.ObjectMapper().readTree(raw);
