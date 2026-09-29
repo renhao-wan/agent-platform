@@ -54,7 +54,7 @@ class OpenApiImportServiceTest {
         assertThat(search.getName()).isEqualTo("search_rooms");
         assertThat(search.getHttpMethod()).isEqualTo("GET");
         assertThat(search.getUrlTemplate()).isEqualTo("http://localhost:8090/api/v1/rooms");
-        assertThat(search.getSensitive()).isZero();
+        assertThat(search.getRequireConfirm()).isZero();
         JsonNode schema = json(search.getInputSchema());
         assertThat(schema.get("properties").get("date").get("type").asText()).isEqualTo("string");
         assertThat(schema.get("required").toString()).contains("date");
@@ -69,7 +69,7 @@ class OpenApiImportServiceTest {
         ToolDefinition cancel = tools.get(2);
         assertThat(cancel.getHttpMethod()).isEqualTo("DELETE");
         assertThat(cancel.getUrlTemplate()).isEqualTo("http://localhost:8090/api/v1/bookings/{id}");
-        assertThat(cancel.getSensitive()).isEqualTo(1);
+        assertThat(cancel.getRequireConfirm()).isEqualTo(1);
     }
 
     @Test

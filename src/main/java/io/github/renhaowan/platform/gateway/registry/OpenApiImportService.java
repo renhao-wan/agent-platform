@@ -75,7 +75,7 @@ public class OpenApiImportService {
                 method.toUpperCase() + " " + path));
         tool.setHttpMethod(method.toUpperCase());
         tool.setUrlTemplate(join(baseUrl, path));
-        tool.setSensitive("DELETE".equalsIgnoreCase(tool.getHttpMethod()) ? 1 : 0);
+        tool.setRequireConfirm("DELETE".equalsIgnoreCase(tool.getHttpMethod()) ? 1 : 0);
         tool.setEnabled(1);
         tool.setInputSchema(buildInputSchema(operation).toString());
         tool.setCreatedAt(LocalDateTime.now());

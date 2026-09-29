@@ -1,0 +1,1 @@
+{"gatewayId":"gw1","openapi":"{\"openapi\":\"3.0.0\",\"servers\":[{\"url\":\"http://localhost:8000\"}],\"paths\":{\"/ping\":{\"get\":{\"operationId\":\"service_ping\",\"summary\":\"检查平台服务健康状态\"}}}}"}

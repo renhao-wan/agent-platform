@@ -25,11 +25,11 @@ public class ProtocolAdminController {
     }
 
     public record ToolView(Long id, String name, String description, String httpMethod,
-                           String urlTemplate, boolean sensitive) {
+                           String urlTemplate, boolean requireConfirm) {
 
         public static ToolView of(ToolDefinition t) {
             return new ToolView(t.getId(), t.getName(), t.getDescription(),
-                    t.getHttpMethod(), t.getUrlTemplate(), t.getSensitive() != null && t.getSensitive() == 1);
+                    t.getHttpMethod(), t.getUrlTemplate(), t.getRequireConfirm() != null && t.getRequireConfirm() == 1);
         }
     }
 

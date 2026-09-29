@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS tool_definition (
     http_method  VARCHAR(8)   NOT NULL,
     url_template VARCHAR(512) NOT NULL,
     input_schema JSON         NULL,
-    sensitive    TINYINT      NOT NULL DEFAULT 0,
+    require_confirm TINYINT   NOT NULL DEFAULT 0,
     enabled      TINYINT      NOT NULL DEFAULT 1,
     created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at   DATETIME     NULL,

@@ -26,7 +26,7 @@ public class ToolDefinition {
     /** MCP inputSchema（JSON 字符串） */
     private String inputSchema;
 
-    private Integer sensitive;
+    private Integer requireConfirm;
 
     private Integer enabled;
 
@@ -98,12 +98,12 @@ public class ToolDefinition {
         this.inputSchema = inputSchema;
     }
 
-    public Integer getSensitive() {
-        return sensitive;
+    public Integer getRequireConfirm() {
+        return requireConfirm;
     }
 
-    public void setSensitive(Integer sensitive) {
-        this.sensitive = sensitive;
+    public void setRequireConfirm(Integer requireConfirm) {
+        this.requireConfirm = requireConfirm;
     }
 
     public Integer getEnabled() {
