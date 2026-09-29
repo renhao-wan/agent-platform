@@ -88,7 +88,7 @@ public class McpGatewayClient {
             spec = spec.header(SESSION_HEADER, sessionId);
         }
         try {
-            return spec.retrieve().toEntity(String.class);
+            return spec.body(body).retrieve().toEntity(String.class);
         } catch (RestClientResponseException e) {
             if (e.getStatusCode().value() == 400) {
                 throw new GatewaySessionExpiredException();

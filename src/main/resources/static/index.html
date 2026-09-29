@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 预订助手 · 会议预约</title>
+<style>
+  :root { --bg:#0f1419; --panel:#1a2129; --line:#2a3441; --text:#e6e9ee; --muted:#8b98a9; --accent:#4c8dff; --ok:#3fb27f; --warn:#e0a83f; }
+  * { box-sizing:border-box; margin:0; }
+  body { background:var(--bg); color:var(--text); font:14px/1.6 "Microsoft YaHei",system-ui,sans-serif; display:flex; flex-direction:column; height:100vh; }
+  header { padding:14px 20px; border-bottom:1px solid var(--line); font-weight:600; }
+  header small { color:var(--muted); font-weight:400; margin-left:10px; }
+  #log { flex:1; overflow-y:auto; padding:16px 20px; display:flex; flex-direction:column; gap:8px; }
+  .evt { padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--panel); max-width:860px; }
+  .evt .tag { display:inline-block; font-size:11px; color:var(--muted); margin-right:8px; min-width:88px; }
+  .evt.answer { border-color:var(--ok); }
+  .evt.error  { border-color:#d05b5b; }
+  .evt.confirm_request { border-color:var(--warn); }
+  .evt.user { background:transparent; border-style:dashed; align-self:flex-end; }
+  #confirm-bar { padding:10px 20px; background:#2a2415; border-top:1px solid var(--warn); }
+  #confirm-bar button { margin-right:10px; padding:6px 18px; border:0; border-radius:6px; cursor:pointer; }
+  #btn-approve { background:var(--ok); color:#fff; }
+  #btn-reject  { background:#555; color:#fff; }
+  form { display:flex; gap:10px; padding:14px 20px; border-top:1px solid var(--line); }
+  input { flex:1; padding:10px 14px; border-radius:8px; border:1px solid var(--line); background:var(--panel); color:var(--text); }
+  button.send { padding:10px 24px; border:0; border-radius:8px; background:var(--accent); color:#fff; cursor:pointer; }
+</style>
+</head>
+<body>
+<header>AI 业务助手 · 会议预约 <small>ReAct 运行时 + 自研 MCP 工具网关</small></header>
+<div id="log"></div>
+<div id="confirm-bar" hidden>
+  <span id="confirm-text"></span>
+  <button id="btn-approve" onclick="confirmAction(true)">✅ 同意执行</button>
+  <button id="btn-reject" onclick="confirmAction(false)">❌ 拒绝</button>
+</div>
+<form id="chat-form">
+  <input id="message" placeholder="例如：帮我订周三下午两点、能坐 8 个人的会议室" autocomplete="off">
+  <button class="send" type="submit">发送</button>
+</form>
+<script>
+const logEl = document.getElementById('log');
+let sessionKey = null;
+let pendingToken = null;
+const TAGS = { user:'我', session:'会话', intent:'意图', plan:'计划', tool_call:'调用工具',
+  tool_result:'工具结果', confirm_request:'待确认', answer:'助手', error:'错误', done:'完成' };
+
+function addEvent(type, text) {
+  const div = document.createElement('div');
+  div.className = 'evt ' + type;
+  div.innerHTML = '<span class="tag">' + (TAGS[type] || type) + '</span>' +
+    (text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function handle(event, data) {
+  switch (event) {
+    case 'session': sessionKey = data.sessionKey; addEvent('session', '会话 ' + sessionKey.slice(0,8) + '…'); break;
+    case 'intent': addEvent('intent', data.label); break;
+    case 'plan': addEvent('plan', (data.steps || []).map((s,i)=>(i+1)+'. '+s).join('　')); break;
+    case 'tool_call': addEvent('tool_call', data.tool + ' ' + data.arguments); break;
+    case 'tool_result': addEvent('tool_result', data.tool + ' → ' + data.summary); break;
+    case 'confirm_request':
+      pendingToken = data.confirmToken;
+      document.getElementById('confirm-text').textContent = data.message;
+      document.getElementById('confirm-bar').hidden = false;
+      addEvent('confirm_request', data.message); break;
+    case 'answer': addEvent('answer', data.content); break;
+    case 'error': addEvent('error', data.message); break;
+    case 'done': addEvent('done', '——'); break;
+  }
+}
+
+async function confirmAction(approved) {
+  if (!pendingToken) return;
+  await fetch('/api/v1/confirm', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ confirmToken: pendingToken, approved }) });
+  addEvent('user', approved ? '✅ 已同意执行' : '❌ 已拒绝');
+  pendingToken = null;
+  document.getElementById('confirm-bar').hidden = true;
+}
+
+document.getElementById('chat-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = document.getElementById('message');
+  const message = input.value.trim();
+  if (!message) return;
+  input.value = '';
+  addEvent('user', message);
+
+  const resp = await fetch('/api/v1/chat', { method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ sessionKey, message }) });
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream:true });
+    const blocks = buffer.split('\n\n');
+    buffer = blocks.pop();
+    for (const block of blocks) {
+      let event = 'message', data = '';
+      for (const line of block.split('\n')) {
+        if (line.startsWith('event:')) event = line.slice(6).trim();
+        else if (line.startsWith('data:')) data += line.slice(5).trim();
+      }
+      if (data) { try { handle(event, JSON.parse(data)); } catch (err) { /* 忽略非 JSON 帧 */ } }
+    }
+  }
+});
+</script>
+</body>
+</html>
