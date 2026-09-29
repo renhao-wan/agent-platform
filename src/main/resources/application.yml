@@ -23,5 +23,6 @@ mybatis-plus:
 
 platform:
   gateway:
+    instance-id: ${INSTANCE_ID:local-1}
     rate-limit:
       permits-per-minute: 60

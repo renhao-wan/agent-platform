@@ -47,7 +47,7 @@ class ApiKeyFilterTest {
     }
 
     @Test
-    void validApiKeyPassesAuthAndReachesRouting() throws Exception {
+    void validApiKeyPassesAuthAndReachesSseEndpoint() throws Exception {
         Tenant tenant = new Tenant();
         tenant.setId(1L);
         tenant.setName("demo");
@@ -55,9 +55,9 @@ class ApiKeyFilterTest {
         tenant.setStatus(Tenant.STATUS_ENABLED);
         when(tenantMapper.selectOne(any())).thenReturn(tenant);
 
-        // M1.2 尚无 MCP 控制器：通过鉴权后表现为 404（路由不存在）而非 401
+        // 通过鉴权后到达 SSE 端点：返回 200（异步建立），而非 401
         mockMvc.perform(get("/demo-gateway/mcp/sse").header("X-Api-Key", "valid-key"))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk());
     }
 
     @Test

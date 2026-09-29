@@ -8,3 +8,16 @@ CREATE TABLE IF NOT EXISTS tenant (
     created_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uk_api_key (api_key)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'MCP 网关租户';
+
+-- M1.3：MCP 网关会话（审计轨迹；会话体在 Redis，TTL 30 分钟滑动）
+CREATE TABLE IF NOT EXISTS gateway_session (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    session_key CHAR(36)   NOT NULL,
+    tenant_id  BIGINT      NOT NULL,
+    gateway_id VARCHAR(64) NOT NULL,
+    transport  VARCHAR(16) NOT NULL COMMENT 'SSE / STREAMABLE',
+    instance_id VARCHAR(64) NOT NULL,
+    created_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expired_at DATETIME    NULL,
+    UNIQUE KEY uk_session_key (session_key)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'MCP 网关会话审计';

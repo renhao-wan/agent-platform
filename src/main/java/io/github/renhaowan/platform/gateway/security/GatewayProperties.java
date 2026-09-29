@@ -5,7 +5,17 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "platform.gateway")
 public class GatewayProperties {
 
+    private String instanceId = "local-1";
+
     private RateLimit rateLimit = new RateLimit();
+
+    public String getInstanceId() {
+        return instanceId;
+    }
+
+    public void setInstanceId(String instanceId) {
+        this.instanceId = instanceId;
+    }
 
     public RateLimit getRateLimit() {
         return rateLimit;
