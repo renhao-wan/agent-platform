@@ -81,4 +81,15 @@ public class SseConnectionRegistry {
     public void unregister(String sessionKey) {
         emitters.remove(sessionKey);
     }
+
+    /** 结束并移除连接（会话终止时调用）。 */
+    public void complete(String sessionKey) {
+        SseEmitter emitter = emitters.remove(sessionKey);
+        if (emitter != null) {
+            try {
+                emitter.complete();
+            } catch (Exception ignored) {
+            }
+        }
+    }
 }
