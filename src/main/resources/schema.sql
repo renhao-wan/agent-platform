@@ -78,7 +78,8 @@ CREATE TABLE IF NOT EXISTS llm_usage (
     INDEX idx_usage_session (session_key)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'LLM 用量打点';
 
--- M3.6：工具级服务凭证（网关转发时自动附带，解决"业务接口自身有鉴权"的接入问题）
-ALTER TABLE tool_definition
-    ADD COLUMN auth_header_name  VARCHAR(64)  NULL AFTER input_schema,
-    ADD COLUMN auth_header_value VARCHAR(256) NULL AFTER auth_header_name;
+-- M3.6：工具级服务凭证（幂等：information_schema 守卫，已存在则跳过）
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS 
+  WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_definition' AND COLUMN_NAME='auth_header_name');
+SET @ddl = IF(@col_exists = 0, 'ALTER TABLE tool_definition ADD COLUMN auth_header_name VARCHAR(64) NULL AFTER input_schema, ADD COLUMN auth_header_value VARCHAR(256) NULL AFTER auth_header_name', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;

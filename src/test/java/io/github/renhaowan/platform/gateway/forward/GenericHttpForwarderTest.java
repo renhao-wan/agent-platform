@@ -139,4 +139,18 @@ class GenericHttpForwarderTest {
         assertThat(result.success()).isTrue();
         assertThat(receivedKey.get()).isEqualTo("booking-service-key");
     }
+
+    @Test
+    void bodyWrapperUnwrappedWhenSchemaDeclaresBodyProperty() throws Exception {
+        ToolDefinition wrapped = tool("POST", "http://localhost:" + port + "/echo");
+        wrapped.setInputSchema("{\"type\":\"object\",\"properties\":{\"body\":{"
+                + "\"type\":\"object\",\"properties\":{\"roomId\":{\"type\":\"integer\"}}}}}");
+
+        var result = forwarder.forward(wrapped,
+                args("{\"body\":{\"roomId\":2,\"title\":\"周会\"}}"));
+
+        assertThat(result.success()).isTrue();
+        assertThat(lastBody.get()).contains("\"roomId\":2").contains("周会");
+        assertThat(lastBody.get()).doesNotContain("\"body\"");
+    }
 }

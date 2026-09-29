@@ -50,6 +50,14 @@ public class GenericHttpForwarder {
             String url = fillTemplate(tool.getUrlTemplate(), pathValues);
             JsonNode remaining = without(arguments, pathValues.keySet());
 
+            // 导入规则将 requestBody 包在 inputSchema.properties.body 下：
+            // 转发时自动解包——body 属性作为 HTTP 请求体，其余顶层参数按方法拼 query
+            boolean hasBodyWrapper = hasBodyWrapper(tool) && remaining != null && remaining.hasNonNull("body");
+            JsonNode httpBody = hasBodyWrapper ? remaining.get("body") : remaining;
+            if (hasBodyWrapper) {
+                ((ObjectNode) remaining).remove("body");
+            }
+
             boolean bodyAllowed = "POST".equals(tool.getHttpMethod())
                     || "PUT".equals(tool.getHttpMethod())
                     || "PATCH".equals(tool.getHttpMethod());
@@ -61,9 +69,9 @@ public class GenericHttpForwarder {
                     .method(HttpMethod.valueOf(tool.getHttpMethod()))
                     .uri(URI.create(url))
                     .accept(MediaType.APPLICATION_JSON);
-            if (bodyAllowed && remaining != null && remaining.size() > 0) {
+            if (bodyAllowed && httpBody != null && httpBody.size() > 0) {
                 spec.contentType(MediaType.APPLICATION_JSON)
-                        .body(remaining.toString().getBytes(StandardCharsets.UTF_8));
+                        .body(httpBody.toString().getBytes(StandardCharsets.UTF_8));
             }
             if (tool.getAuthHeaderName() != null && !tool.getAuthHeaderName().isBlank()) {
                 spec.header(tool.getAuthHeaderName(), tool.getAuthHeaderValue() == null ? "" : tool.getAuthHeaderValue());
@@ -78,6 +86,16 @@ public class GenericHttpForwarder {
             });
         } catch (Exception e) {
             return new ForwardResult(false, 0, null, e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
+    }
+
+    /** 判断工具的 inputSchema 是否采用 body 包装（导入规则：requestBody → properties.body）。 */
+    private boolean hasBodyWrapper(ToolDefinition tool) {
+        try {
+            JsonNode schema = new ObjectMapper().readTree(tool.getInputSchema() == null ? "{}" : tool.getInputSchema());
+            return schema.path("properties").has("body");
+        } catch (Exception e) {
+            return false;
         }
     }
 
