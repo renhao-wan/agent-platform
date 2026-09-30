@@ -66,9 +66,10 @@ open http://localhost:8000/
 
 | 指标 | 数值 | 方法 |
 |---|---|---|
-| 上下文裁剪 Token 节省 | 待 M4 实验填充 | 开/关裁剪各 50 轮，usage 字段对比 |
-| SSE 并发长连接 | 待 M4 压测填充 | JMeter 线程组，P99 + 线程池水位 |
-| 限流精度 | 60 次/分钟 ±0（60 放行 + 5 拒绝 实测） | Redisson RRateLimiter 真实 Redis 验证 |
+| SSE 并发长连接 | **40 并发 200/200，P50 1.03s / P95 1.32s / P99 1.35s**（分位差 <330ms，无线程饥饿） | 并发压测，每请求含：MySQL 会话落库 + MCP 自环 tools/list + 上游调用与错误事件回传（`docs/load/sse-bash-load.sh`） |
+| 限流精度 | **60 次/分钟精确生效（60 放行 + 5×429 实测）** | Redisson RRateLimiter，真实 Redis，越界请求全部 429 |
+| Token 裁剪收益 | 实验脚本就绪（`docs/experiment-token.sh`，12 轮对话开/关对比 + `llm_usage` 打点），因测试账户额度中断待补测 | usage 字段全量打点 |
+| 敏感操作确认 | confirm_request → 人工授权 → 执行 → CANCELLED 全链路实测 | LLM 驱动 cancel 工具的真实会话 |
 
 ## 技术栈
 
