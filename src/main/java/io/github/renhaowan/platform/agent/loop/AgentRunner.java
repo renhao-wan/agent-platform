@@ -60,7 +60,7 @@ public class AgentRunner {
         events.intent(intentClassifier.classify(userText));
 
         List<Message> history = new ArrayList<>();
-        history.add(new SystemMessage(SYSTEM_PROMPT));
+        history.add(new SystemMessage(resolveSystemPrompt()));
         for (ChatMessage message : sessionService.loadHistory(sessionKey)) {
             history.add(toSpringMessage(message));
         }
@@ -129,6 +129,22 @@ public class AgentRunner {
 
         events.error("已达最大推理步数 " + properties.getMaxSteps() + "，对话终止");
         events.done();
+    }
+
+    private String resolveSystemPrompt() {
+        java.time.LocalDate today = java.time.LocalDate.now();
+        String weekday = switch (today.getDayOfWeek()) {
+            case MONDAY -> "一";
+            case TUESDAY -> "二";
+            case WEDNESDAY -> "三";
+            case THURSDAY -> "四";
+            case FRIDAY -> "五";
+            case SATURDAY -> "六";
+            case SUNDAY -> "日";
+        };
+        return SYSTEM_PROMPT
+                .replace("{{CURRENT_DATE}}", today.toString())
+                .replace("{{CURRENT_WEEKDAY}}", weekday);
     }
 
     private String summarize(String resultText) {

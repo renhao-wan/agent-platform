@@ -8,9 +8,9 @@ spring:
     openai:
       base-url: ${LLM_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
       api-key: ${LLM_API_KEY:missing-key}
-      model: ${LLM_MODEL:qwen-plus}
       chat:
         options:
+          model: ${LLM_MODEL:qwen-plus}
           temperature: 0.2
   datasource:
     url: jdbc:mysql://localhost:3306/agent_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
