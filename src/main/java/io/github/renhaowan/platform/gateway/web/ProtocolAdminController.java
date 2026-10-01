@@ -7,6 +7,7 @@ import io.github.renhaowan.platform.gateway.security.TenantContext;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 协议导入与工具查询（管理端）。
  */
+@RequiredArgsConstructor
 @RestController
 @RequestMapping("/admin")
 public class ProtocolAdminController {
@@ -39,11 +41,6 @@ public class ProtocolAdminController {
 
     private final OpenApiImportService importService;
     private final ToolRegistryService registryService;
-
-    public ProtocolAdminController(OpenApiImportService importService, ToolRegistryService registryService) {
-        this.importService = importService;
-        this.registryService = registryService;
-    }
 
     @PostMapping("/protocols/import")
     public ImportResult importProtocols(@RequestBody @Valid ImportRequest request) {

@@ -7,12 +7,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
  * 租户查询与管理。api_key 查询走 60s 本地缓存（MCP 端点每请求都需鉴权，
  * 租户数据量小且变更低频，本地缓存比每次打库/打 Redis 更合适）。
  */
+@RequiredArgsConstructor
 @Service
 public class TenantService {
 
@@ -20,10 +22,6 @@ public class TenantService {
 
     private final TenantMapper tenantMapper;
     private final Map<String, CachedTenant> cacheByKey = new ConcurrentHashMap<>();
-
-    public TenantService(TenantMapper tenantMapper) {
-        this.tenantMapper = tenantMapper;
-    }
 
     public Optional<Tenant> findByApiKey(String apiKey) {
         long now = System.currentTimeMillis();

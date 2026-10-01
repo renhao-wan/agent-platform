@@ -3,24 +3,19 @@ package io.github.renhaowan.platform.agent.memory;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import jakarta.annotation.PreDestroy;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
  * Agent 会话存储：消息历史按 sessionKey 聚合，写入即落库（服务重启不丢对话）。
  */
+@RequiredArgsConstructor
 @Service
 public class AgentSessionService {
 
     private final ChatSessionMapper sessionMapper;
     private final ChatMessageMapper messageMapper;
     private final CheckpointMapper checkpointMapper;
-
-    public AgentSessionService(ChatSessionMapper sessionMapper, ChatMessageMapper messageMapper,
-                               CheckpointMapper checkpointMapper) {
-        this.sessionMapper = sessionMapper;
-        this.messageMapper = messageMapper;
-        this.checkpointMapper = checkpointMapper;
-    }
 
     public String createSession(String title) {
         String sessionKey = java.util.UUID.randomUUID().toString();

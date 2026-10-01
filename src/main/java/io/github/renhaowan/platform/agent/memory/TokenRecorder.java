@@ -1,23 +1,19 @@
 package io.github.renhaowan.platform.agent.memory;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * LLM Token 用量打点（best-effort：打点失败不影响对话主流程，但会留告警）。
+ * LLM Token 用量打点（best-effort：打点失败不影响对话主流程，但会留告警日志）。
  * M4 的 Token 成本实验数据源。
  */
+@Slf4j
+@RequiredArgsConstructor
 @Service
 public class TokenRecorder {
 
-    private static final Logger log = LoggerFactory.getLogger(TokenRecorder.class);
-
     private final LlmUsageMapper usageMapper;
-
-    public TokenRecorder(LlmUsageMapper usageMapper) {
-        this.usageMapper = usageMapper;
-    }
 
     public void record(String sessionKey, String phase, String model, Integer promptTokens, Integer completionTokens) {
         try {

@@ -11,21 +11,19 @@ import io.github.renhaowan.platform.gateway.message.MessageHandler;
 import io.github.renhaowan.platform.gateway.registry.ToolDefinition;
 import io.github.renhaowan.platform.gateway.registry.ToolRegistryService;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
  * MCP tools/list：返回当前租户在指定网关下已启用的工具清单（name/description/inputSchema）。
  */
+@RequiredArgsConstructor
 @Component
 public class ToolsListHandler implements MessageHandler {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final ToolRegistryService registryService;
-
-    public ToolsListHandler(ToolRegistryService registryService) {
-        this.registryService = registryService;
-    }
 
     @Override
     public String method() {

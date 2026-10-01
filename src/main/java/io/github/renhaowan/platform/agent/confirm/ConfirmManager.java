@@ -6,8 +6,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
@@ -15,10 +14,9 @@ import org.springframework.stereotype.Service;
  * 前端携带 confirmToken 调 POST /api/v1/confirm 恢复；超时视为拒绝。
  * M2 为单实例内存实现（重启丢失待确认项，视为拒绝，语义安全）；多实例化时迁移 Redis。
  */
+@Slf4j
 @Service
 public class ConfirmManager {
-
-    private static final Logger log = LoggerFactory.getLogger(ConfirmManager.class);
 
     public record PendingCall(String sessionKey, String toolName, String argumentsJson) {
     }

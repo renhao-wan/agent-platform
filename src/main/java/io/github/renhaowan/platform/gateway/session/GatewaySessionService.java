@@ -1,23 +1,25 @@
 package io.github.renhaowan.platform.gateway.session;
 
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.renhaowan.platform.gateway.security.GatewayProperties;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBucket;
 import org.redisson.api.RedissonClient;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import io.github.renhaowan.platform.gateway.security.GatewayProperties;
 
 /**
  * MCP 网关会话生命周期：Redis 为会话体主存（30 分钟滑动 TTL），MySQL 留审计轨迹。
  */
+@Slf4j
+@RequiredArgsConstructor
 @Service
 public class GatewaySessionService {
-
-    private static final Logger log = LoggerFactory.getLogger(GatewaySessionService.class);
 
     private static final String KEY_PREFIX = "gw:session:";
     private static final Duration TTL = Duration.ofMinutes(30);
@@ -29,18 +31,11 @@ public class GatewaySessionService {
 
     private final GatewaySessionMapper sessionMapper;
     private final RedissonClient redissonClient;
-    private final String instanceId;
-
-    public GatewaySessionService(GatewaySessionMapper sessionMapper,
-                                 RedissonClient redissonClient,
-                                 GatewayProperties properties) {
-        this.sessionMapper = sessionMapper;
-        this.redissonClient = redissonClient;
-        this.instanceId = properties.getInstanceId();
-    }
+    private final GatewayProperties properties;
 
     public SessionState create(String gatewayId, String transport, Long tenantId) {
         String sessionKey = UUID.randomUUID().toString();
+        String instanceId = properties.getInstanceId();
         long now = System.currentTimeMillis();
         SessionState state = new SessionState(sessionKey, tenantId, gatewayId, transport, instanceId, now);
 
@@ -52,7 +47,7 @@ public class GatewaySessionService {
             audit.setGatewayId(gatewayId);
             audit.setTransport(transport);
             audit.setInstanceId(instanceId);
-            audit.setCreatedAt(java.time.LocalDateTime.now());
+            audit.setCreatedAt(LocalDateTime.now());
             sessionMapper.insert(audit);
         } catch (Exception e) {
             log.warn("session audit insert failed {}: {}", sessionKey, e.getMessage());
@@ -89,9 +84,9 @@ public class GatewaySessionService {
             log.warn("session close failed {}: {}", sessionKey, e.getMessage());
         }
         GatewaySession update = new GatewaySession();
-        update.setExpiredAt(java.time.LocalDateTime.now());
+        update.setExpiredAt(LocalDateTime.now());
         sessionMapper.update(update,
-                new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<GatewaySession>()
+                new UpdateWrapper<GatewaySession>()
                         .eq("session_key", sessionKey).isNull("expired_at"));
     }
 

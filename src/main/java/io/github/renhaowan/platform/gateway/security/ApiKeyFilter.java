@@ -9,12 +9,14 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.regex.Pattern;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * MCP 端点租户鉴权：X-Api-Key → 租户校验 → 限流 → 写入 TenantContext。
  * 覆盖 /{gatewayId}/mcp 与 /{gatewayId}/mcp/message；/admin/** 与 /ping 不在鉴权范围。
  */
+@RequiredArgsConstructor
 public class ApiKeyFilter extends OncePerRequestFilter {
 
     public static final String API_KEY_HEADER = "X-Api-Key";
@@ -24,11 +26,6 @@ public class ApiKeyFilter extends OncePerRequestFilter {
 
     private final TenantService tenantService;
     private final RateLimitService rateLimitService;
-
-    public ApiKeyFilter(TenantService tenantService, RateLimitService rateLimitService) {
-        this.tenantService = tenantService;
-        this.rateLimitService = rateLimitService;
-    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)

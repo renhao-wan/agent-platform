@@ -6,12 +6,10 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
@@ -26,9 +24,9 @@ import org.springframework.web.client.RestClient;
  * 行为契约：工具数 < minTools 直接透传；置信度低于阈值取概率 top-k；
  * 任何异常 fail-open 返回全量（路由层故障不影响对话主流程）。
  */
+@Slf4j
 public class WattAiToolSelector implements ToolSelector {
 
-    private static final Logger log = LoggerFactory.getLogger(WattAiToolSelector.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String ROUTE_QUESTION =
             "Which tool should be invoked to handle the user request?";

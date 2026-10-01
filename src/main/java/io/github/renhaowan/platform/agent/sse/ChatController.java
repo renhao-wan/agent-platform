@@ -1,16 +1,16 @@
 package io.github.renhaowan.platform.agent.sse;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.renhaowan.platform.agent.memory.AgentSessionService;
 import io.github.renhaowan.platform.agent.loop.AgentRunner;
+import io.github.renhaowan.platform.agent.memory.AgentSessionService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -19,12 +19,12 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * 对话入口：POST /api/v1/chat（SSE 流式返回）。
- * 循环在独立线程池执行（不占用容器业务线程），confirm-timeout 内连接保活由心跳兜底。
+ * ReAct 循环在独立线程池执行（不占用容器工作线程），confirm 等待期内连接保活由心跳兜底。
  */
+@Slf4j
+@RequiredArgsConstructor
 @RestController
 public class ChatController {
-
-    private static final Logger log = LoggerFactory.getLogger(ChatController.class);
 
     public record ChatRequest(String sessionKey, @NotBlank String message) {
     }
@@ -32,15 +32,13 @@ public class ChatController {
     private final AgentRunner agentRunner;
     private final AgentSessionService sessionService;
     private final ObjectMapper objectMapper;
-    private final ExecutorService executor;
 
-    public ChatController(AgentRunner agentRunner, AgentSessionService sessionService,
-                          ObjectMapper objectMapper) {
-        this.agentRunner = agentRunner;
-        this.sessionService = sessionService;
-        this.objectMapper = objectMapper;
+    /** 循环执行线程池：带初始化的 final 字段，不参与 @RequiredArgsConstructor 生成的构造器。 */
+    private final ExecutorService executor = newFixedExecutor();
+
+    private static ExecutorService newFixedExecutor() {
         AtomicInteger seq = new AtomicInteger();
-        this.executor = Executors.newFixedThreadPool(8, r -> {
+        return Executors.newFixedThreadPool(8, r -> {
             Thread thread = new Thread(r, "agent-loop-" + seq.incrementAndGet());
             thread.setDaemon(true);
             return thread;

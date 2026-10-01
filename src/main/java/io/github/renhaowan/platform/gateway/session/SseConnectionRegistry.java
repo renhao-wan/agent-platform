@@ -2,10 +2,9 @@ package io.github.renhaowan.platform.gateway.session;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RTopic;
 import org.redisson.api.RedissonClient;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -14,13 +13,12 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * 消息回报优先本机直写；连接不在本实例时经 Redis PubSub 广播，
  * 由持有连接的实例（SessionEventSubscriber）接收并写出。
  */
+@Slf4j
 @Service
 public class SseConnectionRegistry {
 
     public record OutboundMessage(String sessionKey, String json) {
     }
-
-    private static final Logger log = LoggerFactory.getLogger(SseConnectionRegistry.class);
 
     public static final String TOPIC = "gw:session-events";
 

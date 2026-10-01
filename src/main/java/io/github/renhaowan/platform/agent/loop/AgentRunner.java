@@ -13,6 +13,7 @@ import io.github.renhaowan.platform.agent.tool.McpGatewayClient;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -27,6 +28,7 @@ import org.springframework.stereotype.Service;
  * 与 OpenAiPlanner 的隐式执行相反，这里每一步都被显式驱动：
  * SSE 分阶段事件、敏感操作确认挂起、步数上限、轨迹落库全部发生在循环内。
  */
+@RequiredArgsConstructor
 @Service
 public class AgentRunner {
 
@@ -42,22 +44,6 @@ public class AgentRunner {
     private final TokenRecorder tokenRecorder;
     private final IntentClassifier intentClassifier;
     private final AgentProperties properties;
-
-    public AgentRunner(Planner planner, ToolSelector toolSelector, DynamicToolRegistry toolRegistry, McpGatewayClient gatewayClient,
-                       AgentSessionService sessionService, ContextTrimmer contextTrimmer,
-                       ConfirmManager confirmManager, TokenRecorder tokenRecorder,
-                       IntentClassifier intentClassifier, AgentProperties properties) {
-        this.planner = planner;
-        this.toolSelector = toolSelector;
-        this.toolRegistry = toolRegistry;
-        this.gatewayClient = gatewayClient;
-        this.sessionService = sessionService;
-        this.contextTrimmer = contextTrimmer;
-        this.confirmManager = confirmManager;
-        this.tokenRecorder = tokenRecorder;
-        this.intentClassifier = intentClassifier;
-        this.properties = properties;
-    }
 
     public void run(String sessionKey, String userText, AgentEventEmitter events) {
         events.intent(intentClassifier.classify(userText));

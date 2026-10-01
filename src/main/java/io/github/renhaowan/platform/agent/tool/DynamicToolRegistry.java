@@ -5,8 +5,8 @@ import io.github.renhaowan.platform.agent.AgentProperties;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.stereotype.Service;
@@ -16,20 +16,17 @@ import org.springframework.stereotype.Service;
  * （仅作 schema 广告位——执行始终走 McpGatewayClient 手动通道，循环内做确认/事件插桩）。
  * 缓存 5 分钟；x-require-confirm 扩展字段映射敏感标记。
  */
+@Slf4j
+@RequiredArgsConstructor
 @Service
 public class DynamicToolRegistry {
 
-    private static final Logger log = LoggerFactory.getLogger(DynamicToolRegistry.class);
     private static final long REFRESH_INTERVAL_MS = 5 * 60_000L;
 
     private final McpGatewayClient gatewayClient;
     private final List<ToolCallback> callbacks = new CopyOnWriteArrayList<>();
     private final Map<String, Boolean> requireConfirmByName = new java.util.concurrent.ConcurrentHashMap<>();
     private volatile long refreshedAt = 0;
-
-    public DynamicToolRegistry(McpGatewayClient gatewayClient) {
-        this.gatewayClient = gatewayClient;
-    }
 
     public synchronized List<ToolCallback> callbacks() {
         if (System.currentTimeMillis() - refreshedAt > REFRESH_INTERVAL_MS) {

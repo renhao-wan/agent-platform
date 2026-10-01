@@ -12,12 +12,14 @@ import io.github.renhaowan.platform.gateway.message.MessageHandler;
 import io.github.renhaowan.platform.gateway.registry.ToolDefinition;
 import io.github.renhaowan.platform.gateway.registry.ToolRegistryService;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
  * MCP tools/call：定位工具 → 泛化转发 → 按 MCP 规范包装
  * （执行失败不抛协议错误，而是 result.isError=true 让模型自行决策下一步）。
  */
+@RequiredArgsConstructor
 @Component
 public class ToolsCallHandler implements MessageHandler {
 
@@ -25,11 +27,6 @@ public class ToolsCallHandler implements MessageHandler {
 
     private final ToolRegistryService registryService;
     private final GenericHttpForwarder forwarder;
-
-    public ToolsCallHandler(ToolRegistryService registryService, GenericHttpForwarder forwarder) {
-        this.registryService = registryService;
-        this.forwarder = forwarder;
-    }
 
     @Override
     public String method() {
