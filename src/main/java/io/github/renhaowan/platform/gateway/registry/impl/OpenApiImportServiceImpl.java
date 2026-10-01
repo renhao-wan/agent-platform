@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.renhaowan.platform.gateway.registry.OpenApiImportService;
-import io.github.renhaowan.platform.gateway.registry.ToolDefinition;
+import io.github.renhaowan.platform.gateway.registry.entity.ToolDefinition;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Iterator;

@@ -2,7 +2,7 @@ package io.github.renhaowan.platform.gateway.security;
 
 import io.github.renhaowan.platform.gateway.message.McpProtocol;
 import io.github.renhaowan.platform.gateway.support.JsonRpcErrorWriter;
-import io.github.renhaowan.platform.gateway.tenant.Tenant;
+import io.github.renhaowan.platform.gateway.tenant.entity.Tenant;
 import io.github.renhaowan.platform.gateway.tenant.TenantService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;

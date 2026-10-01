@@ -1,8 +1,8 @@
 package io.github.renhaowan.platform.gateway.registry.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import io.github.renhaowan.platform.gateway.registry.ToolDefinition;
-import io.github.renhaowan.platform.gateway.registry.ToolDefinitionMapper;
+import io.github.renhaowan.platform.gateway.registry.entity.ToolDefinition;
+import io.github.renhaowan.platform.gateway.registry.mapper.ToolDefinitionMapper;
 import io.github.renhaowan.platform.gateway.registry.ToolRegistryService;
 import java.time.LocalDateTime;
 import java.util.List;

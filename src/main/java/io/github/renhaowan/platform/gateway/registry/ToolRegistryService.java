@@ -1,5 +1,6 @@
 package io.github.renhaowan.platform.gateway.registry;
 
+import io.github.renhaowan.platform.gateway.registry.entity.ToolDefinition;
 import java.util.List;
 import java.util.Optional;
 

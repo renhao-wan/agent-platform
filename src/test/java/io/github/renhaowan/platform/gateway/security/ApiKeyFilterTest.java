@@ -6,8 +6,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.github.renhaowan.platform.gateway.tenant.Tenant;
-import io.github.renhaowan.platform.gateway.tenant.TenantMapper;
+import io.github.renhaowan.platform.gateway.tenant.entity.Tenant;
+import io.github.renhaowan.platform.gateway.tenant.mapper.TenantMapper;
+import io.github.renhaowan.platform.gateway.tenant.mapper.TenantMapper;
 import org.junit.jupiter.api.Test;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,7 +31,7 @@ class ApiKeyFilterTest {
     private TenantMapper tenantMapper;
 
     @MockitoBean
-    private io.github.renhaowan.platform.gateway.registry.ToolDefinitionMapper toolDefinitionMapper;
+    private io.github.renhaowan.platform.gateway.registry.mapper.ToolDefinitionMapper toolDefinitionMapper;
 
     @Test
     void missingApiKeyRejectedWith401() throws Exception {

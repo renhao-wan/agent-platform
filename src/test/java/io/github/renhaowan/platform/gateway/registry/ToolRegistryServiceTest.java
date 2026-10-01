@@ -1,5 +1,7 @@
 package io.github.renhaowan.platform.gateway.registry;
 
+import io.github.renhaowan.platform.gateway.registry.entity.ToolDefinition;
+import io.github.renhaowan.platform.gateway.registry.mapper.ToolDefinitionMapper;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;

@@ -1,4 +1,4 @@
-package io.github.renhaowan.platform.gateway.registry;
+package io.github.renhaowan.platform.gateway.registry.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;

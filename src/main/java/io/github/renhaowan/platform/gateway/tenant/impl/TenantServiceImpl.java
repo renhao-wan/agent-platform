@@ -1,8 +1,8 @@
 package io.github.renhaowan.platform.gateway.tenant.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import io.github.renhaowan.platform.gateway.tenant.Tenant;
-import io.github.renhaowan.platform.gateway.tenant.TenantMapper;
+import io.github.renhaowan.platform.gateway.tenant.entity.Tenant;
+import io.github.renhaowan.platform.gateway.tenant.mapper.TenantMapper;
 import io.github.renhaowan.platform.gateway.tenant.TenantService;
 import java.time.LocalDateTime;
 import java.util.List;

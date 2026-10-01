@@ -1,5 +1,7 @@
 package io.github.renhaowan.platform.gateway.session;
 
+import io.github.renhaowan.platform.gateway.session.entity.GatewaySession;
+import io.github.renhaowan.platform.gateway.session.mapper.GatewaySessionMapper;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;

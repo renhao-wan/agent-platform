@@ -1,6 +1,7 @@
-package io.github.renhaowan.platform.gateway.tenant;
+package io.github.renhaowan.platform.gateway.tenant.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import io.github.renhaowan.platform.gateway.tenant.entity.Tenant;
 import org.apache.ibatis.annotations.Mapper;
 
 /**

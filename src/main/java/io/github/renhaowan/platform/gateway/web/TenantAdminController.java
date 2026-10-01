@@ -1,7 +1,7 @@
 package io.github.renhaowan.platform.gateway.web;
 
 import io.github.renhaowan.platform.common.ApiResponse;
-import io.github.renhaowan.platform.gateway.tenant.Tenant;
+import io.github.renhaowan.platform.gateway.tenant.entity.Tenant;
 import io.github.renhaowan.platform.gateway.tenant.TenantService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;

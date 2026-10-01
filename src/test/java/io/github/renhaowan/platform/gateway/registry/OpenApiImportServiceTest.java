@@ -1,5 +1,6 @@
 package io.github.renhaowan.platform.gateway.registry;
 
+import io.github.renhaowan.platform.gateway.registry.entity.ToolDefinition;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 

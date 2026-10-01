@@ -9,7 +9,7 @@ import io.github.renhaowan.platform.gateway.message.JsonRpcResponse;
 import io.github.renhaowan.platform.gateway.message.McpProtocol;
 import io.github.renhaowan.platform.gateway.message.MessageContext;
 import io.github.renhaowan.platform.gateway.message.MessageHandler;
-import io.github.renhaowan.platform.gateway.registry.ToolDefinition;
+import io.github.renhaowan.platform.gateway.registry.entity.ToolDefinition;
 import io.github.renhaowan.platform.gateway.registry.ToolRegistryService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;

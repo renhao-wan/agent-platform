@@ -1,5 +1,6 @@
 package io.github.renhaowan.platform.gateway.tenant;
 
+import io.github.renhaowan.platform.gateway.tenant.entity.Tenant;
 import java.util.List;
 import java.util.Optional;
 

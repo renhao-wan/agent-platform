@@ -2,7 +2,7 @@ package io.github.renhaowan.platform.gateway.web;
 
 import io.github.renhaowan.platform.common.ApiResponse;
 import io.github.renhaowan.platform.gateway.registry.OpenApiImportService;
-import io.github.renhaowan.platform.gateway.registry.ToolDefinition;
+import io.github.renhaowan.platform.gateway.registry.entity.ToolDefinition;
 import io.github.renhaowan.platform.gateway.registry.ToolRegistryService;
 import io.github.renhaowan.platform.gateway.security.TenantContext;
 import jakarta.validation.Valid;

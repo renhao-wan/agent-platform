@@ -1,5 +1,6 @@
-package io.github.renhaowan.platform.gateway.registry;
+package io.github.renhaowan.platform.gateway.registry.mapper;
 
+import io.github.renhaowan.platform.gateway.registry.entity.ToolDefinition;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 

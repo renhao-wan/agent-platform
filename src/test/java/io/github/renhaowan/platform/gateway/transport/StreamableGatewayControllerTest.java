@@ -10,8 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.renhaowan.platform.gateway.session.GatewaySessionService;
-import io.github.renhaowan.platform.gateway.tenant.Tenant;
-import io.github.renhaowan.platform.gateway.tenant.TenantMapper;
+import io.github.renhaowan.platform.gateway.tenant.entity.Tenant;
+import io.github.renhaowan.platform.gateway.tenant.mapper.TenantMapper;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.redisson.api.RedissonClient;

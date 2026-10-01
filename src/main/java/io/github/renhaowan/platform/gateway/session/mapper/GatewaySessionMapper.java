@@ -1,5 +1,6 @@
-package io.github.renhaowan.platform.gateway.session;
+package io.github.renhaowan.platform.gateway.session.mapper;
 
+import io.github.renhaowan.platform.gateway.session.entity.GatewaySession;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 
