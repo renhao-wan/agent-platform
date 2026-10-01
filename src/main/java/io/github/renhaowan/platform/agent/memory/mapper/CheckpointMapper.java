@@ -1,6 +1,7 @@
-package io.github.renhaowan.platform.agent.memory;
+package io.github.renhaowan.platform.agent.memory.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import io.github.renhaowan.platform.agent.memory.entity.Checkpoint;
 import org.apache.ibatis.annotations.Mapper;
 
 /**

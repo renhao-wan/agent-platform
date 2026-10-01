@@ -2,12 +2,12 @@ package io.github.renhaowan.platform.agent.memory.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import io.github.renhaowan.platform.agent.memory.AgentSessionService;
-import io.github.renhaowan.platform.agent.memory.ChatMessage;
-import io.github.renhaowan.platform.agent.memory.ChatMessageMapper;
-import io.github.renhaowan.platform.agent.memory.ChatSession;
-import io.github.renhaowan.platform.agent.memory.ChatSessionMapper;
-import io.github.renhaowan.platform.agent.memory.Checkpoint;
-import io.github.renhaowan.platform.agent.memory.CheckpointMapper;
+import io.github.renhaowan.platform.agent.memory.entity.ChatMessage;
+import io.github.renhaowan.platform.agent.memory.mapper.ChatMessageMapper;
+import io.github.renhaowan.platform.agent.memory.entity.ChatSession;
+import io.github.renhaowan.platform.agent.memory.mapper.ChatSessionMapper;
+import io.github.renhaowan.platform.agent.memory.entity.Checkpoint;
+import io.github.renhaowan.platform.agent.memory.mapper.CheckpointMapper;
 import jakarta.annotation.PreDestroy;
 import java.util.List;
 import lombok.RequiredArgsConstructor;

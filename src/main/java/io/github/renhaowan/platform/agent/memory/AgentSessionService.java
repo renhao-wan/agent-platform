@@ -1,6 +1,7 @@
 package io.github.renhaowan.platform.agent.memory;
 
 import java.util.List;
+import io.github.renhaowan.platform.agent.memory.entity.ChatMessage;
 
 /**
  * Agent 会话存储：消息历史按 sessionKey 聚合，写入即落库（服务重启不丢对话）。

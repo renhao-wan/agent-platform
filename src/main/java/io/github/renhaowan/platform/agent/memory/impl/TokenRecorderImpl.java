@@ -1,7 +1,7 @@
 package io.github.renhaowan.platform.agent.memory.impl;
 
-import io.github.renhaowan.platform.agent.memory.LlmUsage;
-import io.github.renhaowan.platform.agent.memory.LlmUsageMapper;
+import io.github.renhaowan.platform.agent.memory.entity.LlmUsage;
+import io.github.renhaowan.platform.agent.memory.mapper.LlmUsageMapper;
 import io.github.renhaowan.platform.agent.memory.TokenRecorder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -1,4 +1,4 @@
-package io.github.renhaowan.platform.agent.memory;
+package io.github.renhaowan.platform.agent.memory.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -7,18 +7,15 @@ import java.time.LocalDateTime;
 import lombok.Data;
 
 /**
- * LLM 用量打点行（prompt/completion tokens，按 phase 区分调用环节）。
+ * Agent 对话会话（sessionKey 为业务主键，消息历史挂在其下）。
  */
 @Data
-@TableName("llm_usage")
-public class LlmUsage {
+@TableName("chat_session")
+public class ChatSession {
 
     @TableId(type = IdType.AUTO)
     private Long id;
     private String sessionKey;
-    private String phase;
-    private String model;
-    private Integer promptTokens;
-    private Integer completionTokens;
+    private String title;
     private LocalDateTime createdAt;
 }

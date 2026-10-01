@@ -1,4 +1,4 @@
-package io.github.renhaowan.platform.agent.memory;
+package io.github.renhaowan.platform.agent.memory.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;

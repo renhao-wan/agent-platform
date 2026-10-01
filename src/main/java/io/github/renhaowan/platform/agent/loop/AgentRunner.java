@@ -4,7 +4,7 @@ import io.github.renhaowan.platform.agent.AgentProperties;
 import io.github.renhaowan.platform.agent.confirm.ConfirmManager;
 import io.github.renhaowan.platform.agent.context.ContextTrimmer;
 import io.github.renhaowan.platform.agent.memory.AgentSessionService;
-import io.github.renhaowan.platform.agent.memory.ChatMessage;
+import io.github.renhaowan.platform.agent.memory.entity.ChatMessage;
 import io.github.renhaowan.platform.agent.memory.TokenRecorder;
 import io.github.renhaowan.platform.agent.sse.AgentEventEmitter;
 import io.github.renhaowan.platform.agent.tool.DynamicToolRegistry;
