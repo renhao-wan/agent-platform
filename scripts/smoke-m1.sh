@@ -2,6 +2,8 @@
 # M1 全链路冒烟：导入 OpenAPI → Streamable initialize → tools/list → tools/call（网关自环转发）
 # 前置：docker compose -f docker-compose.dev.yml up -d；应用已用 3307/6380 配置启动
 set -e
+# 统一切到仓库根再执行：脚本内的 docs/ 相对路径（如 smoke-import.json）与目录位置解耦
+cd "$(dirname "$0")/.."
 BASE=http://localhost:8000
 
 KEY=$(curl -s -X POST $BASE/admin/tenants -H "Content-Type: application/json" \

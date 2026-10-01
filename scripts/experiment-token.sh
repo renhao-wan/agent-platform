@@ -2,8 +2,8 @@
 # Token 成本实验（M4.1）：同一长会话（默认 30 轮），对比"裁剪关闭 / 裁剪开启"的 LLM 用量
 # 前置：LLM_API_KEY 已配置；dev 容器已启动；booking 已启动
 # 用法：
-#   步骤 A：TURNS=30 THRESHOLD=999999 bash docs/experiment-token.sh   # 裁剪关闭
-#   步骤 B：TURNS=30 THRESHOLD=800   bash docs/experiment-token.sh   # 裁剪开启
+#   步骤 A：TURNS=30 THRESHOLD=999999 bash scripts/experiment-token.sh   # 裁剪关闭
+#   步骤 B：TURNS=30 THRESHOLD=800   bash scripts/experiment-token.sh   # 裁剪开启
 #   每步先手动重启应用（阈值是启动配置），脚本输出该 session 的 token 总量与逐调用趋势
 TURNS=${TURNS:-30}
 THRESHOLD=${THRESHOLD:-6000}

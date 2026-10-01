@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SSE 并发压测（bash 版，无 JMeter 环境时的等价手段）
-# 用法：bash docs/load/sse-bash-load.sh [并发数=50] [每人轮次=2]
+# 用法：bash scripts/load/sse-bash-load.sh [并发数=50] [每人轮次=2]
 # 前置：应用已启动（中间件容器 + GATEWAY_API_KEY 已配置；无 LLM key 时会快速失败，同样能压到线程池与连接层）
 CONCURRENCY=${1:-50}
 ROUNDS=${2:-2}

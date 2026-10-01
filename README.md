@@ -48,7 +48,7 @@ export GATEWAY_API_KEY=$(curl -s -X POST http://localhost:8000/admin/tenants \
 mvn spring-boot:run
 
 # 4. 全链路冒烟：导入 OpenAPI → initialize → tools/list → tools/call
-bash docs/smoke-m1.sh
+bash scripts/smoke-m1.sh
 
 # 5. 打开控制台对话
 open http://localhost:8000/
@@ -66,9 +66,9 @@ open http://localhost:8000/
 
 | 指标 | 数值 | 方法 |
 |---|---|---|
-| SSE 并发长连接 | **40 并发 200/200，P50 1.03s / P95 1.32s / P99 1.35s**（分位差 <330ms，无线程饥饿） | 并发压测，每请求含：MySQL 会话落库 + MCP 自环 tools/list + 上游调用与错误事件回传（`docs/load/sse-bash-load.sh`） |
+| SSE 并发长连接 | **40 并发 200/200，P50 1.03s / P95 1.32s / P99 1.35s**（分位差 <330ms，无线程饥饿） | 并发压测，每请求含：MySQL 会话落库 + MCP 自环 tools/list + 上游调用与错误事件回传（`scripts/load/sse-bash-load.sh`） |
 | 限流精度 | **60 次/分钟精确生效（60 放行 + 5×429 实测）** | Redisson RRateLimiter，真实 Redis，越界请求全部 429 |
-| Token 裁剪收益 | **30 轮长会话总 Token 降 31.8%**（166,656 → 113,716）；**单次调用 prompt 末轮降 78.6%**（7860 → 1684）；代价：裁剪致遗忘多 20 次重查（阈值需按场景调优，见 ADR-003） | 开/关裁剪 A/B 实测，`docs/experiment-token.sh`（qwen-turbo，usage 全量打点） |
+| Token 裁剪收益 | **30 轮长会话总 Token 降 31.8%**（166,656 → 113,716）；**单次调用 prompt 末轮降 78.6%**（7860 → 1684）；代价：裁剪致遗忘多 20 次重查（阈值需按场景调优，见 ADR-003） | 开/关裁剪 A/B 实测，`scripts/experiment-token.sh`（qwen-turbo，usage 全量打点） |
 | 敏感操作确认 | confirm_request → 人工授权 → 执行 → CANCELLED 全链路实测 | LLM 驱动 cancel 工具的真实会话 |
 
 ## 技术栈
