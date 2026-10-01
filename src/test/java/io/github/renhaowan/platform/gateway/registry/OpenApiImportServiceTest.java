@@ -4,11 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.github.renhaowan.platform.gateway.registry.impl.OpenApiImportServiceImpl;
 import org.junit.jupiter.api.Test;
 
 class OpenApiImportServiceTest {
 
-    private final OpenApiImportService service = new OpenApiImportService();
+    private final OpenApiImportService service = new OpenApiImportServiceImpl();
 
     private static final String OPENAPI = """
             {

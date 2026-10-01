@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import io.github.renhaowan.platform.gateway.registry.impl.ToolRegistryServiceImpl;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -14,7 +15,7 @@ import org.junit.jupiter.api.Test;
 class ToolRegistryServiceTest {
 
     private final ToolDefinitionMapper mapper = mock(ToolDefinitionMapper.class);
-    private final ToolRegistryService service = new ToolRegistryService(mapper);
+    private final ToolRegistryService service = new ToolRegistryServiceImpl(mapper);
 
     private ToolDefinition tool(String name) {
         ToolDefinition tool = new ToolDefinition();
