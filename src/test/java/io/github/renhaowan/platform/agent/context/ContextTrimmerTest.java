@@ -2,6 +2,7 @@ package io.github.renhaowan.platform.agent.context;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.renhaowan.platform.agent.context.impl.ContextTrimmerImpl;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -12,7 +13,7 @@ import org.springframework.ai.chat.messages.UserMessage;
 
 class ContextTrimmerTest {
 
-    private final ContextTrimmer trimmer = new ContextTrimmer(100);
+    private final ContextTrimmer trimmer = new ContextTrimmerImpl(100);
 
     private List<Message> longHistory() {
         List<Message> messages = new ArrayList<>();

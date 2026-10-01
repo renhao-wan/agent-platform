@@ -2,13 +2,14 @@ package io.github.renhaowan.platform.agent.confirm;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.renhaowan.platform.agent.confirm.impl.ConfirmManagerImpl;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
 class ConfirmManagerTest {
 
-    private final ConfirmManager manager = new ConfirmManager();
+    private final ConfirmManager manager = new ConfirmManagerImpl();
 
     @Test
     void approvalResumesAwait() throws Exception {

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.renhaowan.platform.agent.tool.impl.DynamicToolRegistryImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -30,7 +31,7 @@ class DynamicToolRegistryTest {
                 ]
                 """;
         when(gatewayClient.listTools()).thenReturn(mapper.readTree(toolsJson));
-        DynamicToolRegistry registry = new DynamicToolRegistry(gatewayClient);
+        DynamicToolRegistry registry = new DynamicToolRegistryImpl(gatewayClient);
 
         var callbacks = registry.callbacks();
 
@@ -45,7 +46,7 @@ class DynamicToolRegistryTest {
     @Test
     void emptyToolListYieldsNoCallbacks() {
         when(gatewayClient.listTools()).thenReturn(mapper.createArrayNode());
-        DynamicToolRegistry registry = new DynamicToolRegistry(gatewayClient);
+        DynamicToolRegistry registry = new DynamicToolRegistryImpl(gatewayClient);
 
         assertThat(registry.callbacks()).isEmpty();
     }

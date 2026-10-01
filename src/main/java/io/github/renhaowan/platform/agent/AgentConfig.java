@@ -1,6 +1,7 @@
 package io.github.renhaowan.platform.agent;
 
 import io.github.renhaowan.platform.agent.context.ContextTrimmer;
+import io.github.renhaowan.platform.agent.context.impl.ContextTrimmerImpl;
 import io.github.renhaowan.platform.agent.tool.ToolSelector;
 import io.github.renhaowan.platform.agent.tool.impl.NoopToolSelector;
 import io.github.renhaowan.platform.agent.tool.impl.WattAiToolSelector;
@@ -15,7 +16,7 @@ public class AgentConfig {
 
     @Bean
     public ContextTrimmer contextTrimmer(AgentProperties properties) {
-        return new ContextTrimmer(properties.getContextThreshold());
+        return new ContextTrimmerImpl(properties.getContextThreshold());
     }
 
     /** 工具前置路由按配置切换；wattai 失败自动 fail-open，不影响对话主流程。 */

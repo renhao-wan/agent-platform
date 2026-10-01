@@ -13,7 +13,8 @@ import static org.mockito.Mockito.when;
 
 import io.github.renhaowan.platform.agent.AgentProperties;
 import io.github.renhaowan.platform.agent.confirm.ConfirmManager;
-import io.github.renhaowan.platform.agent.context.ContextTrimmer;
+import io.github.renhaowan.platform.agent.confirm.impl.ConfirmManagerImpl;
+import io.github.renhaowan.platform.agent.context.impl.ContextTrimmerImpl;
 import io.github.renhaowan.platform.agent.loop.impl.ConfigIntentClassifier;
 import io.github.renhaowan.platform.agent.memory.AgentSessionService;
 import io.github.renhaowan.platform.agent.memory.ChatMessage;
@@ -53,7 +54,7 @@ class AgentRunnerTest {
     @Mock
     private AgentEventEmitter events;
 
-    private final ConfirmManager confirmManager = new ConfirmManager();
+    private final ConfirmManager confirmManager = new ConfirmManagerImpl();
     private final AgentProperties properties = new AgentProperties();
 
     private AgentRunner runner() {
@@ -64,7 +65,7 @@ class AgentRunnerTest {
         properties.getIntentRules().put("ROOM_BOOKING", List.of("订", "预定", "预约", "book"));
         return new AgentRunner(planner, new io.github.renhaowan.platform.agent.tool.impl.NoopToolSelector(),
                 toolRegistry, gatewayClient, sessionService,
-                new ContextTrimmer(6000), confirmManager, tokenRecorder,
+                new ContextTrimmerImpl(6000), confirmManager, tokenRecorder,
                 new ConfigIntentClassifier(properties), properties);
     }
 
