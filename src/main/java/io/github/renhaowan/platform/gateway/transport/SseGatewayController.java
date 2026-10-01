@@ -1,5 +1,6 @@
 package io.github.renhaowan.platform.gateway.transport;
 
+import lombok.extern.slf4j.Slf4j;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.renhaowan.platform.gateway.message.JsonRpcRequest;
 import io.github.renhaowan.platform.gateway.message.JsonRpcResponse;
@@ -14,8 +15,6 @@ import io.github.renhaowan.platform.gateway.support.JsonRpcErrorWriter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Optional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,10 +28,10 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * GET  /{gatewayId}/mcp/sse            建连，首个事件 endpoint 告知消息端点
  * POST /{gatewayId}/mcp/message        消息入口，响应经 SSE 流回（协议规定）
  */
+@Slf4j
 @RestController
 public class SseGatewayController {
 
-    private static final Logger log = LoggerFactory.getLogger(SseGatewayController.class);
 
     private final GatewaySessionService sessionService;
     private final SseConnectionRegistry registry;
