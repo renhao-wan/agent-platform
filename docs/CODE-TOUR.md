@@ -68,8 +68,8 @@ McpGatewayClient 自环调网关 → 网关分发/转发 → booking 真实执�
 
 ### loop/ 决策循环
 - **AgentRunner.java** ★★【②】：全项目心脏。流程：意图分类（规则通道）→ 载入历史（裁剪后）→ 循环 `Planner.decide` → 有 toolCalls 则逐个执行（敏感工具先挂起等确认）→ `ToolResponseMessage` 回填 → 无 toolCalls 则 answer。系统提示词每轮动态注入 `{{CURRENT_DATE}}/{{CURRENT_WEEKDAY}}`（消除模型编造日期）。步数熔断 maxSteps=8。
-- **Planner.java / impl/OpenAiPlanner.java** ★【②】：规划器抽象 + OpenAI 兼容实现。关键一行：`internalToolExecutionEnabled(false)`——关闭 Spring AI 隐式工具执行，每轮只取回模型的 toolCalls 决策，**执行权收归循环**（这是事件插桩/确认挂起/权限校验能存在的前提）。qwen3 系模型自动透传 `extraBody: {enable_thinking: false}`（DashScope 非流式限制；注：1.1.1 的 extraBody 序列化未生效，已切 qwen-turbo，待 Spring AI 升级）。
-- **IntentClassifier.java / impl/ConfigIntentClassifier.java**：意图分类（规则通道，关键词表配置化在 application.yml 的 `platform.agent.intent.rules`，命中即返回、未命中回落 GENERAL），LLM 通道为预留扩展点。
+- **Planner.java / impl/OpenAiPlanner.java** ★【②】：规划器抽象 + OpenAI 兼容实现。关键一行：`internalToolExecutionEnabled(false)`——关闭 Spring AI 隐式工具执行，每轮只取回模型的 toolCalls 决策，**执行权收归循环**（这是事件插桩/确认挂起/权限校验能存在的前提）。qwen3 系模型自动透传 `extraBody: {enable_thinking: false}`（DashScope 非流式限制；该透传已实现，qwen3-8b 实测待复验）。
+- **（意图分类通道已移除）**：语义决策由模型对工具清单自主完成，平台保持领域中立——业务关键词归业务系统与导入元数据，不在平台代码/配置中出现。
 
 ### sse/ 用户入口
 - **ChatController.java** ★：`POST /api/v1/chat` → SseEmitter + 显式 `ThreadPoolExecutor`（核心 4/上限 8，有界队列 64，AbortPolicy 拒绝→友好报错，命名线程 `agent-loop-*`）异步跑循环——**长连接不占容器业务线程**。
@@ -82,9 +82,9 @@ McpGatewayClient 自环调网关 → 网关分发/转发 → booking 真实执�
 
 ### context/ confirm/ memory/
 - **ContextTrimmer.java** ★【③】：chars/2 粗估超阈值（默认 6000）→ 保留 system + 最近 6 条，更早内容压成摘要 SystemMessage（落 checkpoint 表）。确定性规则，单测友好。
-- **TokenRecorder.java**【③】：usage 打点 best-effort（31.8% 实验的数据源）。
-- **ConfirmManager.java / ConfirmController.java**★：token → CompletableFuture 挂起；`POST /api/v1/confirm` 恢复；超时 = 拒绝。单实例内存实现（重启丢确认项视为拒绝，语义安全）；多实例化迁移 Redis 是既定演进。
-- **AgentSessionService.java** + 四实体四 Mapper：chat_session / chat_message / checkpoint / llm_usage（消息即写即落库，重启不丢对话）。
+- **TokenRecorder（接口）+ impl/TokenRecorderImpl**【③】：usage 打点 best-effort（31.8% 实验的数据源）。
+- **ConfirmManager（接口）+ impl/ConfirmManagerImpl / ConfirmController**★：token → CompletableFuture 挂起；`POST /api/v1/confirm` 恢复；超时 = 拒绝。单实例内存实现（重启丢确认项视为拒绝，语义安全）；多实例化迁移 Redis 是既定演进。
+- **AgentSessionService（接口）+ impl/AgentSessionServiceImpl** + 四实体四 Mapper：chat_session / chat_message / checkpoint / llm_usage（消息即写即落库，重启不丢对话）。
 - **AgentProperties.java / AgentConfig.java**：`platform.agent.*` 配置与需要原始值参数的 Bean 装配。
 
 ---
