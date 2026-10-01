@@ -15,6 +15,28 @@ public class AgentProperties {
     private int contextThreshold = 6000;
     private int confirmTimeoutSeconds = 300;
 
+    /** 工具前置路由：noop（默认透传）| wattai（System One 决策模型） */
+    private String toolSelector = "noop";
+
+    private Wattai wattai = new Wattai();
+
+    public static class Wattai {
+        private String baseUrl = "https://api.wattai.dev";
+        /** 工具数低于该值时不路由（省一次网络跳） */
+        private int minTools = 4;
+        private double confidenceThreshold = 0.6;
+        private int topK = 2;
+
+        public String getBaseUrl() { return baseUrl; }
+        public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
+        public int getMinTools() { return minTools; }
+        public void setMinTools(int minTools) { this.minTools = minTools; }
+        public double getConfidenceThreshold() { return confidenceThreshold; }
+        public void setConfidenceThreshold(double confidenceThreshold) { this.confidenceThreshold = confidenceThreshold; }
+        public int getTopK() { return topK; }
+        public void setTopK(int topK) { this.topK = topK; }
+    }
+
     public String getGatewayBaseUrl() { return gatewayBaseUrl; }
     public void setGatewayBaseUrl(String gatewayBaseUrl) { this.gatewayBaseUrl = gatewayBaseUrl; }
     public String getGatewayId() { return gatewayId; }
@@ -26,5 +48,9 @@ public class AgentProperties {
     public int getContextThreshold() { return contextThreshold; }
     public void setContextThreshold(int contextThreshold) { this.contextThreshold = contextThreshold; }
     public int getConfirmTimeoutSeconds() { return confirmTimeoutSeconds; }
+    public String getToolSelector() { return toolSelector; }
+    public void setToolSelector(String toolSelector) { this.toolSelector = toolSelector; }
+    public Wattai getWattai() { return wattai; }
+    public void setWattai(Wattai wattai) { this.wattai = wattai; }
     public void setConfirmTimeoutSeconds(int confirmTimeoutSeconds) { this.confirmTimeoutSeconds = confirmTimeoutSeconds; }
 }

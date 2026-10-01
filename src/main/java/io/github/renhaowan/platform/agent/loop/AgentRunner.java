@@ -8,6 +8,7 @@ import io.github.renhaowan.platform.agent.memory.ChatMessage;
 import io.github.renhaowan.platform.agent.memory.TokenRecorder;
 import io.github.renhaowan.platform.agent.sse.AgentEventEmitter;
 import io.github.renhaowan.platform.agent.tool.DynamicToolRegistry;
+import io.github.renhaowan.platform.agent.tool.ToolSelector;
 import io.github.renhaowan.platform.agent.tool.McpGatewayClient;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -32,6 +33,7 @@ public class AgentRunner {
     private static final String SYSTEM_PROMPT = loadPrompt();
 
     private final Planner planner;
+    private final ToolSelector toolSelector;
     private final DynamicToolRegistry toolRegistry;
     private final McpGatewayClient gatewayClient;
     private final AgentSessionService sessionService;
@@ -41,11 +43,12 @@ public class AgentRunner {
     private final IntentClassifier intentClassifier;
     private final AgentProperties properties;
 
-    public AgentRunner(Planner planner, DynamicToolRegistry toolRegistry, McpGatewayClient gatewayClient,
+    public AgentRunner(Planner planner, ToolSelector toolSelector, DynamicToolRegistry toolRegistry, McpGatewayClient gatewayClient,
                        AgentSessionService sessionService, ContextTrimmer contextTrimmer,
                        ConfirmManager confirmManager, TokenRecorder tokenRecorder,
                        IntentClassifier intentClassifier, AgentProperties properties) {
         this.planner = planner;
+        this.toolSelector = toolSelector;
         this.toolRegistry = toolRegistry;
         this.gatewayClient = gatewayClient;
         this.sessionService = sessionService;
@@ -73,7 +76,7 @@ public class AgentRunner {
             sessionService.saveCheckpoint(sessionKey, trim.summary());
         }
 
-        List<ToolCallback> tools = toolRegistry.callbacks();
+        List<ToolCallback> tools = toolSelector.select(userText, toolRegistry.callbacks());
 
         for (int step = 0; step < properties.getMaxSteps(); step++) {
             ChatResponse response = planner.decide(history, tools);

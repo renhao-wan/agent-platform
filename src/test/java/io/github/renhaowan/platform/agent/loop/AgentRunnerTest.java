@@ -56,7 +56,8 @@ class AgentRunnerTest {
     private final AgentProperties properties = new AgentProperties();
 
     private AgentRunner runner() {
-        return new AgentRunner(planner, toolRegistry, gatewayClient, sessionService,
+        return new AgentRunner(planner, new io.github.renhaowan.platform.agent.tool.NoopToolSelector(),
+                toolRegistry, gatewayClient, sessionService,
                 new ContextTrimmer(6000), confirmManager, tokenRecorder,
                 new RuleIntentClassifier(), properties);
     }
