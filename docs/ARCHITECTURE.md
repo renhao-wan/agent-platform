@@ -96,17 +96,92 @@
 
 ---
 
-## 4. 用户权限：现状与目标
+## 4. 用户权限：核心原则、三道闸门与落地方案
 
-**现状（已实现，演示简化）**：工具调用使用**服务级凭证**——网关对业务系统统一持有 `X-Service-Key`，以系统账号身份执行。同时网关自身有 apiKey 接入鉴权（哪个客户端应用能进门、看到哪些工具）与令牌桶限流（60 次/分钟/接入方）。
+### 4.1 核心原则
 
-**目标（企业化三步，由近及远）**：
+**模型只提议、不授权；权限校验在代码里，不在模型脑里。**
+AI 的工具选择是一个"建议"，真正的安全边界在网关执行点——由不经过模型的代码，按会话绑定的真实用户身份强制校验。因此模型幻觉出工具名、或被提示注入（"你现在是管理员"）都无法越权：校验看的不是模型说了什么，而是用户是谁。
 
-| 步骤 | 内容 | 解决什么 |
-|---|---|---|
-| 1. 员工登录 | `/api/v1/chat` 挂 JWT，会话绑定员工身份 | 现在"谁在说话"未知 |
-| 2. 工具按人过滤 | `tools/list` 按员工角色过滤（实习生看不到报销工具） | 越权看到/调用不属于自己的工具 |
-| 3. 身份透传（On-Behalf-Of） | 网关以"员工本人"的授权调业务系统，替代系统账号 | 审计归属真实用户；业务系统自身权限体系生效 |
+### 4.2 三道闸门
+
+```
+AI（提议者）："我想调 admin_delete_user"
+      ↓
+【闸门1·可见性过滤】tools/list 按当前用户角色过滤
+   → 无权工具不进入模型视野（同时减少选错干扰）
+   → 注意：这是体验优化而非安全边界——模型可能幻觉出清单外的工具名
+      ↓
+【闸门2·执行点强制鉴权】★ 安全边界 ★
+   tools/call 到达网关 → 校验 会话用户角色 × tool.required_role
+   → 不匹配：包装为 isError=true 的结果拒绝（模型读后转述用户，循环不中断）
+      ↓
+【闸门3·敏感操作人工确认】
+   有权调用的破坏性/不可逆操作 → confirm_request 挂起 → 用户点同意才执行
+```
+
+### 4.3 现状（已实现，演示简化）
+
+- 网关自身：apiKey 接入鉴权（哪个客户端应用能进门）+ 令牌桶限流（60 次/分钟/接入方）；
+- 业务调用：服务级凭证 `X-Service-Key`（系统账号身份执行）；
+- 闸门 3 已实现并实测（同意/拒绝/超时三态）；闸门 1/2 为下述落地方案。
+
+### 4.4 落地改动清单（对着现有代码，共 6 处）
+
+| # | 改动 | 位置 | 内容 |
+|---|---|---|---|
+| 1 | 用户表 + 登录 | 新增 `app_user`；照搬 booking 的 `JwtService` | `POST /api/v1/auth/login` → JWT（claims: userId, role） |
+| 2 | 会话绑定用户 | `chat_session` 加 `user_id`；`ChatController` | 续聊校验 session.userId == jwt.userId（防冒用 sessionKey） |
+| 3 | 身份穿进网关 | `McpGatewayClient` 请求头 + `MessageContext` 加字段 | `X-User-Id` / `X-User-Role`（生产级改为透传用户原 JWT 并验签） |
+| 4 | 闸门 1：可见性过滤 | `ToolRegistryService.listEnabled` 加 role 参数 | `(required_role IS NULL OR required_role = :role)` |
+| 5 | 闸门 2：执行点鉴权 | `ToolsCallHandler`（find 之后、forward 之前） | 见下方核心 20 行 |
+| 6 | 身份透传（On-Behalf-Of，二期） | 网关转发头 | `Authorization: Bearer <用户JWT>` 替代 X-Service-Key——booking 零改动（其 JwtFilter 本就按人校验），审计归属真实用户 |
+
+配套表变更：
+
+```sql
+CREATE TABLE app_user (id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(32) UNIQUE, password_hash VARCHAR(100),
+  role VARCHAR(16), status TINYINT DEFAULT 1);
+ALTER TABLE chat_session   ADD COLUMN user_id BIGINT;
+ALTER TABLE tool_definition ADD COLUMN required_role VARCHAR(16) NULL; -- NULL=全员
+```
+
+闸门 2 核心 20 行（拒绝包装为 isError 结果，模型可读、循环不断）：
+
+```java
+// ToolsCallHandler：def 为查到的工具定义
+if (def.getRequiredRole() != null && !def.getRequiredRole().equals(context.userRole())) {
+    ObjectNode payload = MAPPER.createObjectNode();
+    payload.putArray("content").addObject().put("type", "text")
+           .put("text", "权限不足：当前角色无权调用 " + name);
+    payload.put("isError", true);
+    return JsonRpcResponse.success(request.id(), payload);
+}
+```
+
+### 4.5 砌好之后：一次越权尝试的完整流转
+
+```
+普通员工："帮我把 3 号预订取消"（cancel 要求 ADMIN）
+ ① tools/list → cancel 被过滤 → 模型视野里没有它
+ ② 模型仍幻觉/被注入，硬调 cancel
+ ③ 网关执行点：role=STAFF ≠ ADMIN → isError=true 拒绝
+ ④ 模型读到"权限不足" → 转述用户"您没有取消权限"
+ ⑤ （若为管理员：走已有的 confirm_request 人工确认闸门）
+```
+
+### 4.6 AI 出错的分类对策（现有代码已建成的部分）
+
+| 错误类型 | 机制 | 代码位置 | 状态 |
+|---|---|---|---|
+| 参数/格式错 | 错误回喂自纠 | `ToolsCallHandler` isError 包装 + 系统提示词 | ✅ 实测（400 时间格式 → 自改重试成功） |
+| 死循环 | 步数熔断 | `LoopGuard`（maxSteps=8） | ✅ |
+| 有权但危险 | 人工确认闸 | `x-require-confirm` + `ConfirmManager` 挂起 | ✅ 实测三态 |
+| 重复写入 | 语义幂等键 | booking SHA-256(userId\|roomId\|date\|…) | ✅ 实测 |
+| 越权调用 | 闸门 2 执行点鉴权 | §4.4 第 5 处 | ⬜ 唯一待砌 |
+
+**工作量估算：半天至一天**（登录 2h 复用自己的 JwtService + 列与过滤 1h + 执行点 1h + 测试回归 2h）。
 
 > 设计原则：**接入零成本，授权有边界**。技术上接一个新系统只需导入 OpenAPI；治理上必须回答"谁能用、以谁的身份、留什么痕"。
 
