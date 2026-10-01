@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import io.github.renhaowan.platform.gateway.security.impl.RateLimitServiceImpl;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.redisson.api.RRateLimiter;
 import org.redisson.api.RedissonClient;
@@ -27,7 +28,7 @@ class RateLimitServiceTest {
         when(redissonClient.getRateLimiter(anyString())).thenReturn(rateLimiter);
         when(rateLimiter.tryAcquire()).thenReturn(true);
 
-        assertThat(new RateLimitService(redissonClient, properties).tryAcquire("key-1")).isTrue();
+        assertThat(new RateLimitServiceImpl(redissonClient, properties).tryAcquire("key-1")).isTrue();
     }
 
     @Test
@@ -35,13 +36,13 @@ class RateLimitServiceTest {
         when(redissonClient.getRateLimiter(anyString())).thenReturn(rateLimiter);
         when(rateLimiter.tryAcquire()).thenReturn(false);
 
-        assertThat(new RateLimitService(redissonClient, properties).tryAcquire("key-2")).isFalse();
+        assertThat(new RateLimitServiceImpl(redissonClient, properties).tryAcquire("key-2")).isFalse();
     }
 
     @Test
     void failOpenWhenRedisUnavailable() {
         when(redissonClient.getRateLimiter(anyString())).thenThrow(new IllegalStateException("redis down"));
 
-        assertThat(new RateLimitService(redissonClient, properties).tryAcquire("key-3")).isTrue();
+        assertThat(new RateLimitServiceImpl(redissonClient, properties).tryAcquire("key-3")).isTrue();
     }
 }

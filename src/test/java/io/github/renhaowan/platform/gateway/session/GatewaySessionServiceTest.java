@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Duration;
+import io.github.renhaowan.platform.gateway.session.impl.GatewaySessionServiceImpl;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,7 +35,7 @@ class GatewaySessionServiceTest {
 
     private GatewaySessionService service() {
         GatewayProperties properties = new GatewayProperties();
-        return new GatewaySessionService(sessionMapper, redissonClient, properties);
+        return new GatewaySessionServiceImpl(sessionMapper, redissonClient, properties);
     }
 
     @Test
