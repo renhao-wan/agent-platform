@@ -43,7 +43,3 @@ platform:
     confirm-timeout-seconds: 300
     # 意图分类规则：Map<标签, 关键词列表>，按声明顺序匹配、命中即返回，全部未命中回落 GENERAL。
     # 业务关键词属于运营配置——换业务线/加意图只改这里，平台代码不出现业务词。
-    intent:
-      rules:
-        CANCEL: ["取消", "退订", "cancel"]
-        ROOM_BOOKING: ["订", "预定", "预约", "会议室", "book"]

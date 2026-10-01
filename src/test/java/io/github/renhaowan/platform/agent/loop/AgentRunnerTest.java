@@ -15,7 +15,6 @@ import io.github.renhaowan.platform.agent.AgentProperties;
 import io.github.renhaowan.platform.agent.confirm.ConfirmManager;
 import io.github.renhaowan.platform.agent.confirm.impl.ConfirmManagerImpl;
 import io.github.renhaowan.platform.agent.context.impl.ContextTrimmerImpl;
-import io.github.renhaowan.platform.agent.loop.impl.ConfigIntentClassifier;
 import io.github.renhaowan.platform.agent.memory.AgentSessionService;
 import io.github.renhaowan.platform.agent.memory.ChatMessage;
 import io.github.renhaowan.platform.agent.memory.TokenRecorder;
@@ -58,15 +57,10 @@ class AgentRunnerTest {
     private final AgentProperties properties = new AgentProperties();
 
     private AgentRunner runner() {
-        // 意图规则已配置化（platform.agent.intent.rules）：测试显式注入两组，
-        // 顺序与生产 yml 一致（CANCEL 优先于 ROOM_BOOKING，先匹配先返回）
-        properties.setIntentRules(new java.util.LinkedHashMap<>());
-        properties.getIntentRules().put("CANCEL", List.of("取消", "退订", "cancel"));
-        properties.getIntentRules().put("ROOM_BOOKING", List.of("订", "预定", "预约", "book"));
         return new AgentRunner(planner, new io.github.renhaowan.platform.agent.tool.impl.NoopToolSelector(),
                 toolRegistry, gatewayClient, sessionService,
                 new ContextTrimmerImpl(6000), confirmManager, tokenRecorder,
-                new ConfigIntentClassifier(properties), properties);
+                properties);
     }
 
     private ChatResponse toolCallResponse(String id, String name, String args) {
@@ -93,7 +87,6 @@ class AgentRunnerTest {
 
         runner().run("s1", "帮我订周三下午的会议室", events);
 
-        verify(events).intent(IntentClassifier.LABEL_ROOM_BOOKING);
         verify(events).plan(List.of("search_rooms"));
         verify(events).toolCall(eq("search_rooms"), contains("2026-10-01"));
         verify(events).toolResult(eq("search_rooms"), contains("rooms"));

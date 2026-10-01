@@ -54,9 +54,6 @@ public class AgentEventEmitter {
         send(EventType.SESSION, Map.of("sessionKey", sessionKey));
     }
 
-    public void intent(String label) {
-        send(EventType.INTENT, Map.of("label", label));
-    }
 
     public void plan(List<String> steps) {
         send(EventType.PLAN, Map.of("steps", steps));

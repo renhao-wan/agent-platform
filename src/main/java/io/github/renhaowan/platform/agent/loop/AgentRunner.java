@@ -42,7 +42,6 @@ public class AgentRunner {
     private final ContextTrimmer contextTrimmer;
     private final ConfirmManager confirmManager;
     private final TokenRecorder tokenRecorder;
-    private final IntentClassifier intentClassifier;
     private final AgentProperties properties;
 
     /**
@@ -59,7 +58,6 @@ public class AgentRunner {
      * 失败语义：工具报错/用户拒绝/步数超限都不抛异常——或转述或熔断，对话永不因单点失败中断。
      */
     public void run(String sessionKey, String userText, AgentEventEmitter events) {
-        events.intent(intentClassifier.classify(userText));
 
         List<Message> history = new ArrayList<>();
         history.add(new SystemMessage(resolveSystemPrompt()));
