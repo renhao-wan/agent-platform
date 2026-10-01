@@ -1,5 +1,6 @@
 package io.github.renhaowan.platform.gateway.web;
 
+import io.github.renhaowan.platform.common.ApiResponse;
 import io.github.renhaowan.platform.gateway.registry.OpenApiImportService;
 import io.github.renhaowan.platform.gateway.registry.ToolDefinition;
 import io.github.renhaowan.platform.gateway.registry.ToolRegistryService;
@@ -43,7 +44,7 @@ public class ProtocolAdminController {
     private final ToolRegistryService registryService;
 
     @PostMapping("/protocols/import")
-    public ImportResult importProtocols(@RequestBody @Valid ImportRequest request) {
+    public ApiResponse<ImportResult> importProtocols(@RequestBody @Valid ImportRequest request) {
         TenantContext.TenantInfo tenant = TenantContext.get();
         List<ToolDefinition> tools = importService.parse(
                 request.gatewayId(), tenant.id(), request.openapi(), request.baseUrl());
@@ -53,12 +54,13 @@ public class ProtocolAdminController {
             tool.setAuthHeaderValue(request.authHeaderValue());
         });
         registryService.upsertAll(tools);
-        return new ImportResult(tools.size(), tools.stream().map(ToolView::of).toList());
+        return ApiResponse.ok(new ImportResult(tools.size(), tools.stream().map(ToolView::of).toList()));
     }
 
     @GetMapping("/tools")
-    public List<ToolView> listTools(@RequestParam String gatewayId) {
+    public ApiResponse<List<ToolView>> listTools(@RequestParam String gatewayId) {
         TenantContext.TenantInfo tenant = TenantContext.get();
-        return registryService.listEnabled(tenant.id(), gatewayId).stream().map(ToolView::of).toList();
+        return ApiResponse.ok(registryService.listEnabled(tenant.id(), gatewayId)
+                .stream().map(ToolView::of).toList());
     }
 }

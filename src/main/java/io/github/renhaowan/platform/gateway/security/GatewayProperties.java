@@ -2,6 +2,9 @@ package io.github.renhaowan.platform.gateway.security;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * 网关配置项（application.yml 的 platform.gateway.*：实例标识、限流配额）。
+ */
 @ConfigurationProperties(prefix = "platform.gateway")
 public class GatewayProperties {
 

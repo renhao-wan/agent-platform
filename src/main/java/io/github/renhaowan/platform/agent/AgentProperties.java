@@ -5,6 +5,10 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * Agent 运行时配置项（application.yml 的 platform.agent.*；
+ * @ConfigurationProperties + @ConfigurationPropertiesScan 自动绑定与校验）。
+ */
 @ConfigurationProperties(prefix = "platform.agent")
 public class AgentProperties {
 

@@ -5,6 +5,9 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * Servlet 过滤器装配：把 ApiKeyFilter 注册到过滤链（order=1，先于一切业务处理）。
+ */
 @Configuration
 public class WebConfig {
 

@@ -1,5 +1,6 @@
 package io.github.renhaowan.platform.gateway.web;
 
+import io.github.renhaowan.platform.common.ApiResponse;
 import io.github.renhaowan.platform.gateway.tenant.Tenant;
 import io.github.renhaowan.platform.gateway.tenant.TenantService;
 import jakarta.validation.Valid;
@@ -33,12 +34,12 @@ public class TenantAdminController {
     private final TenantService tenantService;
 
     @PostMapping
-    public TenantView create(@RequestBody @Valid CreateTenantRequest request) {
-        return TenantView.of(tenantService.create(request.name()));
+    public ApiResponse<TenantView> create(@RequestBody @Valid CreateTenantRequest request) {
+        return ApiResponse.ok(TenantView.of(tenantService.create(request.name())));
     }
 
     @GetMapping
-    public List<TenantView> list() {
-        return tenantService.list().stream().map(TenantView::of).toList();
+    public ApiResponse<List<TenantView>> list() {
+        return ApiResponse.ok(tenantService.list().stream().map(TenantView::of).toList());
     }
 }

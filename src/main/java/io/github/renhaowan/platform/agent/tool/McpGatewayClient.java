@@ -43,6 +43,11 @@ public class McpGatewayClient {
                 .build();
     }
 
+    /**
+     * 惰性建立 MCP 会话（首次用到才握手，之后复用）。
+     * <p>MCP 握手 = 发 initialize 请求（带协议版本/能力声明），网关校验通过后
+     * 在响应头 Mcp-Session-Id 返回会话凭证——类似 HTTP 会话 cookie 的获取动作。
+     */
     public synchronized void ensureSession() {
         if (sessionKey != null) {
             return;
@@ -55,6 +60,11 @@ public class McpGatewayClient {
         log.info("mcp gateway session established: {}", sessionKey);
     }
 
+    /**
+     * tools/list：拉取本租户可用的工具清单（名称/描述/参数 schema）。
+     * 供 DynamicToolRegistry 转成 Spring AI ToolCallback——模型靠这份 schema 知道"有什么工具、怎么传参"。
+     * 会话过期（网关返回 400）时自动重握手并重试一次。
+     */
     public synchronized JsonNode listTools() {
         ensureSession();
         try {
@@ -66,7 +76,11 @@ public class McpGatewayClient {
         }
     }
 
-    /** 返回工具执行文本；失败时返回含错误说明的文本（由模型决策下一步）。 */
+    /**
+     * tools/call：执行工具并返回文本结果；失败也返回"含错误说明的文本"而非抛异常——
+     * 让模型看到错误后自行决策下一步（重试/换路/放弃），这是 Agent 容错的关键设计。
+     * 会话过期时自动重握手并重试一次。
+     */
     public synchronized String callTool(String name, String argumentsJson) {
         ensureSession();
         try {
@@ -82,6 +96,12 @@ public class McpGatewayClient {
         sessionKey = null;
     }
 
+    /**
+     * 统一 POST 出口（Streamable HTTP 传输：一条 /{gw}/mcp 通道走完所有方法）。
+     * <p>【白话 RestClient】Spring 6 的同步 HTTP 客户端，链式拼请求。
+     * retrieve().toEntity() 遇 4xx/5xx 会抛 RestClientResponseException（转成异常流）；
+     * 本项目网关侧自环消息体固定 2xx，只有"会话无效"统一映射 400——按此翻译成会话重握手信号。
+     */
     private ResponseEntity<String> post(String sessionId, Map<String, Object> body) {
         RestClient.RequestBodySpec spec = restClient.post()
                 .uri("/" + gatewayId + "/mcp")
