@@ -1,5 +1,8 @@
 package io.github.renhaowan.platform.agent;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "platform.agent")
@@ -17,6 +20,12 @@ public class AgentProperties {
 
     /** 工具前置路由：noop（默认透传）| wattai（System One 决策模型） */
     private String toolSelector = "noop";
+
+    /**
+     * 意图分类规则：Map&lt;标签, 关键词列表&gt;，按声明顺序匹配、命中即返回；
+     * 默认为空（全部回落 GENERAL）——业务关键词属于配置而非代码，示例见 application.yml。
+     */
+    private Map<String, List<String>> intentRules = new LinkedHashMap<>();
 
     private Wattai wattai = new Wattai();
 
@@ -50,6 +59,8 @@ public class AgentProperties {
     public int getConfirmTimeoutSeconds() { return confirmTimeoutSeconds; }
     public String getToolSelector() { return toolSelector; }
     public void setToolSelector(String toolSelector) { this.toolSelector = toolSelector; }
+    public Map<String, List<String>> getIntentRules() { return intentRules; }
+    public void setIntentRules(Map<String, List<String>> intentRules) { this.intentRules = intentRules; }
     public Wattai getWattai() { return wattai; }
     public void setWattai(Wattai wattai) { this.wattai = wattai; }
     public void setConfirmTimeoutSeconds(int confirmTimeoutSeconds) { this.confirmTimeoutSeconds = confirmTimeoutSeconds; }

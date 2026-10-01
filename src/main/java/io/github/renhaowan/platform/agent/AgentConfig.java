@@ -1,9 +1,9 @@
 package io.github.renhaowan.platform.agent;
 
 import io.github.renhaowan.platform.agent.context.ContextTrimmer;
-import io.github.renhaowan.platform.agent.tool.NoopToolSelector;
 import io.github.renhaowan.platform.agent.tool.ToolSelector;
-import io.github.renhaowan.platform.agent.tool.WattAiToolSelector;
+import io.github.renhaowan.platform.agent.tool.impl.NoopToolSelector;
+import io.github.renhaowan.platform.agent.tool.impl.WattAiToolSelector;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 

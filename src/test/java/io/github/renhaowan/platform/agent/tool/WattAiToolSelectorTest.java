@@ -3,6 +3,7 @@ package io.github.renhaowan.platform.agent.tool;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sun.net.httpserver.HttpServer;
+import io.github.renhaowan.platform.agent.tool.impl.WattAiToolSelector;
 import io.github.renhaowan.platform.gateway.registry.ToolRegistryService;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;

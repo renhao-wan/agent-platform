@@ -68,17 +68,17 @@ McpGatewayClient 自环调网关 → 网关分发/转发 → booking 真实执�
 
 ### loop/ 决策循环
 - **AgentRunner.java** ★★【②】：全项目心脏。流程：意图分类（规则通道）→ 载入历史（裁剪后）→ 循环 `Planner.decide` → 有 toolCalls 则逐个执行（敏感工具先挂起等确认）→ `ToolResponseMessage` 回填 → 无 toolCalls 则 answer。系统提示词每轮动态注入 `{{CURRENT_DATE}}/{{CURRENT_WEEKDAY}}`（消除模型编造日期）。步数熔断 maxSteps=8。
-- **Planner.java / OpenAiPlanner.java** ★【②】：规划器抽象 + OpenAI 兼容实现。关键一行：`internalToolExecutionEnabled(false)`——关闭 Spring AI 隐式工具执行，每轮只取回模型的 toolCalls 决策，**执行权收归循环**（这是事件插桩/确认挂起/权限校验能存在的前提）。qwen3 系模型自动透传 `extraBody: {enable_thinking: false}`（DashScope 非流式限制；注：1.1.1 的 extraBody 序列化未生效，已切 qwen-turbo，待 Spring AI 升级）。
-- **IntentClassifier.java / RuleIntentClassifier.java**：意图分类（规则通道：取消/预订/其他关键词），LLM 通道为预留扩展点。
+- **Planner.java / impl/OpenAiPlanner.java** ★【②】：规划器抽象 + OpenAI 兼容实现。关键一行：`internalToolExecutionEnabled(false)`——关闭 Spring AI 隐式工具执行，每轮只取回模型的 toolCalls 决策，**执行权收归循环**（这是事件插桩/确认挂起/权限校验能存在的前提）。qwen3 系模型自动透传 `extraBody: {enable_thinking: false}`（DashScope 非流式限制；注：1.1.1 的 extraBody 序列化未生效，已切 qwen-turbo，待 Spring AI 升级）。
+- **IntentClassifier.java / impl/ConfigIntentClassifier.java**：意图分类（规则通道，关键词表配置化在 application.yml 的 `platform.agent.intent.rules`，命中即返回、未命中回落 GENERAL），LLM 通道为预留扩展点。
 
 ### sse/ 用户入口
-- **ChatController.java** ★：`POST /api/v1/chat` → SseEmitter + 固定线程池（8 线程，命名 `agent-loop-*`）异步跑循环——**长连接不占容器业务线程**。
+- **ChatController.java** ★：`POST /api/v1/chat` → SseEmitter + 显式 `ThreadPoolExecutor`（核心 4/上限 8，有界队列 64，AbortPolicy 拒绝→友好报错，命名线程 `agent-loop-*`）异步跑循环——**长连接不占容器业务线程**。
 - **AgentEventEmitter.java**：8 类事件（session/intent/plan/tool_call/tool_result/confirm_request/answer/error/done）的类型化发射器，连接断开静默丢弃（循环照常落库）。
 
 ### tool/ 工具接入
 - **McpGatewayClient.java** ★【①②的缝合线】：Agent 以 MCP 客户端身份**自环调用**网关——initialize（响应头取 Mcp-Session-Id）→ tools/list → tools/call；400 会话过期自动重初始化重试一次。
 - **DynamicToolRegistry.java** ★：tools/list 结果 → 手写 `GatewayToolCallback`（实现 Spring AI ToolCallback，**仅作 schema 广告位**——执行走 McpGatewayClient 手动通道，这样事件/确认/权限才能插桩）；`x-require-confirm` 映射；5 分钟缓存。
-- **ToolSelector.java / NoopToolSelector.java / WattAiToolSelector.java**【ADR-004】：工具前置路由扩展点。wattai：工具 ≥4 个时调决策模型（state=用户话术，choices=工具名），高置信单选、低置信 top-k、异常 fail-open；**当前默认关闭**（托管端点延迟 ~2s、中文路由置信度不足，探测数据在 ADR）。
+- **ToolSelector.java / impl/NoopToolSelector.java / impl/WattAiToolSelector.java**【ADR-004】：工具前置路由扩展点。wattai：工具 ≥4 个时调决策模型（state=用户话术，choices=工具名），高置信单选、低置信 top-k、异常 fail-open；**当前默认关闭**（托管端点延迟 ~2s、中文路由置信度不足，探测数据在 ADR）。
 
 ### context/ confirm/ memory/
 - **ContextTrimmer.java** ★【③】：chars/2 粗估超阈值（默认 6000）→ 保留 system + 最近 6 条，更早内容压成摘要 SystemMessage（落 checkpoint 表）。确定性规则，单测友好。
