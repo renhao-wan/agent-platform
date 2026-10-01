@@ -2,10 +2,10 @@ package io.github.renhaowan.platform.agent.tool;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.renhaowan.platform.gateway.message.McpProtocol;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -17,12 +17,14 @@ import org.springframework.web.client.RestClientResponseException;
  * 会话惰性建立（initialize 响应头 Mcp-Session-Id）；
  * 遇到无效会话（HTTP 400 / -32602）自动重初始化并重试一次。
  */
+@Slf4j
 @Service
 public class McpGatewayClient {
 
-    private static final Logger log = LoggerFactory.getLogger(McpGatewayClient.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    public static final String SESSION_HEADER = "Mcp-Session-Id";
+
+    /** 兼容保留：请优先引用 McpProtocol.HEADER_SESSION_ID */
+    public static final String SESSION_HEADER = McpProtocol.HEADER_SESSION_ID;
 
     private final RestClient restClient;
     private final String baseUrl;
@@ -37,7 +39,7 @@ public class McpGatewayClient {
         this.apiKey = properties.getGatewayApiKey();
         this.restClient = RestClient.builder()
                 .baseUrl(this.baseUrl)
-                .defaultHeader("X-Api-Key", this.apiKey)
+                .defaultHeader(McpProtocol.HEADER_API_KEY, this.apiKey)
                 .build();
     }
 
@@ -56,11 +58,11 @@ public class McpGatewayClient {
     public synchronized JsonNode listTools() {
         ensureSession();
         try {
-            return body(post(sessionKey, rpc("tools/list"))).path("result").path("tools");
+            return body(post(sessionKey, rpc(McpProtocol.METHOD_TOOLS_LIST))).path("result").path("tools");
         } catch (GatewaySessionExpiredException e) {
             reset();
             ensureSession();
-            return body(post(sessionKey, rpc("tools/list"))).path("result").path("tools");
+            return body(post(sessionKey, rpc(McpProtocol.METHOD_TOOLS_LIST))).path("result").path("tools");
         }
     }
 
@@ -102,7 +104,7 @@ public class McpGatewayClient {
         params.put("protocolVersion", "2025-06-18");
         params.put("capabilities", Map.of());
         params.put("clientInfo", Map.of("name", "agent-platform-runtime", "version", "0.1.0"));
-        return rpc("initialize", params);
+        return rpc(McpProtocol.METHOD_INITIALIZE, params);
     }
 
     private Map<String, Object> toolsCallRequest(String name, String argumentsJson) {
@@ -115,7 +117,7 @@ public class McpGatewayClient {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("name", name);
         params.put("arguments", arguments);
-        return rpc("tools/call", params);
+        return rpc(McpProtocol.METHOD_TOOLS_CALL, params);
     }
 
     private Map<String, Object> rpc(String method) {

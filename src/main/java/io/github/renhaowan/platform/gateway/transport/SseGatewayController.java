@@ -5,8 +5,8 @@ import io.github.renhaowan.platform.gateway.message.JsonRpcRequest;
 import io.github.renhaowan.platform.gateway.message.JsonRpcResponse;
 import io.github.renhaowan.platform.gateway.message.MessageContext;
 import io.github.renhaowan.platform.gateway.message.MessageDispatcher;
+import io.github.renhaowan.platform.gateway.message.McpProtocol;
 import io.github.renhaowan.platform.gateway.security.TenantContext;
-import io.github.renhaowan.platform.gateway.session.GatewaySession;
 import io.github.renhaowan.platform.gateway.session.GatewaySessionService;
 import io.github.renhaowan.platform.gateway.session.SseConnectionRegistry;
 import io.github.renhaowan.platform.gateway.session.SseHeartbeat;
@@ -59,7 +59,7 @@ public class SseGatewayController {
         response.setHeader("X-Accel-Buffering", "no");
 
         GatewaySessionService.SessionState state =
-                sessionService.create(gatewayId, GatewaySession.TRANSPORT_SSE, tenant.id());
+                sessionService.create(gatewayId, McpProtocol.TRANSPORT_SSE, tenant.id());
         SseEmitter emitter = registry.register(state.sessionKey());
         try {
             emitter.send(SseEmitter.event().name("endpoint")
@@ -85,7 +85,7 @@ public class SseGatewayController {
                 && gatewayId.equals(state.get().gatewayId())
                 && tenant != null && tenant.id().equals(state.get().tenantId());
         if (!valid) {
-            JsonRpcErrorWriter.write(response, 400, -32602, "invalid or unknown session");
+            JsonRpcErrorWriter.write(response, 400, McpProtocol.ERROR_INVALID_PARAMS, "invalid or unknown session");
             return;
         }
 

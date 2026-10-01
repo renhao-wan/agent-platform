@@ -1,5 +1,6 @@
 package io.github.renhaowan.platform.gateway.security;
 
+import io.github.renhaowan.platform.gateway.message.McpProtocol;
 import io.github.renhaowan.platform.gateway.support.JsonRpcErrorWriter;
 import io.github.renhaowan.platform.gateway.tenant.Tenant;
 import io.github.renhaowan.platform.gateway.tenant.TenantService;
@@ -19,10 +20,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @RequiredArgsConstructor
 public class ApiKeyFilter extends OncePerRequestFilter {
 
-    public static final String API_KEY_HEADER = "X-Api-Key";
+    public static final String API_KEY_HEADER = McpProtocol.HEADER_API_KEY;
     private static final Pattern MCP_PATH = Pattern.compile("^/[^/]+/mcp(/.*)?$");
-    private static final int RPC_UNAUTHORIZED = -32001;
-    private static final int RPC_RATE_LIMITED = -32002;
 
     private final TenantService tenantService;
     private final RateLimitService rateLimitService;
@@ -38,7 +37,7 @@ public class ApiKeyFilter extends OncePerRequestFilter {
         String apiKey = request.getHeader(API_KEY_HEADER);
         if (apiKey == null || apiKey.isBlank()) {
             JsonRpcErrorWriter.write(response, HttpServletResponse.SC_UNAUTHORIZED,
-                    RPC_UNAUTHORIZED, "missing api key");
+                    McpProtocol.ERROR_UNAUTHORIZED, "missing api key");
             return;
         }
 
@@ -47,12 +46,12 @@ public class ApiKeyFilter extends OncePerRequestFilter {
                 .orElse(null);
         if (tenant == null) {
             JsonRpcErrorWriter.write(response, HttpServletResponse.SC_UNAUTHORIZED,
-                    RPC_UNAUTHORIZED, "invalid api key");
+                    McpProtocol.ERROR_UNAUTHORIZED, "invalid api key");
             return;
         }
 
         if (!rateLimitService.tryAcquire(apiKey)) {
-            JsonRpcErrorWriter.write(response, 429, RPC_RATE_LIMITED, "rate limit exceeded");
+            JsonRpcErrorWriter.write(response, 429, McpProtocol.ERROR_RATE_LIMITED, "rate limit exceeded");
             return;
         }
 

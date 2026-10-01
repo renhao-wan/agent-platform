@@ -14,9 +14,6 @@ import lombok.Data;
 @TableName("gateway_session")
 public class GatewaySession {
 
-    public static final String TRANSPORT_SSE = "SSE";
-    public static final String TRANSPORT_STREAMABLE = "STREAMABLE";
-
     @TableId(type = IdType.AUTO)
     private Long id;
 

@@ -5,8 +5,8 @@ import io.github.renhaowan.platform.gateway.message.JsonRpcRequest;
 import io.github.renhaowan.platform.gateway.message.JsonRpcResponse;
 import io.github.renhaowan.platform.gateway.message.MessageContext;
 import io.github.renhaowan.platform.gateway.message.MessageDispatcher;
+import io.github.renhaowan.platform.gateway.message.McpProtocol;
 import io.github.renhaowan.platform.gateway.security.TenantContext;
-import io.github.renhaowan.platform.gateway.session.GatewaySession;
 import io.github.renhaowan.platform.gateway.session.GatewaySessionService;
 import io.github.renhaowan.platform.gateway.session.SseConnectionRegistry;
 import io.github.renhaowan.platform.gateway.session.SseHeartbeat;
@@ -33,7 +33,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RestController
 public class StreamableGatewayController {
 
-    public static final String SESSION_HEADER = "Mcp-Session-Id";
+    /** 兼容保留：请优先引用 McpProtocol.HEADER_SESSION_ID */
+    public static final String SESSION_HEADER = McpProtocol.HEADER_SESSION_ID;
 
     private final GatewaySessionService sessionService;
     private final SseConnectionRegistry registry;
@@ -58,12 +59,12 @@ public class StreamableGatewayController {
                                        @RequestHeader(value = SESSION_HEADER, required = false) String sessionHeader,
                                        @RequestBody JsonRpcRequest request) throws Exception {
         TenantContext.TenantInfo tenant = TenantContext.get();
-        boolean isInitialize = "initialize".equals(request.method());
+        boolean isInitialize = McpProtocol.METHOD_INITIALIZE.equals(request.method());
 
         String sessionKey;
         if (isInitialize && (sessionHeader == null || sessionHeader.isBlank())) {
             GatewaySessionService.SessionState state =
-                    sessionService.create(gatewayId, GatewaySession.TRANSPORT_STREAMABLE, tenant.id());
+                    sessionService.create(gatewayId, McpProtocol.TRANSPORT_STREAMABLE, tenant.id());
             sessionKey = state.sessionKey();
         } else {
             if (sessionHeader == null || sessionHeader.isBlank()) {
@@ -125,13 +126,14 @@ public class StreamableGatewayController {
     }
 
     private ResponseEntity<String> invalidSession() {
-        JsonRpcResponse error = JsonRpcResponse.failure(null, -32602, "invalid or unknown session");
+        JsonRpcResponse error = JsonRpcResponse.failure(null, McpProtocol.ERROR_INVALID_PARAMS,
+                "invalid or unknown session");
         String json;
         try {
             json = objectMapper.writeValueAsString(error.toEventPayload());
         } catch (Exception e) {
-            json = "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32602,"
-                    + "\"message\":\"invalid or unknown session\"}}";
+            json = "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":" + McpProtocol.ERROR_INVALID_PARAMS
+                    + ",\"message\":\"invalid or unknown session\"}}";
         }
         return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON).body(json);
     }

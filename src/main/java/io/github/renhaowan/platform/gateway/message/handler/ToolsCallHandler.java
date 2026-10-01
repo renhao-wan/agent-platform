@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.renhaowan.platform.gateway.forward.GenericHttpForwarder;
 import io.github.renhaowan.platform.gateway.message.JsonRpcRequest;
 import io.github.renhaowan.platform.gateway.message.JsonRpcResponse;
+import io.github.renhaowan.platform.gateway.message.McpProtocol;
 import io.github.renhaowan.platform.gateway.message.MessageContext;
 import io.github.renhaowan.platform.gateway.message.MessageHandler;
 import io.github.renhaowan.platform.gateway.registry.ToolDefinition;
@@ -30,19 +31,19 @@ public class ToolsCallHandler implements MessageHandler {
 
     @Override
     public String method() {
-        return "tools/call";
+        return McpProtocol.METHOD_TOOLS_CALL;
     }
 
     @Override
     public JsonRpcResponse handle(JsonRpcRequest request, MessageContext context) {
         String name = request.params() == null ? null : request.params().path("name").asText(null);
         if (name == null || name.isBlank()) {
-            return JsonRpcResponse.invalidParams(request.id(), "tools/call requires tool name");
+            return JsonRpcResponse.invalidParams(request.id(), McpProtocol.METHOD_TOOLS_CALL + " requires tool name");
         }
         Optional<ToolDefinition> tool = registryService.find(
                 context.tenantId(), context.gatewayId(), name);
         if (tool.isEmpty()) {
-            return JsonRpcResponse.failure(request.id(), -32602, "unknown tool: " + name);
+            return JsonRpcResponse.failure(request.id(), McpProtocol.ERROR_INVALID_PARAMS, "unknown tool: " + name);
         }
 
         JsonNode arguments = request.params().get("arguments");

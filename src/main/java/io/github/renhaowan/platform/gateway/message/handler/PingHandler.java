@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.renhaowan.platform.gateway.message.JsonRpcRequest;
 import io.github.renhaowan.platform.gateway.message.JsonRpcResponse;
+import io.github.renhaowan.platform.gateway.message.McpProtocol;
 import io.github.renhaowan.platform.gateway.message.MessageContext;
 import io.github.renhaowan.platform.gateway.message.MessageHandler;
 import org.springframework.stereotype.Component;
@@ -18,7 +19,7 @@ public class PingHandler implements MessageHandler {
 
     @Override
     public String method() {
-        return "ping";
+        return McpProtocol.METHOD_PING;
     }
 
     @Override

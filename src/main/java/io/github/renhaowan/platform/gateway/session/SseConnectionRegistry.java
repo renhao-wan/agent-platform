@@ -1,5 +1,7 @@
 package io.github.renhaowan.platform.gateway.session;
 
+import io.github.renhaowan.platform.gateway.message.McpProtocol;
+
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +22,8 @@ public class SseConnectionRegistry {
     public record OutboundMessage(String sessionKey, String json) {
     }
 
-    public static final String TOPIC = "gw:session-events";
+    /** 兼容保留：请优先引用 McpProtocol.CHANNEL_SESSION_EVENTS */
+    public static final String TOPIC = McpProtocol.CHANNEL_SESSION_EVENTS;
 
     private final Map<String, SseEmitter> emitters = new ConcurrentHashMap<>();
     private final RTopic topic;

@@ -2,6 +2,7 @@ package io.github.renhaowan.platform.gateway.session;
 
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.renhaowan.platform.gateway.message.McpProtocol;
 import io.github.renhaowan.platform.gateway.security.GatewayProperties;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -21,7 +22,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class GatewaySessionService {
 
-    private static final String KEY_PREFIX = "gw:session:";
+    private static final String KEY_PREFIX = McpProtocol.REDIS_KEY_SESSION_PREFIX;
     private static final Duration TTL = Duration.ofMinutes(30);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 

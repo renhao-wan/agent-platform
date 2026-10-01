@@ -20,15 +20,15 @@ public record JsonRpcResponse(String jsonrpc, Object id, JsonNode result, RpcErr
     }
 
     public static JsonRpcResponse methodNotFound(Object id, String method) {
-        return failure(id, -32601, "method not found: " + method);
+        return failure(id, McpProtocol.ERROR_METHOD_NOT_FOUND, "method not found: " + method);
     }
 
     public static JsonRpcResponse invalidParams(Object id, String message) {
-        return failure(id, -32602, message);
+        return failure(id, McpProtocol.ERROR_INVALID_PARAMS, message);
     }
 
     public static JsonRpcResponse internalError(Object id, String message) {
-        return failure(id, -32603, message);
+        return failure(id, McpProtocol.ERROR_INTERNAL, message);
     }
 
     public Map<String, Object> toEventPayload() {

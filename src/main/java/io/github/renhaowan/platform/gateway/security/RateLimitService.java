@@ -1,5 +1,7 @@
 package io.github.renhaowan.platform.gateway.security;
 
+import io.github.renhaowan.platform.gateway.message.McpProtocol;
+
 import java.time.Duration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,7 +21,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class RateLimitService {
 
-    private static final String KEY_PREFIX = "gw:ratelimit:";
+    private static final String KEY_PREFIX = McpProtocol.REDIS_KEY_RATE_LIMIT_PREFIX;
 
     private final RedissonClient redissonClient;
     private final GatewayProperties properties;

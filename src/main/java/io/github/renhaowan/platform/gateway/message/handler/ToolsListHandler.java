@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.renhaowan.platform.gateway.message.JsonRpcRequest;
 import io.github.renhaowan.platform.gateway.message.JsonRpcResponse;
+import io.github.renhaowan.platform.gateway.message.McpProtocol;
 import io.github.renhaowan.platform.gateway.message.MessageContext;
 import io.github.renhaowan.platform.gateway.message.MessageHandler;
 import io.github.renhaowan.platform.gateway.registry.ToolDefinition;
@@ -27,7 +28,7 @@ public class ToolsListHandler implements MessageHandler {
 
     @Override
     public String method() {
-        return "tools/list";
+        return McpProtocol.METHOD_TOOLS_LIST;
     }
 
     @Override
