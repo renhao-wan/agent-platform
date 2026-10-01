@@ -45,6 +45,19 @@ public class AgentRunner {
     private final IntentClassifier intentClassifier;
     private final AgentProperties properties;
 
+    /**
+     * ReAct 主循环（全项目核心流程）：
+     * <ol>
+     *   <li>意图分类（规则通道，仅用于前端事件展示）-> 载入历史（裁剪后）-> 追加本轮用户输入；</li>
+     *   <li>每轮 Planner.decide 拿模型决策：无 toolCalls 即回答并结束；
+     *       有 toolCalls 则逐个执行——敏感工具先经 ConfirmManager 挂起等用户确认；</li>
+     *   <li>工具执行经 McpGatewayClient 自环调用 MCP 网关（网关再转发到业务系统）；
+     *       执行结果与"用户拒绝"都作为观察回填，模型据此决定下一步；</li>
+     *   <li>ToolResponseMessage 必须与带 toolCalls 的 AssistantMessage 成对回填，
+     *       否则模型无法看到执行结果（Spring AI 的消息配对约定）。</li>
+     * </ol>
+     * 失败语义：工具报错/用户拒绝/步数超限都不抛异常——或转述或熔断，对话永不因单点失败中断。
+     */
     public void run(String sessionKey, String userText, AgentEventEmitter events) {
         events.intent(intentClassifier.classify(userText));
 

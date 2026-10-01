@@ -25,6 +25,13 @@ public class ContextTrimmer {
     public record TrimResult(List<Message> messages, boolean trimmed, String summary) {
     }
 
+    /**
+     * 裁剪入口：粗估 ≤ 阈值时原样返回（零成本快路径）；
+     * 超阈值时按"system 前缀 + 摘要 + 最近 KEEP_RECENT 条"重建，摘要内容由调用方落 checkpoint 表留痕。
+     *
+     * @param history 完整消息历史（含 system 前缀）
+     * @return TrimResult：裁剪后的消息列表、是否发生裁剪、压缩摘要（未裁剪为 null）
+     */
     public TrimResult trim(List<Message> history) {
         if (estimate(history) <= threshold) {
             return new TrimResult(history, false, null);

@@ -70,6 +70,7 @@ public class AgentEventEmitter {
         send(EventType.TOOL_RESULT, Map.of("tool", tool, "summary", summary));
     }
 
+    /** 敏感操作确认请求：前端渲染确认按钮，用户点击后经 ConfirmController 恢复挂起的循环。 */
     public void confirmRequest(String token, String message) {
         send(EventType.CONFIRM_REQUEST, Map.of("confirmToken", token, "message", message));
     }
