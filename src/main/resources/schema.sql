@@ -101,3 +101,10 @@ SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='chat_session' AND COLUMN_NAME='user_id');
 SET @ddl = IF(@col_exists = 0, 'ALTER TABLE chat_session ADD COLUMN user_id BIGINT NULL AFTER title', 'SELECT 1');
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- M4.2：工具级角色闸门（幂等：information_schema 守卫，已存在则跳过）。
+-- required_role NULL=全员可用；ADMIN|STAFF=仅该角色可见可调
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS 
+  WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_definition' AND COLUMN_NAME='required_role');
+SET @ddl = IF(@col_exists = 0, 'ALTER TABLE tool_definition ADD COLUMN required_role VARCHAR(16) NULL AFTER require_confirm', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;

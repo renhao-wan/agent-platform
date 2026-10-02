@@ -33,6 +33,9 @@ public class ToolDefinition {
 
     private Integer requireConfirm;
 
+    /** 角色闸门：NULL=全员可用；ADMIN|STAFF=仅该角色可见可调 */
+    private String requiredRole;
+
     private Integer enabled;
 
     /** 转发时附带的服务凭证 header 名（如 X-Service-Key），导入时配置 */

@@ -26,7 +26,8 @@ public class OpenApiImportServiceImpl implements OpenApiImportService {
     private static final Set<String> HTTP_METHODS = Set.of("get", "post", "put", "delete", "patch");
 
     @Override
-    public List<ToolDefinition> parse(String gatewayId, Long tenantId, String openApiJson, String baseUrlOverride) {
+    public List<ToolDefinition> parse(String gatewayId, Long tenantId, String openApiJson,
+                                      String baseUrlOverride, String requiredRole) {
         List<ToolDefinition> tools = new ArrayList<>();
         JsonNode root;
         try {
@@ -54,14 +55,14 @@ public class OpenApiImportServiceImpl implements OpenApiImportService {
                 if (!HTTP_METHODS.contains(method)) {
                     continue;
                 }
-                tools.add(buildTool(gatewayId, tenantId, baseUrl, path, method, methodEntry.getValue()));
+                tools.add(buildTool(gatewayId, tenantId, baseUrl, path, method, methodEntry.getValue(), requiredRole));
             }
         }
         return tools;
     }
 
     private ToolDefinition buildTool(String gatewayId, Long tenantId, String baseUrl,
-                                     String path, String method, JsonNode operation) {
+                                     String path, String method, JsonNode operation, String requiredRole) {
         ToolDefinition tool = new ToolDefinition();
         tool.setTenantId(tenantId);
         tool.setGatewayId(gatewayId);
@@ -73,6 +74,8 @@ public class OpenApiImportServiceImpl implements OpenApiImportService {
         tool.setHttpMethod(method.toUpperCase());
         tool.setUrlTemplate(join(baseUrl, path));
         tool.setRequireConfirm("DELETE".equalsIgnoreCase(tool.getHttpMethod()) ? 1 : 0);
+        // 角色闸门：导入方可选声明（null=全员可用）
+        tool.setRequiredRole(requiredRole == null || requiredRole.isBlank() ? null : requiredRole);
         // 敏感规则扩展：取消类操作（取消/退订/cancel）即使不是 DELETE 也需人工确认
         String sensitiveText = (operation.path("summary").asText() + " " + operation.path("description").asText())
                 .toLowerCase();

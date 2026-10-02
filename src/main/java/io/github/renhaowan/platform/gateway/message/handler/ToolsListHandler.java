@@ -17,6 +17,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * MCP tools/list：返回当前租户在指定网关下已启用的工具清单（name/description/inputSchema）。
+ * 闸门 1（可见性）：required_role 为 NULL 的工具全员可见；标注了角色的工具仅对该角色可见——
+ * 过滤发生在清单下发环节，无权工具对模型完全"不存在"，从源头收窄攻击面。
  */
 @RequiredArgsConstructor
 @Component
@@ -33,7 +35,11 @@ public class ToolsListHandler implements MessageHandler {
 
     @Override
     public JsonRpcResponse handle(JsonRpcRequest request, MessageContext context) {
-        List<ToolDefinition> tools = registryService.listEnabled(context.tenantId(), context.gatewayId());
+        List<ToolDefinition> tools = registryService.listEnabled(context.tenantId(), context.gatewayId())
+                .stream()
+                .filter(tool -> tool.getRequiredRole() == null
+                        || tool.getRequiredRole().equals(context.userRole()))
+                .toList();
         ObjectNode result = MAPPER.createObjectNode();
         ArrayNode array = result.putArray("tools");
         for (ToolDefinition tool : tools) {

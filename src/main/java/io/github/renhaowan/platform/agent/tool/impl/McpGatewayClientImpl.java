@@ -2,6 +2,7 @@ package io.github.renhaowan.platform.agent.tool.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.renhaowan.platform.agent.auth.UserPrincipal;
 import io.github.renhaowan.platform.agent.tool.McpGatewayClient;
 import io.github.renhaowan.platform.gateway.message.McpProtocol;
 import java.util.LinkedHashMap;
@@ -42,7 +43,7 @@ public class McpGatewayClientImpl implements McpGatewayClient {
         if (sessionKey != null) {
             return;
         }
-        ResponseEntity<String> entity = post(null, initializeRequest());
+        ResponseEntity<String> entity = post(null, initializeRequest(), null);
         sessionKey = entity.getHeaders().getFirst(SESSION_HEADER);
         if (sessionKey == null) {
             throw new IllegalStateException("gateway did not return session id");
@@ -51,26 +52,28 @@ public class McpGatewayClientImpl implements McpGatewayClient {
     }
 
     @Override
-    public synchronized JsonNode listTools() {
+    public synchronized JsonNode listTools(UserPrincipal user) {
         ensureSession();
         try {
-            return body(post(sessionKey, rpc(McpProtocol.METHOD_TOOLS_LIST))).path("result").path("tools");
+            return body(post(sessionKey, rpc(McpProtocol.METHOD_TOOLS_LIST), user))
+                    .path("result").path("tools");
         } catch (GatewaySessionExpiredException e) {
             reset();
             ensureSession();
-            return body(post(sessionKey, rpc(McpProtocol.METHOD_TOOLS_LIST))).path("result").path("tools");
+            return body(post(sessionKey, rpc(McpProtocol.METHOD_TOOLS_LIST), user))
+                    .path("result").path("tools");
         }
     }
 
     @Override
-    public synchronized String callTool(String name, String argumentsJson) {
+    public synchronized String callTool(String name, String argumentsJson, UserPrincipal user) {
         ensureSession();
         try {
-            return extractText(post(sessionKey, toolsCallRequest(name, argumentsJson)));
+            return extractText(post(sessionKey, toolsCallRequest(name, argumentsJson), user));
         } catch (GatewaySessionExpiredException e) {
             reset();
             ensureSession();
-            return extractText(post(sessionKey, toolsCallRequest(name, argumentsJson)));
+            return extractText(post(sessionKey, toolsCallRequest(name, argumentsJson), user));
         }
     }
 
@@ -81,16 +84,21 @@ public class McpGatewayClientImpl implements McpGatewayClient {
 
     /**
      * 统一 POST 出口（Streamable HTTP 传输：一条 /{gw}/mcp 通道走完所有方法）。
+     * 用户身份头（X-User-Id / X-User-Role）按请求携带，initialize 无身份不传。
      * <p>【白话 RestClient】Spring 6 的同步 HTTP 客户端，链式拼请求。
      * retrieve().toEntity() 遇 4xx/5xx 会抛 RestClientResponseException（转成异常流）；
      * 本项目网关侧自环消息体固定 2xx，只有"会话无效"统一映射 400——按此翻译成会话重握手信号。
      */
-    private ResponseEntity<String> post(String sessionId, Map<String, Object> body) {
+    private ResponseEntity<String> post(String sessionId, Map<String, Object> body, UserPrincipal user) {
         RestClient.RequestBodySpec spec = restClient.post()
                 .uri("/" + gatewayId + "/mcp")
                 .contentType(MediaType.APPLICATION_JSON);
         if (sessionId != null) {
             spec = spec.header(SESSION_HEADER, sessionId);
+        }
+        if (user != null) {
+            spec = spec.header(McpProtocol.HEADER_USER_ID, String.valueOf(user.uid()))
+                    .header(McpProtocol.HEADER_USER_ROLE, user.role());
         }
         try {
             return spec.body(body).retrieve().toEntity(String.class);

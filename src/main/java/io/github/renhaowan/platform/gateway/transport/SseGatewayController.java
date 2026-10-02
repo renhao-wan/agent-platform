@@ -19,6 +19,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -73,6 +74,7 @@ public class SseGatewayController {
     @PostMapping("/{gatewayId}/mcp/message")
     public void message(@PathVariable String gatewayId,
                         @RequestParam String sessionId,
+                        @RequestHeader(value = McpProtocol.HEADER_USER_ROLE, required = false) String userRole,
                         @RequestBody JsonRpcRequest request,
                         HttpServletRequest httpRequest,
                         HttpServletResponse response) throws Exception {
@@ -89,7 +91,7 @@ public class SseGatewayController {
         }
 
         JsonRpcResponse rpcResponse =
-                dispatcher.dispatch(request, new MessageContext(gatewayId, sessionId, tenant.id(), tenant.apiKey()));
+                dispatcher.dispatch(request, new MessageContext(gatewayId, sessionId, tenant.id(), tenant.apiKey(), userRole));
         if (rpcResponse != null) {
             registry.send(sessionId, objectMapper.writeValueAsString(rpcResponse.toEventPayload()));
         }

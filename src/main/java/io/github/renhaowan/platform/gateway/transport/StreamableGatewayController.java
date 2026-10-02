@@ -57,6 +57,7 @@ public class StreamableGatewayController {
     @PostMapping("/{gatewayId}/mcp")
     public ResponseEntity<String> post(@PathVariable String gatewayId,
                                        @RequestHeader(value = SESSION_HEADER, required = false) String sessionHeader,
+                                       @RequestHeader(value = McpProtocol.HEADER_USER_ROLE, required = false) String userRole,
                                        @RequestBody JsonRpcRequest request) throws Exception {
         TenantContext.TenantInfo tenant = TenantContext.get();
         boolean isInitialize = McpProtocol.METHOD_INITIALIZE.equals(request.method());
@@ -77,7 +78,7 @@ public class StreamableGatewayController {
         }
 
         JsonRpcResponse rpcResponse = dispatcher.dispatch(request,
-                new MessageContext(gatewayId, sessionKey, tenant.id(), tenant.apiKey()));
+                new MessageContext(gatewayId, sessionKey, tenant.id(), tenant.apiKey(), userRole));
         if (rpcResponse == null) {
             return ResponseEntity.accepted().build();
         }

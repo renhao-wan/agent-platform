@@ -12,5 +12,9 @@ import java.util.List;
  */
 public interface OpenApiImportService {
 
-    List<ToolDefinition> parse(String gatewayId, Long tenantId, String openApiJson, String baseUrlOverride);
+    /**
+     * @param requiredRole 工具级角色闸门（可选，null=全员可用；如 ADMIN）
+     */
+    List<ToolDefinition> parse(String gatewayId, Long tenantId, String openApiJson,
+                               String baseUrlOverride, String requiredRole);
 }

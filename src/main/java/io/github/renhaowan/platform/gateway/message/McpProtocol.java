@@ -29,9 +29,10 @@ public final class McpProtocol {
     public static final String TRANSPORT_SSE = "SSE";
     public static final String TRANSPORT_STREAMABLE = "STREAMABLE";
 
-    /** HTTP 头：租户鉴权 key / MCP 会话 id / 预留的用户角色透传头 */
+    /** HTTP 头：租户鉴权 key / MCP 会话 id / 用户身份透传（Agent 自环时携带，闸门数据源） */
     public static final String HEADER_API_KEY = "X-Api-Key";
     public static final String HEADER_SESSION_ID = "Mcp-Session-Id";
+    public static final String HEADER_USER_ID = "X-User-Id";
     public static final String HEADER_USER_ROLE = "X-User-Role";
 
     /** Redis key 约定：会话体（RBucket）、限流器（RRateLimiter）、跨实例事件频道（RTopic） */

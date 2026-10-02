@@ -77,7 +77,7 @@ public class AgentRunner {
             sessionService.saveCheckpoint(sessionKey, trim.summary());
         }
 
-        List<ToolCallback> tools = toolSelector.select(userText, toolRegistry.callbacks());
+        List<ToolCallback> tools = toolSelector.select(userText, toolRegistry.callbacks(principal));
 
         for (int step = 0; step < properties.getMaxSteps(); step++) {
             ChatResponse response = planner.decide(history, tools);
@@ -111,7 +111,7 @@ public class AgentRunner {
             List<ToolResponseMessage.ToolResponse> responses = new ArrayList<>();
             for (AssistantMessage.ToolCall call : calls) {
                 boolean approved = true;
-                if (toolRegistry.requireConfirm(call.name())) {
+                if (toolRegistry.requireConfirm(call.name(), principal)) {
                     String token = confirmManager.request(sessionKey, call.name(), call.arguments());
                     events.confirmRequest(token, "即将执行敏感操作：" + call.name() + "，请确认");
                     approved = Boolean.TRUE.equals(confirmManager.await(token, properties.getConfirmTimeoutSeconds()));
@@ -122,7 +122,8 @@ public class AgentRunner {
                     resultText = "用户拒绝了该操作";
                 } else {
                     events.toolCall(call.name(), call.arguments() == null ? "{}" : call.arguments());
-                    resultText = gatewayClient.callTool(call.name(), call.arguments());
+                    // 用户身份随调用下穿网关：闸门 2（执行点鉴权）在网关侧校验 required_role
+                    resultText = gatewayClient.callTool(call.name(), call.arguments(), principal);
                     events.toolResult(call.name(), summarize(resultText));
                 }
                 responses.add(new ToolResponseMessage.ToolResponse(call.id(), call.name(), resultText));

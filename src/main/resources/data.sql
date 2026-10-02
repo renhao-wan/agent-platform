@@ -7,3 +7,7 @@ FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM app_user WHERE username = 'admin');
 INSERT INTO app_user (username, password_hash, role)
 SELECT 'staff01', '10176e7b7b24d317acfcf8d2064cfd2f24e154f7b5a96603077d5ef813d6a6b6', 'STAFF'
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM app_user WHERE username = 'staff01');
+
+-- 角色闸门种子：cancel 工具仅 ADMIN 可见可调（UPDATE 天然幂等；工具未导入时为 0 行更新）
+UPDATE tool_definition SET required_role = 'ADMIN' WHERE name = 'cancel';
+

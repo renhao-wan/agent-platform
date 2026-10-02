@@ -83,9 +83,9 @@ class AgentRunnerTest {
         when(planner.decide(anyList(), any()))
                 .thenReturn(toolCallResponse("c1", "search_rooms", "{\"date\":\"2026-10-01\"}"),
                         answerResponse("已为你找到 3 间可用会议室"));
-        when(toolRegistry.requireConfirm("search_rooms")).thenReturn(false);
-        when(toolRegistry.callbacks()).thenReturn(List.of());
-        when(gatewayClient.callTool(eq("search_rooms"), anyString())).thenReturn("{\"rooms\":3}");
+        when(toolRegistry.requireConfirm(eq("search_rooms"), any())).thenReturn(false);
+        when(toolRegistry.callbacks(any())).thenReturn(List.of());
+        when(gatewayClient.callTool(eq("search_rooms"), anyString(), any())).thenReturn("{\"rooms\":3}");
 
         runner().run("s1", "帮我订周三下午的会议室", events, staff);
 
@@ -107,9 +107,9 @@ class AgentRunnerTest {
         when(planner.decide(anyList(), any()))
                 .thenReturn(toolCallResponse("c1", "cancel_booking", "{\"id\":42}"),
                         answerResponse("已取消"));
-        when(toolRegistry.requireConfirm("cancel_booking")).thenReturn(true);
-        when(toolRegistry.callbacks()).thenReturn(List.of());
-        when(gatewayClient.callTool(eq("cancel_booking"), anyString())).thenReturn("{\"status\":\"CANCELLED\"}");
+        when(toolRegistry.requireConfirm(eq("cancel_booking"), any())).thenReturn(true);
+        when(toolRegistry.callbacks(any())).thenReturn(List.of());
+        when(gatewayClient.callTool(eq("cancel_booking"), anyString(), any())).thenReturn("{\"status\":\"CANCELLED\"}");
 
         // confirm_request 事件发出后，异步线程模拟用户点击"同意"
         org.mockito.Mockito.doAnswer(invocation -> {
@@ -126,7 +126,7 @@ class AgentRunnerTest {
 
         runner().run("s1", "取消刚才那个预订", events, staff);
 
-        verify(gatewayClient).callTool(eq("cancel_booking"), contains("42"));
+        verify(gatewayClient).callTool(eq("cancel_booking"), contains("42"), any());
         verify(events).answer("已取消");
         verify(events).done();
     }
@@ -138,8 +138,8 @@ class AgentRunnerTest {
         when(planner.decide(anyList(), any()))
                 .thenReturn(toolCallResponse("c1", "cancel_booking", "{\"id\":42}"),
                         answerResponse("好的，未取消"));
-        when(toolRegistry.requireConfirm("cancel_booking")).thenReturn(true);
-        when(toolRegistry.callbacks()).thenReturn(List.of());
+        when(toolRegistry.requireConfirm(eq("cancel_booking"), any())).thenReturn(true);
+        when(toolRegistry.callbacks(any())).thenReturn(List.of());
 
         org.mockito.Mockito.doAnswer(invocation -> {
             String token = invocation.getArgument(0);
@@ -155,7 +155,7 @@ class AgentRunnerTest {
 
         runner().run("s1", "算了别取消", events, staff);
 
-        verify(gatewayClient, never()).callTool(anyString(), anyString());
+        verify(gatewayClient, never()).callTool(anyString(), anyString(), any());
         verify(sessionService).appendMessage(eq("s1"), eq(ChatMessage.ROLE_TOOL),
                 contains("拒绝"), eq("cancel_booking"));
         verify(events).answer("好的，未取消");
@@ -168,14 +168,14 @@ class AgentRunnerTest {
         AtomicInteger counter = new AtomicInteger();
         when(planner.decide(anyList(), any()))
                 .thenAnswer(inv -> toolCallResponse("c" + counter.incrementAndGet(), "search_rooms", "{}"));
-        when(toolRegistry.requireConfirm(anyString())).thenReturn(false);
-        when(toolRegistry.callbacks()).thenReturn(List.of());
-        when(gatewayClient.callTool(anyString(), anyString())).thenReturn("{}");
+        when(toolRegistry.requireConfirm(anyString(), any())).thenReturn(false);
+        when(toolRegistry.callbacks(any())).thenReturn(List.of());
+        when(gatewayClient.callTool(anyString(), anyString(), any())).thenReturn("{}");
 
         runner().run("s1", "随便查查", events, staff);
 
         verify(events).error(contains("最大推理步数"));
         verify(events).done();
-        verify(gatewayClient, times(3)).callTool(anyString(), anyString());
+        verify(gatewayClient, times(3)).callTool(anyString(), anyString(), any());
     }
 }
