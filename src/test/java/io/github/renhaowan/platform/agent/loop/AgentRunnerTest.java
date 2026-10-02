@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.renhaowan.platform.agent.AgentProperties;
+import io.github.renhaowan.platform.agent.auth.UserPrincipal;
 import io.github.renhaowan.platform.agent.confirm.ConfirmManager;
 import io.github.renhaowan.platform.agent.confirm.impl.ConfirmManagerImpl;
 import io.github.renhaowan.platform.agent.context.impl.ContextTrimmerImpl;
@@ -53,6 +54,7 @@ class AgentRunnerTest {
     @Mock
     private AgentEventEmitter events;
 
+    private final UserPrincipal staff = new UserPrincipal(1L, "STAFF");
     private final ConfirmManager confirmManager = new ConfirmManagerImpl();
     private final AgentProperties properties = new AgentProperties();
 
@@ -85,7 +87,7 @@ class AgentRunnerTest {
         when(toolRegistry.callbacks()).thenReturn(List.of());
         when(gatewayClient.callTool(eq("search_rooms"), anyString())).thenReturn("{\"rooms\":3}");
 
-        runner().run("s1", "帮我订周三下午的会议室", events);
+        runner().run("s1", "帮我订周三下午的会议室", events, staff);
 
         verify(events).plan(List.of("search_rooms"));
         verify(events).toolCall(eq("search_rooms"), contains("2026-10-01"));
@@ -122,7 +124,7 @@ class AgentRunnerTest {
             return null;
         }).when(events).confirmRequest(anyString(), anyString());
 
-        runner().run("s1", "取消刚才那个预订", events);
+        runner().run("s1", "取消刚才那个预订", events, staff);
 
         verify(gatewayClient).callTool(eq("cancel_booking"), contains("42"));
         verify(events).answer("已取消");
@@ -151,7 +153,7 @@ class AgentRunnerTest {
             return null;
         }).when(events).confirmRequest(anyString(), anyString());
 
-        runner().run("s1", "算了别取消", events);
+        runner().run("s1", "算了别取消", events, staff);
 
         verify(gatewayClient, never()).callTool(anyString(), anyString());
         verify(sessionService).appendMessage(eq("s1"), eq(ChatMessage.ROLE_TOOL),
@@ -170,7 +172,7 @@ class AgentRunnerTest {
         when(toolRegistry.callbacks()).thenReturn(List.of());
         when(gatewayClient.callTool(anyString(), anyString())).thenReturn("{}");
 
-        runner().run("s1", "随便查查", events);
+        runner().run("s1", "随便查查", events, staff);
 
         verify(events).error(contains("最大推理步数"));
         verify(events).done();

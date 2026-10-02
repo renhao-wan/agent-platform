@@ -83,3 +83,21 @@ SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_definition' AND COLUMN_NAME='auth_header_name');
 SET @ddl = IF(@col_exists = 0, 'ALTER TABLE tool_definition ADD COLUMN auth_header_name VARCHAR(64) NULL AFTER input_schema, ADD COLUMN auth_header_value VARCHAR(256) NULL AFTER auth_header_name', 'SELECT 1');
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- M4.1：平台用户（登录与三级权限闸门的身份源；密码存 SHA-256 十六进制小写）
+CREATE TABLE IF NOT EXISTS app_user (
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    username      VARCHAR(32)  NOT NULL,
+    password_hash VARCHAR(100) NOT NULL COMMENT 'SHA-256 十六进制小写',
+    role          VARCHAR(16)  NOT NULL COMMENT 'ADMIN | STAFF',
+    status        TINYINT      NOT NULL DEFAULT 1 COMMENT '1 启用 0 停用',
+    created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_app_user_username (username)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '平台用户';
+
+-- M4.1：会话归属用户（幂等：information_schema 守卫，已存在则跳过；
+-- NULL 表示历史遗留的无主会话，续聊放行但新会话一律绑定）
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS 
+  WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='chat_session' AND COLUMN_NAME='user_id');
+SET @ddl = IF(@col_exists = 0, 'ALTER TABLE chat_session ADD COLUMN user_id BIGINT NULL AFTER title', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;

@@ -1,6 +1,7 @@
 package io.github.renhaowan.platform.agent.loop;
 
 import io.github.renhaowan.platform.agent.AgentProperties;
+import io.github.renhaowan.platform.agent.auth.UserPrincipal;
 import io.github.renhaowan.platform.agent.confirm.ConfirmManager;
 import io.github.renhaowan.platform.agent.context.ContextTrimmer;
 import io.github.renhaowan.platform.agent.memory.AgentSessionService;
@@ -56,8 +57,11 @@ public class AgentRunner {
      *       否则模型无法看到执行结果（Spring AI 的消息配对约定）。</li>
      * </ol>
      * 失败语义：工具报错/用户拒绝/步数超限都不抛异常——或转述或熔断，对话永不因单点失败中断。
+     *
+     * @param principal 当前会话用户身份（uid/role）——ThreadLocal 不跨线程池，
+     *                  由 ChatController 在 HTTP 线程显式取出传入，驱动工具可见性与执行鉴权
      */
-    public void run(String sessionKey, String userText, AgentEventEmitter events) {
+    public void run(String sessionKey, String userText, AgentEventEmitter events, UserPrincipal principal) {
 
         List<Message> history = new ArrayList<>();
         history.add(new SystemMessage(resolveSystemPrompt()));

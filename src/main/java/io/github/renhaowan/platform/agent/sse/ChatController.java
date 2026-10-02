@@ -1,8 +1,11 @@
 package io.github.renhaowan.platform.agent.sse;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.renhaowan.platform.agent.auth.UserContext;
+import io.github.renhaowan.platform.agent.auth.UserPrincipal;
 import io.github.renhaowan.platform.agent.loop.AgentRunner;
 import io.github.renhaowan.platform.agent.memory.AgentSessionService;
+import io.github.renhaowan.platform.agent.memory.entity.ChatSession;
 import jakarta.annotation.PreDestroy;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -85,15 +88,30 @@ public class ChatController {
         SseEmitter emitter = new SseEmitter(15 * 60_000L);
         AgentEventEmitter events = new AgentEventEmitter(emitter, objectMapper);
 
-        String sessionKey = request.sessionKey() == null || request.sessionKey().isBlank()
-                ? sessionService.createSession(request.message().substring(0, Math.min(20, request.message().length())))
-                : request.sessionKey();
+        // ThreadLocal 不跨线程池：在 HTTP 线程把身份取出，之后全程显式传参
+        UserPrincipal principal = UserContext.get();
+
+        String sessionKey;
+        if (request.sessionKey() == null || request.sessionKey().isBlank()) {
+            sessionKey = sessionService.createSession(
+                    request.message().substring(0, Math.min(20, request.message().length())),
+                    principal.uid());
+        } else {
+            sessionKey = request.sessionKey();
+            if (!ownsSession(sessionKey, principal)) {
+                // 归属校验失败：以 SSE 错误事件反馈，不启动对话循环（403 语义）
+                events.error("403 无权访问该会话：会话不属于当前用户");
+                events.done();
+                emitter.complete();
+                return emitter;
+            }
+        }
         events.session(sessionKey);
 
         try {
             executor.execute(() -> {
                 try {
-                    agentRunner.run(sessionKey, request.message(), events);
+                    agentRunner.run(sessionKey, request.message(), events, principal);
                     emitter.complete();
                 } catch (Exception e) {
                     log.error("agent loop failed, session {}", sessionKey, e);
@@ -110,5 +128,15 @@ public class ChatController {
             emitter.complete();
         }
         return emitter;
+    }
+
+    /**
+     * 会话归属校验：会话存在且已绑定 user_id 时，仅归属者可续聊。
+     * user_id 为 NULL 的历史遗留会话放行（不追溯封锁存量数据）。
+     */
+    private boolean ownsSession(String sessionKey, UserPrincipal principal) {
+        return sessionService.findBySessionKey(sessionKey)
+                .map(session -> session.getUserId() == null || session.getUserId().equals(principal.uid()))
+                .orElse(true);
     }
 }

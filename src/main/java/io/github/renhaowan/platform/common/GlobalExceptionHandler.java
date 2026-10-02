@@ -33,6 +33,14 @@ public class GlobalExceptionHandler {
         return ApiResponse.error(404, "not found");
     }
 
+    /** 登录凭证错误（用户不存在/密码不符/账号停用）：401，不泄露具体是哪一项。 */
+    @ExceptionHandler(io.github.renhaowan.platform.agent.auth.InvalidCredentialsException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ApiResponse<Void> handleInvalidCredentials(
+            io.github.renhaowan.platform.agent.auth.InvalidCredentialsException e) {
+        return ApiResponse.error(401, e.getMessage());
+    }
+
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiResponse<Void> handleUnexpected(Exception e) {

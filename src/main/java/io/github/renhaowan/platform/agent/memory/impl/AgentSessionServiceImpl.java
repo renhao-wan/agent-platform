@@ -10,6 +10,7 @@ import io.github.renhaowan.platform.agent.memory.entity.Checkpoint;
 import io.github.renhaowan.platform.agent.memory.mapper.CheckpointMapper;
 import jakarta.annotation.PreDestroy;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -23,11 +24,12 @@ public class AgentSessionServiceImpl implements AgentSessionService {
     private final CheckpointMapper checkpointMapper;
 
     @Override
-    public String createSession(String title) {
+    public String createSession(String title, Long userId) {
         String sessionKey = java.util.UUID.randomUUID().toString();
         ChatSession session = new ChatSession();
         session.setSessionKey(sessionKey);
         session.setTitle(title);
+        session.setUserId(userId);
         sessionMapper.insert(session);
         return sessionKey;
     }
@@ -54,6 +56,12 @@ public class AgentSessionServiceImpl implements AgentSessionService {
         checkpoint.setSessionKey(sessionKey);
         checkpoint.setSummary(summary);
         checkpointMapper.insert(checkpoint);
+    }
+
+    @Override
+    public Optional<ChatSession> findBySessionKey(String sessionKey) {
+        return Optional.ofNullable(sessionMapper.selectOne(
+                new QueryWrapper<ChatSession>().eq("session_key", sessionKey)));
     }
 
     @Override
