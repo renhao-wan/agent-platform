@@ -16,7 +16,8 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 
 /**
- * wattai 路由器契约测试（本地 HttpServer 模拟决策端点，离线可重复）。
+ * wattai 路由节点契约测试（本地 HttpServer 模拟决策端点，离线可重复）。
+ * 弃权 = Optional.empty（交责任链下一环），接管 = Optional.of(筛选结果)。
  */
 class WattAiToolSelectorTest {
 
@@ -70,8 +71,8 @@ class WattAiToolSelectorTest {
     }
 
     @Test
-    void highConfidenceRoutesToSingleTool() {
-        var picked = selector(3, 0.6).select("帮我订会议室", List.of(search, create, cancel));
+    void highConfidenceTakesOverWithSingleTool() {
+        var picked = selector(3, 0.6).select("帮我订会议室", List.of(search, create, cancel)).orElseThrow();
 
         assertThat(requests.get()).isEqualTo(1);
         assertThat(picked).hasSize(1);
@@ -79,12 +80,12 @@ class WattAiToolSelectorTest {
     }
 
     @Test
-    void lowConfidenceFallsBackToTopK() {
+    void lowConfidenceDegradesToTopK() {
         responseBody = "{\"results\":[{\"argmax\":\"create\",\"confidence\":0.3,"
                 + "\"options\":[\"searchAvailable\",\"create\",\"cancel\"],"
                 + "\"probs\":[0.3,0.35,0.35]}]}";
 
-        var picked = selector(3, 0.6).select("帮我订会议室", List.of(search, create, cancel));
+        var picked = selector(3, 0.6).select("帮我订会议室", List.of(search, create, cancel)).orElseThrow();
 
         assertThat(picked).hasSize(2);
         assertThat(picked).extracting(t -> t.getToolDefinition().name())
@@ -92,21 +93,32 @@ class WattAiToolSelectorTest {
     }
 
     @Test
-    void decisionApiFailureFailsOpen() {
+    void decisionApiFailureAbstainsToNextHandler() {
         // 指向不可达端口，避免污染共享 HttpServer（其他用例还要用）
         WattAiToolSelector deadSelector =
                 new WattAiToolSelector("http://localhost:1", null, 3, 0.6, 2);
 
         var picked = deadSelector.select("帮我订会议室", List.of(search, create, cancel));
 
-        assertThat(picked).hasSize(3); // fail-open 全量
+        assertThat(picked).isEmpty(); // 弃权 → 责任链下一环 / 链尾兜底全量
     }
 
     @Test
-    void fewToolsPassThroughWithoutCallingDecisionApi() {
+    void fewToolsAbstainWithoutCallingDecisionApi() {
         var picked = selector(4, 0.6).select("帮我订会议室", List.of(search, create));
 
-        assertThat(picked).hasSize(2);
+        assertThat(picked).isEmpty();
         assertThat(requests.get()).isZero();
+    }
+
+    @Test
+    void argmaxOutsideCandidatesAbstainsInsteadOfEmittingEmptySet() {
+        // 潜伏缺陷回归：argmax 指向候选外工具名时，旧实现会交出空工具集（主模型无工具可用）
+        responseBody = "{\"results\":[{\"argmax\":\"ghostTool\",\"confidence\":0.9,"
+                + "\"options\":[\"searchAvailable\",\"create\"],\"probs\":[0.9,0.1]}]}";
+
+        var picked = selector(3, 0.6).select("帮我订会议室", List.of(search, create, cancel));
+
+        assertThat(picked).isEmpty();
     }
 }

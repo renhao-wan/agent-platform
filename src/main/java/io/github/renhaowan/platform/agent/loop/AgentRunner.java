@@ -6,6 +6,7 @@ import io.github.renhaowan.platform.agent.confirm.ConfirmManager;
 import io.github.renhaowan.platform.agent.context.ContextTrimmer;
 import io.github.renhaowan.platform.agent.memory.AgentSessionService;
 import io.github.renhaowan.platform.agent.memory.entity.ChatMessage;
+import io.github.renhaowan.platform.agent.memory.impl.HistoryRecallTool;
 import io.github.renhaowan.platform.agent.memory.TokenRecorder;
 import io.github.renhaowan.platform.agent.sse.AgentEventEmitter;
 import io.github.renhaowan.platform.agent.tool.DynamicToolRegistry;
@@ -39,6 +40,7 @@ public class AgentRunner {
     private final ToolSelector toolSelector;
     private final DynamicToolRegistry toolRegistry;
     private final McpGatewayClient gatewayClient;
+    private final HistoryRecallTool historyRecallTool;
     private final AgentSessionService sessionService;
     private final ContextTrimmer contextTrimmer;
     private final ConfirmManager confirmManager;
@@ -77,7 +79,11 @@ public class AgentRunner {
             sessionService.saveCheckpoint(sessionKey, trim.summary());
         }
 
-        List<ToolCallback> tools = toolSelector.select(userText, toolRegistry.callbacks(principal));
+        List<ToolCallback> allTools = toolRegistry.callbacks(principal);
+        // 路由责任链（ADR-004）：节点弃权/失败都回落全量，orElse 只是契约兜底
+        List<ToolCallback> tools = new ArrayList<>(toolSelector.select(userText, allTools).orElse(allTools));
+        // 平台自有内部工具不参与业务路由，始终在册（会话记忆调回，领域中立、角色无关，ADR-005）
+        tools.add(historyRecallTool.callback());
 
         for (int step = 0; step < properties.getMaxSteps(); step++) {
             ChatResponse response = planner.decide(history, tools);
@@ -120,6 +126,11 @@ public class AgentRunner {
                 String resultText;
                 if (!approved) {
                     resultText = "用户拒绝了该操作";
+                } else if (historyRecallTool.handles(call.name())) {
+                    // 平台内部工具本地执行：不进网关、无确认/角色闸门（只读当前会话自己的历史）
+                    events.toolCall(call.name(), call.arguments() == null ? "{}" : call.arguments());
+                    resultText = historyRecallTool.execute(sessionKey, call.arguments());
+                    events.toolResult(call.name(), summarize(resultText));
                 } else {
                     events.toolCall(call.name(), call.arguments() == null ? "{}" : call.arguments());
                     // 用户身份随调用下穿网关：闸门 2（执行点鉴权）在网关侧校验 required_role

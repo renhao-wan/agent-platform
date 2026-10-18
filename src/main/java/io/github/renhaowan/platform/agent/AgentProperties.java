@@ -1,14 +1,17 @@
 package io.github.renhaowan.platform.agent;
 
+import lombok.Data;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  * Agent 运行时配置项（application.yml 的 platform.agent.*；
  * @ConfigurationProperties + @ConfigurationPropertiesScan 自动绑定与校验）。
  */
+@Data
 @ConfigurationProperties(prefix = "platform.agent")
 public class AgentProperties {
 
@@ -22,8 +25,13 @@ public class AgentProperties {
     private int contextThreshold = 6000;
     private int confirmTimeoutSeconds = 300;
 
-    /** 工具前置路由：noop（默认透传）| wattai（System One 决策模型） */
-    private String toolSelector = "noop";
+    /**
+     * 工具路由责任链节点及顺序（逗号分隔、按序尝试）：当前支持 wattai；
+     * 置空 = 不路由、全量直通。jev / 本地语义路由实现就绪后按优先级前置。
+     */
+    private String routingHandlers = "wattai";
+    /** 责任链触发阈值：工具数达到该值才启用路由；未达则整链休眠、全量直通（ADR-004） */
+    private int routingToolCountThreshold = 20;
 
     /**
      * 意图分类规则：Map&lt;标签, 关键词列表&gt;，按声明顺序匹配、命中即返回；
@@ -50,22 +58,4 @@ public class AgentProperties {
         public void setTopK(int topK) { this.topK = topK; }
     }
 
-    public String getGatewayBaseUrl() { return gatewayBaseUrl; }
-    public void setGatewayBaseUrl(String gatewayBaseUrl) { this.gatewayBaseUrl = gatewayBaseUrl; }
-    public String getGatewayId() { return gatewayId; }
-    public void setGatewayId(String gatewayId) { this.gatewayId = gatewayId; }
-    public String getGatewayApiKey() { return gatewayApiKey; }
-    public void setGatewayApiKey(String gatewayApiKey) { this.gatewayApiKey = gatewayApiKey; }
-    public int getMaxSteps() { return maxSteps; }
-    public void setMaxSteps(int maxSteps) { this.maxSteps = maxSteps; }
-    public int getContextThreshold() { return contextThreshold; }
-    public void setContextThreshold(int contextThreshold) { this.contextThreshold = contextThreshold; }
-    public int getConfirmTimeoutSeconds() { return confirmTimeoutSeconds; }
-    public String getToolSelector() { return toolSelector; }
-    public void setToolSelector(String toolSelector) { this.toolSelector = toolSelector; }
-    public Map<String, List<String>> getIntentRules() { return intentRules; }
-    public void setIntentRules(Map<String, List<String>> intentRules) { this.intentRules = intentRules; }
-    public Wattai getWattai() { return wattai; }
-    public void setWattai(Wattai wattai) { this.wattai = wattai; }
-    public void setConfirmTimeoutSeconds(int confirmTimeoutSeconds) { this.confirmTimeoutSeconds = confirmTimeoutSeconds; }
 }

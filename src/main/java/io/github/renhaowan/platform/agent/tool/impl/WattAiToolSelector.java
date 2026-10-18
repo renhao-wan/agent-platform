@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import io.github.renhaowan.platform.agent.tool.ToolSelector;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.http.MediaType;
@@ -22,8 +23,9 @@ import org.springframework.web.client.RestClient;
  * 延迟 ~2s（含跨境网络）、中文工具路由置信度持续 <0.4 —— 因此默认关闭，
  * 仅作为 ToolSelector 的一种实现保留；自托管 GGUF（205MB 量化版）可消除网络延迟。
  * <p>
- * 行为契约：工具数 < minTools 直接透传；置信度低于阈值取概率 top-k；
- * 任何异常 fail-open 返回全量（路由层故障不影响对话主流程）。
+ * 行为契约（责任链节点语义）：工具数 < minTools 弃权；置信度低于阈值降级为概率 top-k
+ * （排序仍有价值，属接管而非弃权）；argmax 落在候选外时弃权（不能交出空集让主模型无工具可用）；
+ * 任何异常弃权交下一环，由链尾兜底全量直通——路由层故障不影响对话主流程。
  */
 @Slf4j
 public class WattAiToolSelector implements ToolSelector {
@@ -54,22 +56,23 @@ public class WattAiToolSelector implements ToolSelector {
     }
 
     @Override
-    public List<ToolCallback> select(String userText, List<ToolCallback> allTools) {
+    public Optional<List<ToolCallback>> select(String userText, List<ToolCallback> allTools) {
         if (allTools.size() < minTools) {
-            return allTools;
+            return Optional.empty();
         }
         try {
             Decision decision = callDecisionModel(userText, allTools);
             if (decision.confidence() < confidenceThreshold) {
-                log.warn("wattai low confidence {}, fallback to top-{}", decision.confidence(), topK);
-                return topKByProbability(allTools, decision);
+                log.warn("wattai low confidence {}, degrade to top-{}", decision.confidence(), topK);
+                return Optional.of(topKByProbability(allTools, decision));
             }
-            return allTools.stream()
+            List<ToolCallback> hit = allTools.stream()
                     .filter(t -> t.getToolDefinition().name().equals(decision.argmax()))
                     .toList();
+            return hit.isEmpty() ? Optional.empty() : Optional.of(hit);
         } catch (Exception e) {
-            log.warn("wattai routing failed, fail-open: {}", e.getMessage());
-            return allTools;
+            log.warn("wattai routing failed, abstain to next handler: {}", e.getMessage());
+            return Optional.empty();
         }
     }
 

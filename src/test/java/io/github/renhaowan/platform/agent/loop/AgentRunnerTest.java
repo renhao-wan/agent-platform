@@ -3,14 +3,17 @@ package io.github.renhaowan.platform.agent.loop;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import io.github.renhaowan.platform.agent.AgentProperties;
 import io.github.renhaowan.platform.agent.auth.UserPrincipal;
 import io.github.renhaowan.platform.agent.confirm.ConfirmManager;
@@ -18,6 +21,9 @@ import io.github.renhaowan.platform.agent.confirm.impl.ConfirmManagerImpl;
 import io.github.renhaowan.platform.agent.context.impl.ContextTrimmerImpl;
 import io.github.renhaowan.platform.agent.memory.AgentSessionService;
 import io.github.renhaowan.platform.agent.memory.entity.ChatMessage;
+import io.github.renhaowan.platform.agent.memory.impl.HistoryRecallTool;
+import io.github.renhaowan.platform.agent.memory.mapper.CheckpointMapper;
+import io.github.renhaowan.platform.agent.memory.mapper.ChatMessageMapper;
 import io.github.renhaowan.platform.agent.memory.TokenRecorder;
 import io.github.renhaowan.platform.agent.sse.AgentEventEmitter;
 import io.github.renhaowan.platform.agent.tool.DynamicToolRegistry;
@@ -46,6 +52,12 @@ class AgentRunnerTest {
     private McpGatewayClient gatewayClient;
 
     @Mock
+    private ChatMessageMapper chatMessageMapper;
+
+    @Mock
+    private CheckpointMapper checkpointMapper;
+
+    @Mock
     private AgentSessionService sessionService;
 
     @Mock
@@ -59,9 +71,11 @@ class AgentRunnerTest {
     private final AgentProperties properties = new AgentProperties();
 
     private AgentRunner runner() {
-        return new AgentRunner(planner, new io.github.renhaowan.platform.agent.tool.impl.NoopToolSelector(),
-                toolRegistry, gatewayClient, sessionService,
-                new ContextTrimmerImpl(6000), confirmManager, tokenRecorder,
+        // 空责任链 + 阈值置最大 = 不路由、全量直通（等价原 NoopToolSelector）
+        return new AgentRunner(planner,
+                new io.github.renhaowan.platform.agent.tool.impl.ToolSelectorChain(List.of(), Integer.MAX_VALUE),
+                toolRegistry, gatewayClient, new HistoryRecallTool(chatMessageMapper, checkpointMapper),
+                sessionService, new ContextTrimmerImpl(6000), confirmManager, tokenRecorder,
                 properties);
     }
 
@@ -98,6 +112,32 @@ class AgentRunnerTest {
         verify(sessionService).appendMessage(eq("s1"), eq(ChatMessage.ROLE_TOOL), contains("rooms"), eq("search_rooms"));
         verify(sessionService).appendMessage(eq("s1"), eq(ChatMessage.ROLE_ASSISTANT), anyString(), eq((String) null));
         verify(tokenRecorder, times(2)).record(eq("s1"), eq("decide"), anyString(), any(), any());
+    }
+
+    @Test
+    void recallToolRunsLocallyAndNeverTouchesGateway() {
+        when(sessionService.loadHistory("s1")).thenReturn(List.of());
+        when(planner.decide(anyList(), any()))
+                .thenReturn(toolCallResponse("c1", "recallHistory", "{\"keyword\":\"B305\"}"),
+                        answerResponse("你之前查过 B305，当时还有空位"));
+        when(toolRegistry.callbacks(any())).thenReturn(List.of());
+        ChatMessage hit = new ChatMessage();
+        hit.setId(7L);
+        hit.setRole(ChatMessage.ROLE_USER);
+        hit.setContent("查一下现在 B305 的状态");
+        hit.setCreatedAt(java.time.LocalDateTime.of(2026, 10, 1, 10, 0));
+        when(chatMessageMapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(hit));
+
+        runner().run("s1", "我刚才是不是看过 B305", events, staff);
+
+        // 内部工具本地执行：网关零调用；工具清单里始终带 recallHistory 广告位
+        verify(gatewayClient, never()).callTool(anyString(), anyString(), any());
+        verify(planner, atLeast(1)).decide(anyList(), argThat(tools -> tools.stream()
+                .anyMatch(t -> HistoryRecallTool.TOOL_NAME.equals(t.getToolDefinition().name()))));
+        verify(events).toolCall(eq("recallHistory"), contains("B305"));
+        verify(sessionService).appendMessage(eq("s1"), eq(ChatMessage.ROLE_TOOL),
+                contains("B305"), eq("recallHistory"));
+        verify(events).answer("你之前查过 B305，当时还有空位");
     }
 
     @Test
