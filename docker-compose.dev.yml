@@ -1,4 +1,4 @@
-# 开发环境中间件（平台专属容器，与宿主机 MySQL80/Redis 6379 完全隔离）
+# 开发环境中间件（与宿主机 MySQL/Redis 实例完全隔离，自带建库脚本，不依赖其他仓库路径）
 # 用法：docker compose -f docker-compose.dev.yml up -d
 services:
   mysql:
@@ -11,8 +11,8 @@ services:
       - "3307:3306"
     volumes:
       - mysql-data:/var/lib/mysql
-      # meeting-booking 业务库初始化（仅首次空数据目录时执行）
-      - ../meeting-booking/docker/mysql-init:/docker-entrypoint-initdb.d:ro
+      # 建库脚本随本仓库分发（不依赖其他仓库路径）；仅在数据卷首次创建时执行
+      - ./docker/mysql-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-uroot", "-proot"]
       interval: 5s
