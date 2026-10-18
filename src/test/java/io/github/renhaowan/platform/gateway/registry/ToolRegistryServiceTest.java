@@ -21,7 +21,6 @@ class ToolRegistryServiceTest {
 
     private ToolDefinition tool(String name) {
         ToolDefinition tool = new ToolDefinition();
-        tool.setTenantId(7L);
         tool.setGatewayId("gw1");
         tool.setName(name);
         tool.setHttpMethod("GET");

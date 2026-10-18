@@ -20,17 +20,15 @@ public class ToolRegistryServiceImpl implements ToolRegistryService {
     }
 
     @Override
-    public List<ToolDefinition> listEnabled(Long tenantId, String gatewayId) {
+    public List<ToolDefinition> listEnabled(String gatewayId) {
         return mapper.selectList(new QueryWrapper<ToolDefinition>()
-                .eq("tenant_id", tenantId)
                 .eq("gateway_id", gatewayId)
                 .eq("enabled", 1));
     }
 
     @Override
-    public Optional<ToolDefinition> find(Long tenantId, String gatewayId, String name) {
+    public Optional<ToolDefinition> find(String gatewayId, String name) {
         return Optional.ofNullable(mapper.selectOne(new QueryWrapper<ToolDefinition>()
-                .eq("tenant_id", tenantId)
                 .eq("gateway_id", gatewayId)
                 .eq("name", name)));
     }

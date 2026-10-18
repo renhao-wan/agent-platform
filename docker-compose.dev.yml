@@ -1,4 +1,4 @@
-# 开发环境中间件（与宿主机 MySQL/Redis 实例完全隔离，自带建库脚本，不依赖其他仓库路径）
+# 开发环境中间件（与宿主机 MySQL 实例完全隔离，自带建库脚本，不依赖其他仓库路径）
 # 用法：docker compose -f docker-compose.dev.yml up -d
 services:
   mysql:
@@ -15,17 +15,6 @@ services:
       - ./docker/mysql-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-uroot", "-proot"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
-
-  redis:
-    image: redis:7-alpine
-    container_name: agent-platform-redis
-    ports:
-      - "6380:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 30

@@ -29,17 +29,16 @@ public class ToolAccessService {
     private final GenericHttpForwarder forwarder;
 
     /** 闸门 1：required_role 为空的工具全员可见；标注了角色的工具仅对该角色可见。 */
-    public List<ToolDefinition> listVisible(Long tenantId, String gatewayId, String userRole) {
-        return registryService.listEnabled(tenantId, gatewayId).stream()
+    public List<ToolDefinition> listVisible(String gatewayId, String userRole) {
+        return registryService.listEnabled(gatewayId).stream()
                 .filter(tool -> tool.getRequiredRole() == null
                         || tool.getRequiredRole().equals(userRole))
                 .toList();
     }
 
     /** 闸门 2，通过后泛化转发。任何失败都包装成可读文本回喂模型。 */
-    public ToolCallResult invoke(Long tenantId, String gatewayId, String userRole,
-                                 String name, String argsJson) {
-        Optional<ToolDefinition> tool = registryService.find(tenantId, gatewayId, name);
+    public ToolCallResult invoke(String gatewayId, String userRole, String name, String argsJson) {
+        Optional<ToolDefinition> tool = registryService.find(gatewayId, name);
         if (tool.isEmpty()) {
             return new ToolCallResult(true, "unknown tool: " + name);
         }

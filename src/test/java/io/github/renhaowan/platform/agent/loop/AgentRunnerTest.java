@@ -27,7 +27,7 @@ import io.github.renhaowan.platform.agent.memory.mapper.ChatMessageMapper;
 import io.github.renhaowan.platform.agent.memory.TokenRecorder;
 import io.github.renhaowan.platform.agent.sse.AgentEventEmitter;
 import io.github.renhaowan.platform.agent.tool.DynamicToolRegistry;
-import io.github.renhaowan.platform.agent.tool.McpGatewayClient;
+import io.github.renhaowan.platform.agent.tool.ToolGateway;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
@@ -49,7 +49,7 @@ class AgentRunnerTest {
     private DynamicToolRegistry toolRegistry;
 
     @Mock
-    private McpGatewayClient gatewayClient;
+    private ToolGateway toolGateway;
 
     @Mock
     private ChatMessageMapper chatMessageMapper;
@@ -74,7 +74,7 @@ class AgentRunnerTest {
         // 空责任链 + 阈值置最大 = 不路由、全量直通（等价原 NoopToolSelector）
         return new AgentRunner(planner,
                 new io.github.renhaowan.platform.agent.tool.impl.ToolSelectorChain(List.of(), Integer.MAX_VALUE),
-                toolRegistry, gatewayClient, new HistoryRecallTool(chatMessageMapper, checkpointMapper),
+                toolRegistry, toolGateway, new HistoryRecallTool(chatMessageMapper, checkpointMapper),
                 sessionService, new ContextTrimmerImpl(6000), confirmManager, tokenRecorder,
                 properties);
     }
@@ -99,7 +99,7 @@ class AgentRunnerTest {
                         answerResponse("已为你找到 3 间可用会议室"));
         when(toolRegistry.requireConfirm(eq("search_rooms"), any())).thenReturn(false);
         when(toolRegistry.callbacks(any())).thenReturn(List.of());
-        when(gatewayClient.callTool(eq("search_rooms"), anyString(), any())).thenReturn("{\"rooms\":3}");
+        when(toolGateway.callTool(eq("search_rooms"), anyString(), any())).thenReturn("{\"rooms\":3}");
 
         runner().run("s1", "帮我订周三下午的会议室", events, staff);
 
@@ -115,7 +115,7 @@ class AgentRunnerTest {
     }
 
     @Test
-    void recallToolRunsLocallyAndNeverTouchesGateway() {
+    void recallToolRunsLocallyAndNeverTouchesBusinessSystems() {
         when(sessionService.loadHistory("s1")).thenReturn(List.of());
         when(planner.decide(anyList(), any()))
                 .thenReturn(toolCallResponse("c1", "recallHistory", "{\"keyword\":\"B305\"}"),
@@ -130,8 +130,8 @@ class AgentRunnerTest {
 
         runner().run("s1", "我刚才是不是看过 B305", events, staff);
 
-        // 内部工具本地执行：网关零调用；工具清单里始终带 recallHistory 广告位
-        verify(gatewayClient, never()).callTool(anyString(), anyString(), any());
+        // 内部工具本地执行：工具层零调用；工具清单里始终带 recallHistory 广告位
+        verify(toolGateway, never()).callTool(anyString(), anyString(), any());
         verify(planner, atLeast(1)).decide(anyList(), argThat(tools -> tools.stream()
                 .anyMatch(t -> HistoryRecallTool.TOOL_NAME.equals(t.getToolDefinition().name()))));
         verify(events).toolCall(eq("recallHistory"), contains("B305"));
@@ -149,7 +149,7 @@ class AgentRunnerTest {
                         answerResponse("已取消"));
         when(toolRegistry.requireConfirm(eq("cancel_booking"), any())).thenReturn(true);
         when(toolRegistry.callbacks(any())).thenReturn(List.of());
-        when(gatewayClient.callTool(eq("cancel_booking"), anyString(), any())).thenReturn("{\"status\":\"CANCELLED\"}");
+        when(toolGateway.callTool(eq("cancel_booking"), anyString(), any())).thenReturn("{\"status\":\"CANCELLED\"}");
 
         // confirm_request 事件发出后，异步线程模拟用户点击"同意"
         org.mockito.Mockito.doAnswer(invocation -> {
@@ -166,7 +166,7 @@ class AgentRunnerTest {
 
         runner().run("s1", "取消刚才那个预订", events, staff);
 
-        verify(gatewayClient).callTool(eq("cancel_booking"), contains("42"), any());
+        verify(toolGateway).callTool(eq("cancel_booking"), contains("42"), any());
         verify(events).answer("已取消");
         verify(events).done();
     }
@@ -195,7 +195,7 @@ class AgentRunnerTest {
 
         runner().run("s1", "算了别取消", events, staff);
 
-        verify(gatewayClient, never()).callTool(anyString(), anyString(), any());
+        verify(toolGateway, never()).callTool(anyString(), anyString(), any());
         verify(sessionService).appendMessage(eq("s1"), eq(ChatMessage.ROLE_TOOL),
                 contains("拒绝"), eq("cancel_booking"));
         verify(events).answer("好的，未取消");
@@ -210,12 +210,12 @@ class AgentRunnerTest {
                 .thenAnswer(inv -> toolCallResponse("c" + counter.incrementAndGet(), "search_rooms", "{}"));
         when(toolRegistry.requireConfirm(anyString(), any())).thenReturn(false);
         when(toolRegistry.callbacks(any())).thenReturn(List.of());
-        when(gatewayClient.callTool(anyString(), anyString(), any())).thenReturn("{}");
+        when(toolGateway.callTool(anyString(), anyString(), any())).thenReturn("{}");
 
         runner().run("s1", "随便查查", events, staff);
 
         verify(events).error(contains("最大推理步数"));
         verify(events).done();
-        verify(gatewayClient, times(3)).callTool(anyString(), anyString(), any());
+        verify(toolGateway, times(3)).callTool(anyString(), anyString(), any());
     }
 }

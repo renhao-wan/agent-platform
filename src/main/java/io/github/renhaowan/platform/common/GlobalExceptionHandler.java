@@ -10,7 +10,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * 管理端/对话端统一异常出口：异常一律转 ApiResponse 形态（HTTP 状态码语义不变）。
- * 注意：MCP 协议端点的错误不走这里——协议层错误由 JsonRpcErrorWriter / JsonRpcResponse 输出。
+ * 注意：工具执行失败不抛异常也不走这里——失败被包装为文本观察回喂模型（ToolAccessService）。
  */
 @Slf4j
 @RestControllerAdvice

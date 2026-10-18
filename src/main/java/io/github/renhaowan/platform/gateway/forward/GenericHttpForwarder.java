@@ -32,13 +32,13 @@ public class GenericHttpForwarder {
 
     private final RestClient restClient;
 
-    public GenericHttpForwarder() {
+    public GenericHttpForwarder(ForwardProperties properties) {
         HttpClient httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(2))
+                .connectTimeout(Duration.ofMillis(properties.getConnectTimeoutMs()))
                 .build();
         org.springframework.http.client.JdkClientHttpRequestFactory factory =
                 new org.springframework.http.client.JdkClientHttpRequestFactory(httpClient);
-        factory.setReadTimeout(Duration.ofSeconds(10));
+        factory.setReadTimeout(Duration.ofMillis(properties.getReadTimeoutMs()));
         this.restClient = RestClient.builder().requestFactory(factory).build();
     }
 

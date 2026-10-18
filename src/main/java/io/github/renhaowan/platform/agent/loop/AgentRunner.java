@@ -11,7 +11,7 @@ import io.github.renhaowan.platform.agent.memory.TokenRecorder;
 import io.github.renhaowan.platform.agent.sse.AgentEventEmitter;
 import io.github.renhaowan.platform.agent.tool.DynamicToolRegistry;
 import io.github.renhaowan.platform.agent.tool.ToolSelector;
-import io.github.renhaowan.platform.agent.tool.McpGatewayClient;
+import io.github.renhaowan.platform.agent.tool.ToolGateway;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,7 +39,7 @@ public class AgentRunner {
     private final Planner planner;
     private final ToolSelector toolSelector;
     private final DynamicToolRegistry toolRegistry;
-    private final McpGatewayClient gatewayClient;
+    private final ToolGateway toolGateway;
     private final HistoryRecallTool historyRecallTool;
     private final AgentSessionService sessionService;
     private final ContextTrimmer contextTrimmer;
@@ -53,7 +53,7 @@ public class AgentRunner {
      *   <li>意图分类（规则通道，仅用于前端事件展示）-> 载入历史（裁剪后）-> 追加本轮用户输入；</li>
      *   <li>每轮 Planner.decide 拿模型决策：无 toolCalls 即回答并结束；
      *       有 toolCalls 则逐个执行——敏感工具先经 ConfirmManager 挂起等用户确认；</li>
-     *   <li>工具执行经 McpGatewayClient 自环调用 MCP 网关（网关再转发到业务系统）；
+     *   <li>工具执行经 ToolGateway 进程内调用工具层（工具层再转发到业务系统）；
      *       执行结果与"用户拒绝"都作为观察回填，模型据此决定下一步；</li>
      *   <li>ToolResponseMessage 必须与带 toolCalls 的 AssistantMessage 成对回填，
      *       否则模型无法看到执行结果（Spring AI 的消息配对约定）。</li>
@@ -133,8 +133,8 @@ public class AgentRunner {
                     events.toolResult(call.name(), summarize(resultText));
                 } else {
                     events.toolCall(call.name(), call.arguments() == null ? "{}" : call.arguments());
-                    // 用户身份随调用下穿网关：闸门 2（执行点鉴权）在网关侧校验 required_role
-                    resultText = gatewayClient.callTool(call.name(), call.arguments(), principal);
+                    // 用户身份随调用下穿工具层：闸门 2（执行点鉴权）在那里校验 required_role
+                    resultText = toolGateway.callTool(call.name(), call.arguments(), principal);
                     events.toolResult(call.name(), summarize(resultText));
                 }
                 responses.add(new ToolResponseMessage.ToolResponse(call.id(), call.name(), resultText));

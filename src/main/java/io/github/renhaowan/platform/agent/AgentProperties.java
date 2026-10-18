@@ -15,11 +15,8 @@ import java.util.Map;
 @ConfigurationProperties(prefix = "platform.agent")
 public class AgentProperties {
 
-    /** MCP 网关地址（同进程自环） */
-    private String gatewayBaseUrl = "http://localhost:8000";
+    /** 工具层网关标识（工具定义按 gatewayId 分组，导入时指定） */
     private String gatewayId = "gw1";
-    /** 平台自身租户的 apiKey（Agent 以 MCP 客户端身份访问网关） */
-    private String gatewayApiKey = "";
     private int maxSteps = 8;
     /** 上下文裁剪阈值（粗估 token 数） */
     private int contextThreshold = 6000;

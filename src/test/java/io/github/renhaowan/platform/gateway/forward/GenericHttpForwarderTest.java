@@ -17,7 +17,7 @@ class GenericHttpForwarderTest {
 
     private HttpServer server;
     private int port;
-    private final GenericHttpForwarder forwarder = new GenericHttpForwarder();
+    private final GenericHttpForwarder forwarder = new GenericHttpForwarder(new ForwardProperties());
     private final AtomicReference<String> lastQuery = new AtomicReference<>();
     private final AtomicReference<String> lastBody = new AtomicReference<>();
 

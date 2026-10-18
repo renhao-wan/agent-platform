@@ -20,10 +20,6 @@ spring:
   sql:
     init:
       mode: always   # schema.sql 使用 IF NOT EXISTS，启动时幂等建表
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
 
 mybatis-plus:
   configuration:
@@ -31,21 +27,19 @@ mybatis-plus:
 
 platform:
   gateway:
-    instance-id: ${INSTANCE_ID:local-1}
-    rate-limit:
-      permits-per-minute: 60
+    forward:
+      # 转发到业务系统的超时（毫秒）；测试用极短值验证超时路径
+      connect-timeout-ms: 2000
+      read-timeout-ms: 10000
   agent:
-    gateway-base-url: ${GATEWAY_BASE_URL:http://localhost:8000}
     gateway-id: ${AGENT_GATEWAY_ID:gw1}
-    gateway-api-key: ${GATEWAY_API_KEY:}
     max-steps: 8
     context-threshold: 6000
     confirm-timeout-seconds: 300
-    # 工具路由责任链（ADR-004）：节点按 handlers 顺序逐环尝试，弃权/异常传下一环，链尾兜底全量直通。
-    # 触发阈值：工具数达到 tool-count-threshold 才启用路由——当前个位数工具规模下整链休眠，
+    # 工具路由责任链（ADR-004）：节点按 routing-handlers 顺序逐环尝试，弃权/异常传下一环，链尾兜底全量直通。
+    # 触发阈值：工具数达到 routing-tool-count-threshold 才启用路由——当前个位数工具规模下整链休眠，
     # 对主流程零开销；工具规模化后自动武装，无需改代码。本地想提前体验把阈值调到 4 以下即可。
-    routing:
-      tool-count-threshold: 20
-      handlers: wattai   # 逗号分隔按序尝试；当前支持 wattai（jev/本地语义路由为预留扩展位）；置空 = 不路由
+    routing-handlers: wattai   # 逗号分隔按序尝试；当前支持 wattai（jev/本地语义路由为预留扩展位）；置空 = 不路由
+    routing-tool-count-threshold: 20
     # 意图分类规则：Map<标签, 关键词列表>，按声明顺序匹配、命中即返回，全部未命中回落 GENERAL。
     # 业务关键词属于运营配置——换业务线/加意图只改这里，平台代码不出现业务词。

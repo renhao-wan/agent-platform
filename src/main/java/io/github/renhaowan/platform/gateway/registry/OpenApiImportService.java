@@ -4,7 +4,7 @@ import io.github.renhaowan.platform.gateway.registry.entity.ToolDefinition;
 import java.util.List;
 
 /**
- * OpenAPI 3.0 JSON → MCP Tool 定义解析。
+ * OpenAPI 3.0 JSON → 工具定义解析。
  * <p>
  * 映射规则：operationId→工具名（缺失则 method_path slug）；summary/description→描述；
  * path 参数填充 url_template 占位符；query 参数与 requestBody(application/json)
@@ -15,6 +15,6 @@ public interface OpenApiImportService {
     /**
      * @param requiredRole 工具级角色闸门（可选，null=全员可用；如 ADMIN）
      */
-    List<ToolDefinition> parse(String gatewayId, Long tenantId, String openApiJson,
+    List<ToolDefinition> parse(String gatewayId, String openApiJson,
                                String baseUrlOverride, String requiredRole);
 }

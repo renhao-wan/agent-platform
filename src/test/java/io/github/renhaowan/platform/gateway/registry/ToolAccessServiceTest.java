@@ -19,7 +19,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ToolAccessServiceTest {
 
-    private static final long TENANT = 7L;
     private static final String GATEWAY = "gw1";
 
     @Mock
@@ -41,7 +40,7 @@ class ToolAccessServiceTest {
     }
 
     private void givenVisible(ToolDefinition... tools) {
-        when(registryService.listEnabled(TENANT, GATEWAY)).thenReturn(List.of(tools));
+        when(registryService.listEnabled(GATEWAY)).thenReturn(List.of(tools));
     }
 
     // ---------- 闸门 1：可见性过滤 ----------
@@ -50,7 +49,7 @@ class ToolAccessServiceTest {
     void staffDoesNotSeeAdminOnlyTool() {
         givenVisible(tool("search_rooms", null), tool("cancel_booking", "ADMIN"));
 
-        assertThat(service().listVisible(TENANT, GATEWAY, "STAFF"))
+        assertThat(service().listVisible(GATEWAY, "STAFF"))
                 .extracting(ToolDefinition::getName)
                 .containsExactly("search_rooms");
     }
@@ -59,7 +58,7 @@ class ToolAccessServiceTest {
     void adminSeesBothPublicAndAdminOnlyTools() {
         givenVisible(tool("search_rooms", null), tool("cancel_booking", "ADMIN"));
 
-        assertThat(service().listVisible(TENANT, GATEWAY, "ADMIN"))
+        assertThat(service().listVisible(GATEWAY, "ADMIN"))
                 .extracting(ToolDefinition::getName)
                 .containsExactly("search_rooms", "cancel_booking");
     }
@@ -68,7 +67,7 @@ class ToolAccessServiceTest {
     void anonymousRoleSeesOnlyPublicTools() {
         givenVisible(tool("search_rooms", null), tool("cancel_booking", "ADMIN"));
 
-        assertThat(service().listVisible(TENANT, GATEWAY, null))
+        assertThat(service().listVisible(GATEWAY, null))
                 .extracting(ToolDefinition::getName)
                 .containsExactly("search_rooms");
     }
@@ -77,11 +76,11 @@ class ToolAccessServiceTest {
 
     @Test
     void wrongRoleIsDeniedBeforeForwarding() {
-        when(registryService.find(TENANT, GATEWAY, "cancel_booking"))
+        when(registryService.find(GATEWAY, "cancel_booking"))
                 .thenReturn(Optional.of(tool("cancel_booking", "ADMIN")));
 
         ToolAccessService.ToolCallResult result =
-                service().invoke(TENANT, GATEWAY, "STAFF", "cancel_booking", "{\"id\":13}");
+                service().invoke(GATEWAY, "STAFF", "cancel_booking", "{\"id\":13}");
 
         assertThat(result.isError()).isTrue();
         assertThat(result.text()).contains("权限不足").contains("ADMIN");
@@ -90,14 +89,14 @@ class ToolAccessServiceTest {
 
     @Test
     void matchingRoleIsForwarded() {
-        when(registryService.find(TENANT, GATEWAY, "cancel_booking"))
+        when(registryService.find(GATEWAY, "cancel_booking"))
                 .thenReturn(Optional.of(tool("cancel_booking", "ADMIN")));
         when(forwarder.forward(any(ToolDefinition.class), any()))
                 .thenReturn(new GenericHttpForwarder.ForwardResult(
                         true, 200, "{\"status\":\"CANCELLED\"}", null));
 
         ToolAccessService.ToolCallResult result =
-                service().invoke(TENANT, GATEWAY, "ADMIN", "cancel_booking", "{\"id\":13}");
+                service().invoke(GATEWAY, "ADMIN", "cancel_booking", "{\"id\":13}");
 
         assertThat(result.isError()).isFalse();
         assertThat(result.text()).contains("CANCELLED");
@@ -106,22 +105,22 @@ class ToolAccessServiceTest {
 
     @Test
     void publicToolIsForwardedWithoutRole() {
-        when(registryService.find(TENANT, GATEWAY, "search_rooms"))
+        when(registryService.find(GATEWAY, "search_rooms"))
                 .thenReturn(Optional.of(tool("search_rooms", null)));
         when(forwarder.forward(any(ToolDefinition.class), any()))
                 .thenReturn(new GenericHttpForwarder.ForwardResult(true, 200, "{\"rooms\":3}", null));
 
-        assertThat(service().invoke(TENANT, GATEWAY, "STAFF", "search_rooms", "{}").isError()).isFalse();
+        assertThat(service().invoke(GATEWAY, "STAFF", "search_rooms", "{}").isError()).isFalse();
     }
 
     // ---------- 失败一律回喂文本，不抛异常 ----------
 
     @Test
     void unknownToolIsErrorResultNotException() {
-        when(registryService.find(TENANT, GATEWAY, "nope")).thenReturn(Optional.empty());
+        when(registryService.find(GATEWAY, "nope")).thenReturn(Optional.empty());
 
         ToolAccessService.ToolCallResult result =
-                service().invoke(TENANT, GATEWAY, "ADMIN", "nope", "{}");
+                service().invoke(GATEWAY, "ADMIN", "nope", "{}");
 
         assertThat(result.isError()).isTrue();
         assertThat(result.text()).contains("unknown tool");
@@ -130,14 +129,14 @@ class ToolAccessServiceTest {
 
     @Test
     void backendFailureIsCarriedBackAsErrorText() {
-        when(registryService.find(TENANT, GATEWAY, "create_booking"))
+        when(registryService.find(GATEWAY, "create_booking"))
                 .thenReturn(Optional.of(tool("create_booking", null)));
         when(forwarder.forward(any(ToolDefinition.class), any()))
                 .thenReturn(new GenericHttpForwarder.ForwardResult(
                         false, 500, "", "backend responded 500"));
 
         ToolAccessService.ToolCallResult result =
-                service().invoke(TENANT, GATEWAY, "STAFF", "create_booking", "{}");
+                service().invoke(GATEWAY, "STAFF", "create_booking", "{}");
 
         assertThat(result.isError()).isTrue();
         assertThat(result.text()).contains("500");
@@ -145,11 +144,11 @@ class ToolAccessServiceTest {
 
     @Test
     void malformedArgumentsAreReportedWithoutForwarding() {
-        when(registryService.find(TENANT, GATEWAY, "search_rooms"))
+        when(registryService.find(GATEWAY, "search_rooms"))
                 .thenReturn(Optional.of(tool("search_rooms", null)));
 
         ToolAccessService.ToolCallResult result =
-                service().invoke(TENANT, GATEWAY, "STAFF", "search_rooms", "{not json");
+                service().invoke(GATEWAY, "STAFF", "search_rooms", "{not json");
 
         assertThat(result.isError()).isTrue();
         assertThat(result.text()).contains("JSON");
@@ -158,11 +157,11 @@ class ToolAccessServiceTest {
 
     @Test
     void blankArgumentsAreTreatedAsNoArguments() {
-        when(registryService.find(TENANT, GATEWAY, "list_rooms"))
+        when(registryService.find(GATEWAY, "list_rooms"))
                 .thenReturn(Optional.of(tool("list_rooms", null)));
         when(forwarder.forward(any(ToolDefinition.class), any()))
                 .thenReturn(new GenericHttpForwarder.ForwardResult(true, 200, "[]", null));
 
-        assertThat(service().invoke(TENANT, GATEWAY, "STAFF", "list_rooms", "").isError()).isFalse();
+        assertThat(service().invoke(GATEWAY, "STAFF", "list_rooms", "").isError()).isFalse();
     }
 }

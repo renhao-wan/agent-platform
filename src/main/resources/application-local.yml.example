@@ -5,9 +5,6 @@ spring:
     url: jdbc:mysql://localhost:3307/agent_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: root
     password: root
-  data:
-    redis:
-      port: 6380
 
 spring.ai:
   openai:
@@ -16,7 +13,3 @@ spring.ai:
     chat:
       options:
         model: qwen-turbo                                      # qwen-plus / glm-4-flash 等 OpenAI 兼容模型
-
-platform:
-  agent:
-    gateway-api-key: <平台租户 apiKey（POST /admin/tenants 创建获得）>

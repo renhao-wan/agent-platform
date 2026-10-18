@@ -48,7 +48,7 @@ class OpenApiImportServiceTest {
 
     @Test
     void parsesToolsWithOperationIdAndSchema() {
-        var tools = service.parse("gw1", 7L, OPENAPI, null, null);
+        var tools = service.parse("gw1",OPENAPI, null, null);
 
         assertThat(tools).hasSize(3);
 
@@ -81,7 +81,7 @@ class OpenApiImportServiceTest {
                  "paths":{"/api/v1/bookings/{id}":{"get":{"summary":"详情",
                    "parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"integer"}}]}}}}
                 """;
-        var tools = service.parse("gw1", 7L, openapi, null, null);
+        var tools = service.parse("gw1",openapi, null, null);
 
         assertThat(tools.get(0).getName()).isEqualTo("get_api_v1_bookings_id");
         assertThat(json(tools.get(0).getInputSchema()).get("required").toString()).contains("id");
@@ -89,14 +89,14 @@ class OpenApiImportServiceTest {
 
     @Test
     void baseUrlOverrideWinsOverServers() {
-        var tools = service.parse("gw1", 7L, OPENAPI, "http://override:9999", null);
+        var tools = service.parse("gw1",OPENAPI, "http://override:9999", null);
 
         assertThat(tools.get(0).getUrlTemplate()).startsWith("http://override:9999/api/v1/rooms");
     }
 
     @Test
     void invalidJsonThrowsIllegalArgument() {
-        assertThatThrownBy(() -> service.parse("gw1", 7L, "{not-json", null, null))
+        assertThatThrownBy(() -> service.parse("gw1","{not-json", null, null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -107,7 +107,7 @@ class OpenApiImportServiceTest {
                  "paths":{"/api/v1/bookings/{id}/cancel":{"post":{"summary":"取消指定预订",
                    "parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"integer"}}]}}}}
                 """;
-        var tools = service.parse("gw1", 7L, openapi, null, null);
+        var tools = service.parse("gw1",openapi, null, null);
 
         assertThat(tools.get(0).getHttpMethod()).isEqualTo("POST");
         assertThat(tools.get(0).getRequireConfirm()).isEqualTo(1);
@@ -115,21 +115,21 @@ class OpenApiImportServiceTest {
 
     @Test
     void requiredRoleDefaultsToNullWhenOmitted() {
-        var tools = service.parse("gw1", 7L, OPENAPI, null, null);
+        var tools = service.parse("gw1",OPENAPI, null, null);
 
         assertThat(tools).allSatisfy(t -> assertThat(t.getRequiredRole()).isNull());
     }
 
     @Test
     void requiredRoleAppliedToAllImportedTools() {
-        var tools = service.parse("gw1", 7L, OPENAPI, null, "ADMIN");
+        var tools = service.parse("gw1",OPENAPI, null, "ADMIN");
 
         assertThat(tools).allSatisfy(t -> assertThat(t.getRequiredRole()).isEqualTo("ADMIN"));
     }
 
     @Test
     void blankRequiredRoleTreatedAsNull() {
-        var tools = service.parse("gw1", 7L, OPENAPI, null, "  ");
+        var tools = service.parse("gw1",OPENAPI, null, "  ");
 
         assertThat(tools).allSatisfy(t -> assertThat(t.getRequiredRole()).isNull());
     }

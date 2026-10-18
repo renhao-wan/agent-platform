@@ -26,7 +26,7 @@ public class OpenApiImportServiceImpl implements OpenApiImportService {
     private static final Set<String> HTTP_METHODS = Set.of("get", "post", "put", "delete", "patch");
 
     @Override
-    public List<ToolDefinition> parse(String gatewayId, Long tenantId, String openApiJson,
+    public List<ToolDefinition> parse(String gatewayId, String openApiJson,
                                       String baseUrlOverride, String requiredRole) {
         List<ToolDefinition> tools = new ArrayList<>();
         JsonNode root;
@@ -55,16 +55,15 @@ public class OpenApiImportServiceImpl implements OpenApiImportService {
                 if (!HTTP_METHODS.contains(method)) {
                     continue;
                 }
-                tools.add(buildTool(gatewayId, tenantId, baseUrl, path, method, methodEntry.getValue(), requiredRole));
+                tools.add(buildTool(gatewayId, baseUrl, path, method, methodEntry.getValue(), requiredRole));
             }
         }
         return tools;
     }
 
-    private ToolDefinition buildTool(String gatewayId, Long tenantId, String baseUrl,
+    private ToolDefinition buildTool(String gatewayId, String baseUrl,
                                      String path, String method, JsonNode operation, String requiredRole) {
         ToolDefinition tool = new ToolDefinition();
-        tool.setTenantId(tenantId);
         tool.setGatewayId(gatewayId);
         tool.setName(operation.hasNonNull("operationId")
                 ? operation.get("operationId").asText()

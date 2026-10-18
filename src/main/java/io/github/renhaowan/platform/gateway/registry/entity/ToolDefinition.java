@@ -16,8 +16,6 @@ public class ToolDefinition {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private Long tenantId;
-
     private String gatewayId;
 
     private String name;
@@ -28,7 +26,7 @@ public class ToolDefinition {
 
     private String urlTemplate;
 
-    /** MCP inputSchema（JSON 字符串） */
+    /** 工具参数 schema（JSON 字符串，OpenAPI 导入产物） */
     private String inputSchema;
 
     private Integer requireConfirm;

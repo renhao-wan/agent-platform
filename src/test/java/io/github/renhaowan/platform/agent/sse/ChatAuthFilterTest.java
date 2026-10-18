@@ -18,7 +18,6 @@ import io.github.renhaowan.platform.agent.memory.AgentSessionService;
 import io.github.renhaowan.platform.agent.memory.entity.ChatSession;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
-import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -40,9 +39,6 @@ class ChatAuthFilterTest {
 
     @Autowired
     private JwtService jwtService;
-
-    @MockitoBean
-    private RedissonClient redissonClient;
 
     @MockitoBean
     private AgentRunner agentRunner;
