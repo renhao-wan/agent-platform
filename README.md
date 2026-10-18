@@ -36,7 +36,7 @@
 
 ```bash
 # 1. 启动 MySQL（容器映射 3307，与宿主机实例刻意隔离）
-docker compose -f docker-compose.dev.yml up -d
+docker compose up -d mysql
 
 # 2. 生成本地 profile（已 gitignore）：DB 指向容器 3307 + 填模型 API Key
 cp src/main/resources/application-local.yml.example \
@@ -50,10 +50,12 @@ mvn spring-boot:run -Dspring-boot.run.profiles=local
 
 种子账号：`admin/admin123`（ADMIN）、`staff01/staff123`（STAFF）。
 
-可选——起两个 WireMock 模拟业务系统（报销 :8091 / 报修 :8092），用于演示跨系统聚合与差异化权限：
+不带 `mysql` 参数直接 `docker compose up -d` 则连平台自身一起容器化运行（需先 `mvn -DskipTests package`）。
+
+可选——起三个业务系统（会议室预订 :8090 + 两个 WireMock 模拟后端：报销 :8091 / 报修 :8092），用于演示跨系统聚合与差异化权限：
 
 ```bash
-docker compose -f ../business-systems/docker-compose.yml up -d
+cd ../business-systems && docker compose up -d
 # 再以 ADMIN 身份登录，POST /admin/protocols/import 导入各自的 openapi.json
 ```
 

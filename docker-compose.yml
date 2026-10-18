@@ -1,0 +1,37 @@
+# 平台自带的运行编排：MySQL + agent-platform
+# 用法：docker compose up -d
+#   本地 IDE 跑应用时只需中间件：docker compose up -d mysql
+# 前置：mvn -DskipTests package（容器挂载本仓库的构建产物）
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: agent_platform
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  agent-platform:
+    image: eclipse-temurin:17-jre
+    working_dir: /app
+    volumes:
+      - ./target/agent-platform-0.1.0-SNAPSHOT.jar:/app/app.jar:ro
+    command: ["java", "-jar", "app.jar",
+              "--spring.datasource.url=jdbc:mysql://mysql:3306/agent_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai"]
+    ports:
+      - "8000:8000"
+    environment:
+      LLM_API_KEY: ${LLM_API_KEY:-missing-key}
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysql-data:
