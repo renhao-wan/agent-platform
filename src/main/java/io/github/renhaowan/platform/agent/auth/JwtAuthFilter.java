@@ -14,7 +14,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * 用户 JWT 鉴权过滤器（手写，不引入 Spring Security）：
- * 拦 {@code /api/v1/chat}、{@code /api/v1/confirm} 与 {@code /admin/**}，
+ * 拦 {@code /api/v1/chat}、{@code /api/v1/confirm}、{@code /api/v1/tools} 与 {@code /admin/**}，
  * 校验 {@code Authorization: Bearer <JWT>}，解出 uid/role 写入 {@link UserContext}（请求结束清理）；
  * 其余路径一律放行。{@code /admin/**} 额外要求 ADMIN 角色。
  * 401/403 直接在过滤器层输出 JSON（尚未进入 @ControllerAdvice 范围）。
@@ -64,9 +64,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
     }
 
-    /** 鉴权范围：对话与确认两个用户端点 + 管理端（登录页自身不在其列）。 */
+    /** 鉴权范围：对话、确认、工具目录三个用户端点 + 管理端（登录页自身不在其列）。 */
     static boolean requiresAuth(String uri) {
-        return "/api/v1/chat".equals(uri) || "/api/v1/confirm".equals(uri)
+        return "/api/v1/chat".equals(uri) || "/api/v1/confirm".equals(uri) || "/api/v1/tools".equals(uri)
                 || uri.startsWith("/admin/");
     }
 
