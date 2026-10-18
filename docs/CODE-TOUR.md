@@ -78,13 +78,14 @@ McpGatewayClient 自环调网关 → 网关分发/转发 → booking 真实执�
 ### tool/ 工具接入
 - **McpGatewayClient.java** ★【①②的缝合线】：Agent 以 MCP 客户端身份**自环调用**网关——initialize（响应头取 Mcp-Session-Id）→ tools/list → tools/call；400 会话过期自动重初始化重试一次。
 - **DynamicToolRegistry.java** ★：tools/list 结果 → 手写 `GatewayToolCallback`（实现 Spring AI ToolCallback，**仅作 schema 广告位**——执行走 McpGatewayClient 手动通道，这样事件/确认/权限才能插桩）；`x-require-confirm` 映射；5 分钟缓存。
-- **ToolSelector.java / impl/NoopToolSelector.java / impl/WattAiToolSelector.java**【ADR-004】：工具前置路由扩展点。wattai：工具 ≥4 个时调决策模型（state=用户话术，choices=工具名），高置信单选、低置信 top-k、异常 fail-open；**当前默认关闭**（托管端点延迟 ~2s、中文路由置信度不足，探测数据在 ADR）。
+- **ToolSelector.java / impl/ToolSelectorChain.java / impl/WattAiToolSelector.java**【ADR-004】：工具前置路由责任链。`AgentRunner` 进主模型前先过链：工具数未达 `routing-tool-count-threshold`（默认 20）整链休眠、全量直通；达到后按 `routing-handlers` 顺序逐环尝试，节点以 `Optional.empty` 弃权（前置不满足/异常）传下一环，任一环节点接管即短路，全部弃权回落全量——路由层任何故障不影响主流程。wattai 节点：调决策模型（state=用户话术，choices=工具名），高置信单选、低置信 top-k 降级、argmax 落空/异常弃权。当前规模下链休眠（收益为负），扩展位预留 jev/本地语义路由。
 
 ### context/ confirm/ memory/
 - **ContextTrimmer.java** ★【③】：chars/2 粗估超阈值（默认 6000）→ 保留 system + 最近 6 条，更早内容压成摘要 SystemMessage（落 checkpoint 表）。确定性规则，单测友好。
 - **TokenRecorder（接口）+ impl/TokenRecorderImpl**【③】：usage 打点 best-effort（31.8% 实验的数据源）。
 - **ConfirmManager（接口）+ impl/ConfirmManagerImpl / ConfirmController**★：token → CompletableFuture 挂起；`POST /api/v1/confirm` 恢复；超时 = 拒绝。单实例内存实现（重启丢确认项视为拒绝，语义安全）；多实例化迁移 Redis 是既定演进。
 - **AgentSessionService（接口）+ impl/AgentSessionServiceImpl** + 四实体四 Mapper：chat_session / chat_message / checkpoint / llm_usage（消息即写即落库，重启不丢对话）。
+- **HistoryRecallTool**【ADR-005】：平台自有内部工具 `recallHistory`——会话记忆"冷层"取回通道。模型自主判断何时按关键词检索当前会话的早期消息与里程碑（chat_message/checkpoint，MySQL LIKE，跨表按时间合并）；AgentRunner 本地执行，不进网关、不参与路由/确认，角色无关。三层记忆 = 最近 6 条（热）+ checkpoint 摘要（温）+ 全量历史调回（冷），替代向量库 RAG。
 - **AgentProperties.java / AgentConfig.java**：`platform.agent.*` 配置与需要原始值参数的 Bean 装配。
 
 ---
