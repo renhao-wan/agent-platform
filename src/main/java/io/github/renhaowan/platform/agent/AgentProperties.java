@@ -3,10 +3,6 @@ package io.github.renhaowan.platform.agent;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
 /**
  * Agent 运行时配置项（application.yml 的 platform.agent.*；
  * @ConfigurationProperties + @ConfigurationPropertiesScan 自动绑定与校验）。
@@ -29,12 +25,6 @@ public class AgentProperties {
     private String routingHandlers = "wattai";
     /** 责任链触发阈值：工具数达到该值才启用路由；未达则整链休眠、全量直通（ADR-004） */
     private int routingToolCountThreshold = 20;
-
-    /**
-     * 意图分类规则：Map&lt;标签, 关键词列表&gt;，按声明顺序匹配、命中即返回；
-     * 默认为空（全部回落 GENERAL）——业务关键词属于配置而非代码，示例见 application.yml。
-     */
-    private Map<String, List<String>> intentRules = new LinkedHashMap<>();
 
     private Wattai wattai = new Wattai();
 

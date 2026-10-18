@@ -7,7 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
- * 类型化 SSE 事件发射器：事件名见 {@link EventType} 常量（intent/plan/tool_call/...）。
+ * 类型化 SSE 事件发射器：事件名见 {@link EventType} 常量（session/plan/tool_call/tool_result/confirm_request/answer/error/done）。
  * 前端按 event 名路由渲染；连接中断后静默丢弃后续事件（循环继续跑完并落库，前端重连可查历史）。
  */
 @Slf4j
@@ -16,7 +16,6 @@ public class AgentEventEmitter {
     /** SSE 事件名约定（event: 字段取值），与前端 static/index.html 及压测脚本保持一致 */
     public static final class EventType {
         public static final String SESSION = "session";
-        public static final String INTENT = "intent";
         public static final String PLAN = "plan";
         public static final String TOOL_CALL = "tool_call";
         public static final String TOOL_RESULT = "tool_result";
