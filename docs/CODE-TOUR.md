@@ -1,121 +1,110 @@
 # 代码导览 — agent-platform 逐文件说明
 
 > 用途：给作者本人的复述地图（每个文件一句话 + 面试考点），也供读者按图索骥。
-> 共 63 个主文件 + 15 个测试类。标注：★ = 面试深挖高发区；【①②③④】= 对应简历亮点 1-4。
+> 共 57 个主文件 + 17 个测试类。标注：★ = 面试深挖高发区；【①②③④】= 对应简历亮点 1-4。
 
 ## 推荐通读顺序（约 40 分钟）
 
 ```
 PlatformApplication → application.yml → ChatController → AgentRunner →
-Planner/OpenAiPlanner → McpGatewayClient → DynamicToolRegistry →
-MessageDispatcher → ToolsCallHandler → GenericHttpForwarder →
-OpenApiImportService → SseConnectionRegistry/SessionEventSubscriber →
+Planner/OpenAiPlanner → ToolGateway/InProcessToolGateway → DynamicToolRegistry →
+ToolAccessService → GenericHttpForwarder → OpenApiImportService →
 ContextTrimmer → ConfirmManager
 ```
 
 沿一次真实请求读：你在页面说一句话 → ChatController 收到 → AgentRunner 循环 →
-McpGatewayClient 自环调网关 → 网关分发/转发 → booking 真实执行 → 原路返回 → SSE 推给你。
+`ToolGateway` 进程内调工具层 → 闸门校验 → 转发给 booking 真实执行 → 原路返回 → SSE 推给你。
 
 ---
 
-## 1. gateway/ —— MCP 工具网关（简历亮点①：手写协议层）
+## 1. gateway/ —— 工具层（简历亮点①②）
 
-### transport/ 传输端点
-- **SseGatewayController.java** ★【①】
-  `GET /{gw}/mcp/sse`：建会话（Redis）→ 注册 SseEmitter → 下发 `endpoint` 事件（告知消息端点）→ 启动 25s 心跳。
-  `POST /{gw}/mcp/message`：校验会话（gatewayId + tenantId 双匹配，防劫持）→ 分发处理 → **响应经 SSE 流回**（HTTP 202 空体）。
-  面试点：会话不在/租户不符 → 400 -32602；SSE 断连即会话失效。
-- **StreamableGatewayController.java** ★【①】
-  `POST /{gw}/mcp`：`initialize` 创建会话并在**响应头**回 `Mcp-Session-Id`；普通消息直回 JSON；客户端开过 GET 流则响应经流回（202）。
-  `GET /{gw}/mcp`：服务器→客户端事件流。`DELETE`：终止会话（Redis 删除 + 审计盖章 + 连接 complete）。
-  面试点：与 SSE 的差异表（会话建立方式/消息路径/终止方式）见 ADR-002。
+> 名字还叫 gateway，但实体已经变了：这里不再有协议层，只有"注册什么、放不放行、怎么转发"。
+> 与 `agent/` 同处一个 Spring 应用，被 `ToolGateway` 以普通方法调用触达。
 
-### message/ 协议与分发
-- **MessageDispatcher.java** ★：`method → Handler` 直排分发（Map 路由，无策略树）；`id` 为空 = 通知，不产生响应；未知方法 -32601；Handler 异常 -32603。
-- **InitializeHandler.java**：版本协商（支持 2024-11-05 / 2025-03-26 / 2025-06-18，不认识则回落默认）+ `capabilities.tools` + `serverInfo`。
-- **ToolsListHandler.java** ★：查 `tool_definition`（按租户+网关），输出 `name/description/inputSchema` + 平台扩展字段 `x-require-confirm`。
-- **ToolsCallHandler.java** ★★【①+安全边界】：定位工具 → **（用户级权限校验预留位置，见 ARCHITECTURE §4 闸门 2）** → 泛化转发 → 结果包装为 `content[0].text`；失败包装为 `isError=true`（模型可读、循环不断，不打断协议）。
-- **JsonRpcRequest / JsonRpcResponse / MessageContext.java**：协议信封（2.0 请求/响应/错误码）与一次调用的上下文。
-- **JsonRpcErrorWriter.java**：过滤器层的标准 JSON-RPC 错误输出（401/429）。
-
-### registry/ 工具注册
-- **OpenApiImportService.java** ★【①】：OpenAPI JSON → 工具定义。规则：`operationId`→工具名（缺失则 slug 兜底）、`summary`→描述（模型选工具的依据）、path 参数填 `url_template` 占位、query/requestBody 合并生成 `inputSchema`、**DELETE 或"取消/cancel"字样自动标 require_confirm**。
-- **ToolRegistryService.java**：按（租户, 网关）作用域查询/更新；同名工具更新不重复插入。
-- **ToolDefinition.java / ToolDefinitionMapper.java**：`tool_definition` 表实体（URL 模板、inputSchema、require_confirm、auth_header）。
-
-### security/ 接入鉴权
-- **ApiKeyFilter.java** ★：MCP 端点与管理端（/admin/tenants 除外）要求 `X-Api-Key` → 查租户 → 限流 → 写入 `TenantContext`。失败输出 JSON-RPC 401/429。
-- **RateLimitService.java** ★：Redisson `RRateLimiter`（OVERALL，60 次/分/接入方）；**故障 fail-open**（可用性优先，后端还有业务校验兜底）——取舍已写入 ADR。
-- **TenantContext.java / GatewayProperties.java / WebConfig.java**：请求级身份 ThreadLocal、`platform.gateway.*` 配置、过滤器注册（order=1）。
-- **tenant/Tenant.java / TenantMapper.java / TenantService.java**：租户表 + api_key 查询（60s 本地缓存，每请求鉴权不打库）。
-
-### session/ 会话与多实例
-- **GatewaySessionService.java** ★【④】：会话体存 Redis（30 分钟滑动 TTL，validate 时续期），MySQL 只留审计（best-effort，失败不阻断建连）。
-- **SseConnectionRegistry.java** ★★【④】：本实例持有的 SSE 连接表。回复路径：**本机有连接直写；没有则 `publishAsync` 到 Redis 频道**，由持有连接的实例代发。
-- **SessionEventSubscriber.java**【④】：订阅 `gw:session-events` 频道，收到广播后本机有连接才写出。
-- **SseHeartbeat.java**：25s 注释帧保活，写失败自动停止该连接的心跳。
-- **GatewaySession.java / GatewaySessionMapper.java**：会话审计表实体。
+### registry/ 工具注册与访问控制
+- **OpenApiImportService.java** ★【②】：OpenAPI JSON → 工具定义。规则：`operationId`→工具名（缺失则 slug 兜底）、`summary`→描述（模型选工具的依据）、path 参数填 `url_template` 占位、query/requestBody 合并生成 `inputSchema`、**DELETE 或"取消/退订/cancel"字样自动标 require_confirm**。
+- **ToolRegistryService.java**：按 gatewayId 作用域查询/更新；同名工具更新不重复插入。
+- **ToolAccessService.java** ★★【① 安全边界】：系统里**唯一的工具访问入口**，两道闸门都在这一个类里。
+  `listVisible(gatewayId, userRole)` 做**闸门 1**——`required_role` 为空全员可见，标了角色的只对该角色可见；
+  `invoke(gatewayId, userRole, name, argsJson)` 做**闸门 2**——定位工具 → 角色不匹配直接返回 `ToolCallResult(true, "权限不足：需要 X 角色")` → 参数非法 JSON 也如实回喂 → 通过后交 `GenericHttpForwarder`。
+  面试点：为什么拒绝要包装成文本结果而不是抛异常？因为抛异常会打断 ReAct 循环，而模型需要"看到失败、自己决定重试还是转述用户"。
+- **ToolDefinition.java / ToolDefinitionMapper.java**：`tool_definition` 表实体（url_template、inputSchema、require_confirm、auth_header、required_role）。
 
 ### forward/ 泛化转发
-- **GenericHttpForwarder.java** ★★【①】：网关"手"的部分。拼装规则：`url_template` 的 `{param}` 从 arguments 取值（URL 编码）；GET/DELETE 余参拼 query；POST/PUT/PATCH 余参作 UTF-8 JSON body；**inputSchema 若声明了 `properties.body` 则自动解包**（导入规则的逆向）；`auth_header_name/value` 存在则附带服务凭证。执行：connect 2s / read 10s；响应 **8KB 截断**（防打爆模型上下文）；非 2xx 与异常统一转为 `success=false` 的结果（由模型决策下一步，不抛协议错误）。
+- **GenericHttpForwarder.java** ★★【②】：工具层的"手"。拼装规则：`url_template` 的 `{param}` 从 arguments 取值（URL 编码）；GET/DELETE 余参拼 query；POST/PUT/PATCH 余参作 UTF-8 JSON body；**inputSchema 若声明了 `properties.body` 则自动解包**（导入规则的逆向）；`auth_header_name/value` 存在则附带服务凭证。执行：connect 2s / read 10s；响应 **8KB 截断**（防打爆模型上下文）；非 2xx 与异常统一转为 `ForwardResult(success=false, error=...)`（由模型决策下一步，不抛异常）。用 `exchange()` 而非 `retrieve()` 正是为了保住原始状态码。
+- **ForwardProperties.java**：`platform.gateway.forward.connect-timeout-ms` / `read-timeout-ms`（默认 2000 / 10000，原先硬编码在类里）。
 
-### tenant/ web/ 
-- 租户管理与协议导入的管理端 REST（`/admin/tenants` 开放、`/admin/tools`、`/admin/protocols/import` 需 key）。
+### web/ 管理端
+- **ProtocolAdminController.java** ★：`POST /admin/protocols/import`（gatewayId + openapi + baseUrl + requiredRole + 服务级 auth header）与 `GET /admin/tools`。整个 `/admin/**` 由 `JwtAuthFilter` 要求 ADMIN 角色——**没有第二套凭证体系**。
 
 ---
 
-## 2. agent/ —— ReAct 运行时（简历亮点②③④）
+## 2. agent/ —— ReAct 运行时（简历亮点③④）
 
 ### loop/ 决策循环
-- **AgentRunner.java** ★★【②】：全项目心脏。流程：载入历史（裁剪后）→ 循环 `Planner.decide`（意图分类通道已移除——语义决策由模型对工具清单自主完成，平台保持领域中立） → 有 toolCalls 则逐个执行（敏感工具先挂起等确认）→ `ToolResponseMessage` 回填 → 无 toolCalls 则 answer。系统提示词每轮动态注入 `{{CURRENT_DATE}}/{{CURRENT_WEEKDAY}}`（消除模型编造日期）。步数熔断 maxSteps=8。
-- **Planner.java / impl/OpenAiPlanner.java** ★【②】：规划器抽象 + OpenAI 兼容实现。关键一行：`internalToolExecutionEnabled(false)`——关闭 Spring AI 隐式工具执行，每轮只取回模型的 toolCalls 决策，**执行权收归循环**（这是事件插桩/确认挂起/权限校验能存在的前提）。qwen3 系模型自动透传 `extraBody: {enable_thinking: false}`（DashScope 非流式限制；该透传已实现，qwen3-8b 实测待复验）。
-- **（意图分类通道已移除）**：语义决策由模型对工具清单自主完成，平台保持领域中立——业务关键词归业务系统与导入元数据，不在平台代码/配置中出现。
+- **AgentRunner.java** ★★【③】：全项目心脏。流程：载入历史（裁剪后）→ 循环 `Planner.decide`（语义决策由模型对工具清单自主完成，平台保持领域中立） → 有 toolCalls 则逐个执行（敏感工具先挂起等确认）→ `ToolResponseMessage` 回填 → 无 toolCalls 则 answer。系统提示词每轮动态注入 `{{CURRENT_DATE}}/{{CURRENT_WEEKDAY}}`（消除模型编造日期）。步数熔断 maxSteps=8。**本次重构里这个类的主循环一行没改**——只把注入的 `McpGatewayClient` 换成 `ToolGateway`。
+- **Planner.java / impl/OpenAiPlanner.java** ★【③】：规划器抽象 + OpenAI 兼容实现。关键一行：`internalToolExecutionEnabled(false)`——关闭 Spring AI 隐式工具执行，每轮只取回模型的 toolCalls 决策，**执行权收归循环**（这是事件插桩/确认挂起/权限校验能存在的前提）。qwen3 系模型自动透传 `extraBody: {enable_thinking: false}`（DashScope 非流式限制；该透传已实现，qwen3-8b 实测待复验）。
 
 ### sse/ 用户入口
-- **ChatController.java** ★：`POST /api/v1/chat` → SseEmitter + 显式 `ThreadPoolExecutor`（核心 4/上限 8，有界队列 64，AbortPolicy 拒绝→友好报错，命名线程 `agent-loop-*`）异步跑循环——**长连接不占容器业务线程**。
+- **ChatController.java** ★：`POST /api/v1/chat` → SseEmitter + 显式 `ThreadPoolExecutor`（核心 4/上限 8，有界队列 64，AbortPolicy 拒绝→友好报错，命名线程 `agent-loop-*`）异步跑循环——**长连接不占容器业务线程**。身份在 HTTP 线程用 `UserContext.get()` 取出后**显式传参**给线程池里的循环（ThreadLocal 不跨线程池）。
 - **AgentEventEmitter.java**：8 类事件（session/plan/tool_call/tool_result/confirm_request/answer/error/done）的类型化发射器，连接断开静默丢弃（循环照常落库）。
 
 ### tool/ 工具接入
-- **McpGatewayClient.java** ★【①②的缝合线】：Agent 以 MCP 客户端身份**自环调用**网关——initialize（响应头取 Mcp-Session-Id）→ tools/list → tools/call；400 会话过期自动重初始化重试一次。
-- **DynamicToolRegistry.java** ★：tools/list 结果 → 手写 `GatewayToolCallback`（实现 Spring AI ToolCallback，**仅作 schema 广告位**——执行走 McpGatewayClient 手动通道，这样事件/确认/权限才能插桩）；`x-require-confirm` 映射；5 分钟缓存。
+- **ToolGateway.java + impl/InProcessToolGateway.java** ★【①②的缝合线】：Agent 访问工具层的**唯一出口**。
+  接口两个方法：`listTools(user)` / `callTool(name, argsJson, user)`，约定**失败也返回文本、不抛异常**。
+  进程内实现直接把调用转给 `ToolAccessService`，gatewayId 从 `AgentProperties` 取；失败文本加 `tool error: ` 前缀供模型识别。
+  面试点：为什么留接口？——将来工具层若真拆成独立部署，换个实现即可，Agent 循环不用动。目前**没有第二实现**，"进程内"就是唯一形态。
+- **DynamicToolRegistry.java** ★：工具层返回的工具定义 → 手写 `GatewayToolCallback`（实现 Spring AI ToolCallback，**仅作 schema 广告位**——`call()` 留给 Spring AI 的隐式路径，本项目不走；真正执行在 `AgentRunner` 手动通道）；`require_confirm` 列映射为敏感标记；**按角色分桶缓存 5 分钟**（STAFF 与 ADMIN 各看各的清单，不串桶）；刷新是"先构建后整体切换"，失败保留旧桶——注册失败不影响在跑对话。
 - **ToolSelector.java / impl/ToolSelectorChain.java / impl/WattAiToolSelector.java**【ADR-004】：工具前置路由责任链。`AgentRunner` 进主模型前先过链：工具数未达 `routing-tool-count-threshold`（默认 20）整链休眠、全量直通；达到后按 `routing-handlers` 顺序逐环尝试，节点以 `Optional.empty` 弃权（前置不满足/异常）传下一环，任一环节点接管即短路，全部弃权回落全量——路由层任何故障不影响主流程。wattai 节点：调决策模型（state=用户话术，choices=工具名），高置信单选、低置信 top-k 降级、argmax 落空/异常弃权。当前规模下链休眠（收益为负），扩展位预留 jev/本地语义路由。
 
+### auth/ 用户身份
+- **JwtService.java + AuthController/AuthService/AuthServiceImpl**：`POST /api/v1/auth/login` 签发 JWT（claims: uid/role），解析失败抛 `JwtException`。`InvalidCredentialsException` 由全局异常处理转 401。
+- **JwtAuthFilter.java** ★：手写过滤器（不引入 Spring Security）。拦 `/api/v1/chat`、`/api/v1/confirm` 与 `/admin/**`，解出 `UserPrincipal` 写入 `UserContext`（请求结束清理），其余路径放行；`/admin/**` 额外要求 `ADMIN` 角色，403 输出"需要 ADMIN 角色"。401/403 在过滤器层直接写 JSON（尚未进 `@ControllerAdvice` 范围）。
+- **UserPrincipal.java / UserContext.java**：身份 record（uid + role）与请求级 ThreadLocal。
+- **entity/AppUser.java / mapper/AppUserMapper.java**：`app_user` 表（username / password_hash / role / status）。
+- **WebConfig.java**：只注册一个 `JwtAuthFilter`（order=1）。
+
 ### context/ confirm/ memory/
-- **ContextTrimmer.java** ★【③】：chars/2 粗估超阈值（默认 6000）→ 保留 system + 最近 6 条，更早内容压成摘要 SystemMessage（落 checkpoint 表）。确定性规则，单测友好。
-- **TokenRecorder（接口）+ impl/TokenRecorderImpl**【③】：usage 打点 best-effort（31.8% 实验的数据源）。
-- **ConfirmManager（接口）+ impl/ConfirmManagerImpl / ConfirmController**★：token → CompletableFuture 挂起；`POST /api/v1/confirm` 恢复；超时 = 拒绝。单实例内存实现（重启丢确认项视为拒绝，语义安全）；多实例化迁移 Redis 是既定演进。
+- **ContextTrimmer.java** ★【④】：chars/2 粗估超阈值（默认 6000）→ 保留 system + 最近 6 条，更早内容压成摘要 SystemMessage（落 checkpoint 表）。确定性规则，单测友好。
+- **TokenRecorder（接口）+ impl/TokenRecorderImpl**【④】：usage 打点 best-effort（31.8% 实验的数据源）。
+- **ConfirmManager（接口）+ impl/ConfirmManagerImpl / ConfirmController**★【①】：token → CompletableFuture 挂起；`POST /api/v1/confirm` 恢复；超时 = 拒绝。单实例内存实现（重启丢确认项视为拒绝，语义安全）。
 - **AgentSessionService（接口）+ impl/AgentSessionServiceImpl** + 四实体四 Mapper：chat_session / chat_message / checkpoint / llm_usage（消息即写即落库，重启不丢对话）。
-- **HistoryRecallTool**【ADR-005】：平台自有内部工具 `recallHistory`——会话记忆"冷层"取回通道。模型自主判断何时按关键词检索当前会话的早期消息与里程碑（chat_message/checkpoint，MySQL LIKE，跨表按时间合并）；AgentRunner 本地执行，不进网关、不参与路由/确认，角色无关。三层记忆 = 最近 6 条（热）+ checkpoint 摘要（温）+ 全量历史调回（冷），替代向量库 RAG。
+- **HistoryRecallTool**【④ ADR-005】：平台自有内部工具 `recallHistory`——会话记忆"冷层"取回通道。模型自主判断何时按关键词检索当前会话的早期消息与里程碑（chat_message/checkpoint，MySQL LIKE，跨表按时间合并）；AgentRunner 本地执行，不进工具层、不参与路由/确认，角色无关。三层记忆 = 最近 6 条（热）+ checkpoint 摘要（温）+ 全量历史调回（冷），替代向量库 RAG。
 - **AgentProperties.java / AgentConfig.java**：`platform.agent.*` 配置与需要原始值参数的 Bean 装配。
 
 ---
 
 ## 3. common/ web/ resources/
 
+- `common/ApiResponse.java`：统一响应包装 `{code, message, data}`。
 - `common/GlobalExceptionHandler.java`：参数校验 400、NoResourceFound 404（防吞）、其余 500。
+- `web/PingController.java`：健康探针。
 - `resources/static/index.html`：单页控制台（fetch 流解析 SSE，8 类事件渲染，确认按钮）。
-- `resources/schema.sql`：9 张表幂等建表（IF NOT EXISTS + information_schema 守卫的 ALTER）。
+- `resources/schema.sql`：6 张表幂等建表（IF NOT EXISTS + information_schema 守卫的 ALTER）。
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
 
-## 4. 测试（15 类，59 项）
+## 4. 测试（17 类，83 项）
 
 | 测试类 | 覆盖 |
 |---|---|
-| MessageDispatcherTest (5) | initialize 协商/回落、ping、-32601、通知无响应 |
-| StreamableGatewayControllerTest (7) | 建会话回头部、缺头拒绝、合法/未知会话、通知 202、终止、404 |
-| ToolsHandlersTest (4) | tools/list 结构、未知工具、成功包装、isError 包装 |
-| GenericHttpForwarderTest (7) | query/body/path 填充、UTF-8、8KB 截断、后端 500、不可达 |
-| OpenApiImportServiceTest (5) | 三类参数解析、slug 兜底、baseUrl 覆盖、非法 JSON、取消类敏感 |
-| ToolRegistryServiceTest (2) | upsert 插入/更新 |
-| ApiKeyFilterTest (6) | 401 三态、放行、admin 范围 |
-| RateLimitServiceTest (3) | 放行/拒绝/fail-open |
-| GatewaySessionServiceTest (5) | 建会话、续期、缺失、Redis 宕、关闭 |
-| MessageDispatcherTest 之外的 transport 测试 | SSE 见 ApiKeyFilterTest 的 200 用例 |
+| ToolAccessServiceTest (10) | 闸门 1 各角色可见性、闸门 2 拒绝/放行、未知工具、非法 JSON、转发失败回喂 |
+| OpenApiImportServiceTest (8) | 三类参数解析、slug 兜底、baseUrl 覆盖、非法 JSON、取消类敏感 |
+| GenericHttpForwarderTest (8) | query/body/path 填充、UTF-8、8KB 截断、后端 500、不可达 |
+| GenericHttpForwarderTimeoutTest (4) | WireMock：读超时、连接中断、非 JSON 响应体、截断边界 |
+| ToolSelectorChainTest (7) | 阈值休眠、逐环弃权传递、短路、全弃权回落、异常降级、argmax 越界 |
+| HistoryRecallToolTest (7) | 关键词检索、跨表合并、条数/长度上限、未命中如实回喂 |
+| WattAiToolSelectorTest (5) | 高置信单选、低置信 top-k、到点异常弃权 |
+| JwtServiceTest (5) | 签发/解析、过期、篡改签名 |
+| ChatAuthFilterTest (5) | 401 三态、放行、admin 范围（403） |
+| AgentRunnerTest (5) | 循环三态：执行/同意/拒绝/超步数、recall 本地执行 |
+| DynamicToolRegistryTest (4) | 角色分桶、确认映射、空清单、刷新失败保留旧桶 |
 | ConfirmManagerTest (4) | 同意/拒绝/超时/未知 token |
+| AuthControllerTest (4) | 登录成功/密码错/用户不存在/参数校验 |
 | ContextTrimmerTest (3) | 不裁剪/裁剪结构/摘要计数 |
-| AgentRunnerTest (4) | 循环三态：执行/同意/拒绝/超步数 |
-| DynamicToolRegistryTest (2) | 回调构建 + 确认映射、空清单 |
+| ToolRegistryServiceTest (2) | upsert 插入/更新 |
 | PlatformApplicationTests (1) | 上下文启动 |
+| AgentSelfHealingTest (1) | ★ 端到端：WireMock 业务系统首次 500、二次 200，ReAct 循环不中断、两次观察都回填落库 |
 
 ## 5. 一次请求的类名级走线
 
@@ -123,16 +112,13 @@ McpGatewayClient 自环调网关 → 网关分发/转发 → booking 真实执�
 index.html → ChatController.chat
   → AgentSessionService.createSession / loadHistory
   → ContextTrimmer.trim
-  → DynamicToolRegistry.callbacks（自环 McpGatewayClient → 网关 tools/list）
+  → DynamicToolRegistry.callbacks（→ ToolGateway.listTools → ToolAccessService.listVisible 闸门1）
+  → ToolSelectorChain.route（工具数 <20 整链休眠）
   → AgentRunner 循环：
-      Planner.decide（qwen-turbo）
-      → ToolsCallHandler？不——循环经 McpGatewayClient.callTool
-        → StreamableGatewayController.post（tools/call）
-        → MessageDispatcher → ToolsCallHandler
+      Planner.decide（qwen-plus，OpenAI 兼容协议）
+      → ToolGateway.callTool（进程内方法调用）
+        → ToolAccessService.invoke（闸门2 鉴权）
         → GenericHttpForwarder → meeting-booking REST
-      → 观察回填 → 下一轮
+      → 观察回填 ToolResponseMessage → 下一轮
   → AgentEventEmitter.send（SSE）→ 浏览器
 ```
-
-> 注：Agent 循环调网关走 `StreamableGatewayController`（POST 直回 JSON）；
-> SSE 传输端点（`/{gw}/mcp/sse`）保留给标准 MCP 客户端接入场景。

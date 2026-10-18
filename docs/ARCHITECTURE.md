@@ -30,16 +30,16 @@
 ┌────────────────────────────────────────────────────────────────┐
 │                    agent-platform（:8000）                       │
 │                                                                │
-│  ① 用户接入层【规划中】                                            │
+│  ① 用户接入层【已实现】                                            │
 │     员工登录(JWT) → 角色 → 工具可见性按人过滤                        │
 │                    │                                           │
 │  ② Agent 运行时【已实现】                                         │
 │     ReAct 显式循环：规划 → 工具调用 → 观察 → 反思 → 回答             │
 │     SSE 分阶段直播 · 上下文裁剪 · Token 打点 · 敏感操作挂起等确认     │
-│                    │ MCP 客户端（tools.list / tools.call）         │
-│  ③ MCP 工具网关【已实现】                                         │
-│     SSE + Streamable HTTP 双传输 · OpenAPI → Tool 自动注册         │
-│     apiKey 接入鉴权 · 令牌桶限流 · 泛化 HTTP 转发                   │
+│                    │ ToolGateway（进程内方法调用）                  │
+│  ③ 工具层【已实现】                                               │
+│     OpenAPI → Tool 自动注册                                       │
+│     闸门1 可见性过滤 · 闸门2 执行点鉴权 · 泛化 HTTP 转发              │
 └─────────┬──────────────────┬──────────────────┬─────────────────┘
           ▼                  ▼                  ▼
    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
@@ -49,16 +49,16 @@
    ↑ 业务系统零改造：不碰模型、不写 AI 代码，只需提供接口文档
 
    模型：平台统一供给（OpenAI 兼容协议，yml 配置可换供应商）→ 只有 ② 用它
-   基础设施：MySQL（工具注册/会话/用量打点）· Redis（网关会话/限流/PubSub）
+   基础设施：MySQL（工具注册/会话/用量打点）
 ```
 
 **分层职责**：
 
 | 层 | 职责 | 关键点 |
 |---|---|---|
-| ① 用户接入层 | 认识"你是谁"，决定你能看到/调用哪些工具 | **规划中**（现状：服务级凭证，见 §4） |
+| ① 用户接入层 | 认识"你是谁"，决定你能看到/调用哪些工具 | JWT + 角色；`/admin/**` 额外要求 ADMIN |
 | ② Agent 运行时 | 决定"怎么做"：选工具、造参数、看结果、定下一步 | 显式 ReAct 循环，每步可插桩（事件/确认/上限） |
-| ③ MCP 工具网关 | 决定"怎么安全地做"：鉴权、限流、注册、转发 | 手写协议层，动态注册多租工具 |
+| ③ 工具层 | 决定"怎么安全地做"：可见性过滤、执行点鉴权、转发 | 与 ② 同进程，`ToolGateway` 一次方法调用即达 |
 | 业务系统 | 只提供接口（OpenAPI 文档） | 对 AI 零感知 |
 
 ---
@@ -68,120 +68,101 @@
 用户输入："**帮我订下周三下午两点、能坐 8 人的会议室**"
 
 ```
-用户                ② Agent 运行时           ③ MCP 网关            会议室预订
+用户                ② Agent 运行时           ③ 工具层            会议室预订
  │                        │                     │                     │
  │──"帮我订下周三…"──────▶│                     │                     │
  │                        │ 0. LLM 读工具清单      │                     │
  │◀─ plan(模型决策) ──────│                     │                     │
- │                        │ 1. tools/list ─────▶│ 按接入凭证过滤工具     │
+ │                        │ 1. listTools ──────▶│ 按角色过滤可见工具     │
  │                        │◀── 工具清单 ─────────│                     │
  │                        │                     │                     │
  │                        │ 2. LLM 决策：先查房间（参数自填：              │
  │                        │    date=2026-10-07 由"下周三"换算而来）        │
  │◀─ plan/tool_call ──────│                     │                     │
- │                        │ 3. tools/call ─────▶│ 4. 鉴权→限流→转发 ───▶│ 查库
+ │                        │ 3. callTool ───────▶│ 4. 闸门2 + 转发 ─────▶│ 查库
  │                        │◀── 真实结果 ─────────│◀────────────────────│
  │◀─ tool_result ─────────│                     │                     │
  │                        │ 5. LLM 观察→反思：    │                     │
  │                        │    房间唯一满足→直接订 │                     │
- │                        │ 6. tools/call(create)────────────────────▶│ 写库
+ │                        │ 6. callTool(create) ────────────────────▶│ 写库
  │                        │                     │◀── 预订号 9 ─────────│
  │◀─ answer ──────────────│ "已订好 B401，预订号9" │                     │
  │◀─ done ────────────────│                     │                     │
 ```
 
+注：`listTools` / `callTool` 是 `ToolGateway` 的进程内方法调用，不是网络往返——上图把它们画成一次"调用"只为标出职责边界。
+
 **敏感操作分支（取消类工具 `require_confirm=true`）**：第 6 步前循环挂起 → 推 `confirm_request` 事件 → 用户点"同意/拒绝" → 恢复执行或把"用户拒绝"作为观察喂回模型。
 
-**错误自愈（实测）**：模型首次 `create` 时间格式错（`14:00:00`）→ 业务系统返回明确 400 → 模型自动改为 `14:00` 重试成功——工具失败按 MCP 规范包装为 `isError=true` 结果交模型决策，不打断协议。
+**错误自愈（实测）**：模型首次 `create` 时间格式错（`14:00:00`）→ 业务系统返回明确 400 → 模型自动改为 `14:00` 重试成功——工具失败包装为 `isError=true` 的文本观察交模型决策，不打断循环。
 
 ---
 
-## 4. 用户权限：核心原则、三道闸门与落地方案
+## 4. 用户权限：核心原则与三道闸门
 
 ### 4.1 核心原则
 
 **模型只提议、不授权；权限校验在代码里，不在模型脑里。**
-AI 的工具选择是一个"建议"，真正的安全边界在网关执行点——由不经过模型的代码，按会话绑定的真实用户身份强制校验。因此模型幻觉出工具名、或被提示注入（"你现在是管理员"）都无法越权：校验看的不是模型说了什么，而是用户是谁。
+AI 的工具选择是一个"建议"，真正的安全边界在工具层执行点——由不经过模型的代码，按会话绑定的真实用户身份强制校验。因此模型幻觉出工具名、或被提示注入（"你现在是管理员"）都无法越权：校验看的不是模型说了什么，而是用户是谁。
 
 ### 4.2 三道闸门
 
 ```
 AI（提议者）："我想调 admin_delete_user"
       ↓
-【闸门1·可见性过滤】tools/list 按当前用户角色过滤
+【闸门1·可见性过滤】listVisible 按当前用户角色过滤
    → 无权工具不进入模型视野（同时减少选错干扰）
    → 注意：这是体验优化而非安全边界——模型可能幻觉出清单外的工具名
       ↓
 【闸门2·执行点强制鉴权】★ 安全边界 ★
-   tools/call 到达网关 → 校验 会话用户角色 × tool.required_role
+   invoke 到达工具层 → 校验 会话用户角色 × tool.required_role
    → 不匹配：包装为 isError=true 的结果拒绝（模型读后转述用户，循环不中断）
       ↓
 【闸门3·敏感操作人工确认】
    有权调用的破坏性/不可逆操作 → confirm_request 挂起 → 用户点同意才执行
 ```
 
-### 4.3 现状（已实现，演示简化）
+### 4.3 现状：三道闸门均已实现
 
-- 网关自身：apiKey 接入鉴权（哪个客户端应用能进门）+ 令牌桶限流（60 次/分钟/接入方）；
-- 业务调用：服务级凭证 `X-Service-Key`（系统账号身份执行）；
-- 闸门 3 已实现并实测（同意/拒绝/超时三态）；闸门 1/2 为下述落地方案。
+- **接入鉴权**：用户 JWT 一套打天下——`/api/v1/chat`、`/api/v1/confirm` 校验 Bearer token，`/admin/**` 额外要求 `ADMIN` 角色（403 输出"需要 ADMIN 角色"）。没有第二套凭证体系。
+- **闸门 1 / 闸门 2**：都在 `gateway/registry/ToolAccessService`，被 `InProcessToolGateway` 调用，即 `AgentRunner` 调工具时的必经之路。
+- **闸门 3**：`ConfirmManager` 挂起 + `POST /api/v1/confirm` 恢复（同意/拒绝/超时三态均已实测）。
+- **业务调用身份**：转发时按需附服务级凭证 `X-Service-Key`（解决业务接口自身有鉴权的接入问题）；用户级 On-Behalf-Of 透传是既定演进项。
 
-### 4.4 落地改动清单（对着现有代码，共 6 处）
+### 4.4 闸门 2 的核心实现
 
-| # | 改动 | 位置 | 内容 |
-|---|---|---|---|
-| 1 | 用户表 + 登录 | 新增 `app_user`；照搬 booking 的 `JwtService` | `POST /api/v1/auth/login` → JWT（claims: userId, role） |
-| 2 | 会话绑定用户 | `chat_session` 加 `user_id`；`ChatController` | 续聊校验 session.userId == jwt.userId（防冒用 sessionKey） |
-| 3 | 身份穿进网关 | `McpGatewayClient` 请求头 + `MessageContext` 加字段 | `X-User-Id` / `X-User-Role`（生产级改为透传用户原 JWT 并验签） |
-| 4 | 闸门 1：可见性过滤 | `ToolRegistryService.listEnabled` 加 role 参数 | `(required_role IS NULL OR required_role = :role)` |
-| 5 | 闸门 2：执行点鉴权 | `ToolsCallHandler`（find 之后、forward 之前） | 见下方核心 20 行 |
-| 6 | 身份透传（On-Behalf-Of，二期） | 网关转发头 | `Authorization: Bearer <用户JWT>` 替代 X-Service-Key——booking 零改动（其 JwtFilter 本就按人校验），审计归属真实用户 |
-
-配套表变更：
-
-```sql
-CREATE TABLE app_user (id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  username VARCHAR(32) UNIQUE, password_hash VARCHAR(100),
-  role VARCHAR(16), status TINYINT DEFAULT 1);
-ALTER TABLE chat_session   ADD COLUMN user_id BIGINT;
-ALTER TABLE tool_definition ADD COLUMN required_role VARCHAR(16) NULL; -- NULL=全员
-```
-
-闸门 2 核心 20 行（拒绝包装为 isError 结果，模型可读、循环不断）：
+模型可能幻觉出不存在的工具名，也可能被提示注入诱导去调越权工具，因此执行前必须再校验一次。拒绝**包装为 `isError=true` 的文本结果**而非异常——模型读得到、循环不断：
 
 ```java
-// ToolsCallHandler：def 为查到的工具定义
-if (def.getRequiredRole() != null && !def.getRequiredRole().equals(context.userRole())) {
-    ObjectNode payload = MAPPER.createObjectNode();
-    payload.putArray("content").addObject().put("type", "text")
-           .put("text", "权限不足：当前角色无权调用 " + name);
-    payload.put("isError", true);
-    return JsonRpcResponse.success(request.id(), payload);
+// ToolAccessService.invoke：定位工具后、转发之前
+String requiredRole = tool.get().getRequiredRole();
+if (requiredRole != null && !requiredRole.equals(userRole)) {
+    return new ToolCallResult(true, "权限不足：需要 " + requiredRole + " 角色");
 }
 ```
 
-### 4.5 砌好之后：一次越权尝试的完整流转
+两道闸门的共同约定：**失败永不抛异常**，一律返回文本观察（`ToolCallResult.isError`）——这是 ReAct 循环能"看到失败并自己决定下一步"的前提。
+
+### 4.5 一次越权尝试的完整流转
 
 ```
 普通员工："帮我把 3 号预订取消"（cancel 要求 ADMIN）
- ① tools/list → cancel 被过滤 → 模型视野里没有它
+ ① listVisible → cancel 被过滤 → 模型视野里没有它
  ② 模型仍幻觉/被注入，硬调 cancel
- ③ 网关执行点：role=STAFF ≠ ADMIN → isError=true 拒绝
+ ③ ToolAccessService.invoke：role=STAFF ≠ ADMIN → isError=true 拒绝
  ④ 模型读到"权限不足" → 转述用户"您没有取消权限"
  ⑤ （若为管理员：走已有的 confirm_request 人工确认闸门）
 ```
 
-### 4.6 AI 出错的分类对策（现有代码已建成的部分）
+### 4.6 AI 出错的分类对策（均已实现）
 
 | 错误类型 | 机制 | 代码位置 | 状态 |
 |---|---|---|---|
-| 参数/格式错 | 错误回喂自纠 | `ToolsCallHandler` isError 包装 + 系统提示词 | ✅ 实测（400 时间格式 → 自改重试成功） |
+| 参数/格式错 | 错误回喂自纠 | `ToolAccessService.invoke` isError 包装 + 系统提示词 | ✅ 实测（400 时间格式 → 自改重试成功） |
 | 死循环 | 步数熔断 | `LoopGuard`（maxSteps=8） | ✅ |
-| 有权但危险 | 人工确认闸 | `x-require-confirm` + `ConfirmManager` 挂起 | ✅ 实测三态 |
+| 有权但危险 | 人工确认闸 | `require_confirm` 列 + `ConfirmManager` 挂起 | ✅ 实测三态 |
 | 重复写入 | 语义幂等键 | booking SHA-256(userId\|roomId\|date\|…) | ✅ 实测 |
-| 越权调用 | 闸门 2 执行点鉴权 | §4.4 第 5 处 | ⬜ 唯一待砌 |
-
-**工作量估算：半天至一天**（登录 2h 复用自己的 JwtService + 列与过滤 1h + 执行点 1h + 测试回归 2h）。
+| 越权调用 | 闸门 2 执行点鉴权 | `ToolAccessService.invoke` | ✅ |
 
 > 设计原则：**接入零成本，授权有边界**。技术上接一个新系统只需导入 OpenAPI；治理上必须回答"谁能用、以谁的身份、留什么痕"。
 
@@ -189,7 +170,7 @@ if (def.getRequiredRole() != null && !def.getRequiredRole().equals(context.userR
 
 ## 5. 模型策略
 
-- 模型**只被 Agent 运行时使用**（网关、业务系统均不依赖 LLM）；
+- 模型**只被 Agent 运行时使用**（工具层、业务系统均不依赖 LLM）；
 - 平台统一供给：OpenAI 兼容协议，`yml` 配置供应商（已实测 DashScope qwen-plus/qwen-turbo 无缝切换）；
 - 演进路径：单模型（现状）→ 模型配置入库热切换 → 按接入方/场景路由不同模型（触发条件：成本分摊或需求分化）。
 
@@ -197,16 +178,15 @@ if (def.getRequiredRole() != null && !def.getRequiredRole().equals(context.userR
 
 | 决策 | 一句话理由 |
 |---|---|
-| 手写 MCP 协议层（ADR-001） | 动态注册/多接入隔离/多实例同步 starter 均不提供——网关的实体本就要自研 |
-| 双传输 SSE + Streamable（ADR-002） | 兼容存量客户端 + 面向规范演进方向，共享会话与消息层边际成本低 |
 | 滑窗 + 摘要混合裁剪（ADR-003） | 纯滑窗丢关键事实、纯摘要成本翻倍；实测总 Token 降 31.8%，代价 +48.8% 重查次数 |
+| 工具前置路由接口先行、默认休眠（ADR-004） | 工具数未达阈值时整链休眠、全量直通——规模化前零开销，规模化后自动武装 |
+| 会话记忆用内部工具调回而非 RAG（ADR-005） | 对话消息短碎、上下文依赖强，嵌入质量天然差；把 RAG 推迟到规模证明它必要的时刻 |
+| 进程内工具调用，删除 MCP 协议层与自环（ADR-006） | 自环理由只有"预留拆分部署"且从未兑现，代价是每次调用多一跳网络、异常跨协议层 |
 
 ## 7. 实测数据（README 性能表同步）
 
 | 指标 | 数值 |
 |---|---|
 | SSE 并发 | 40 并发 200/200，P50 1.03s / P99 1.35s |
-| 限流精度 | 60 次/分钟精确生效（60 放行 + 5×429） |
 | Token 裁剪 | 30 轮长会话总量降 31.8%；单次调用 prompt 降 78.6% |
-| 多实例会话漂移 | 双实例实测：连接在 A、消息打 B、响应回 A（Redis PubSub） |
-| 自动化测试 | 86 项（协议/转发/裁剪/循环三态/限流/鉴权） |
+| 自动化测试 | 83 项（转发拼装与超时故障/裁剪策略/循环三态/越权拦截/路由责任链/端到端自愈） |
