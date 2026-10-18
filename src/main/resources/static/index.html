@@ -3,287 +3,1340 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI 助手 · 会议预约</title>
-<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<title>AI 助手平台 · Agent Console</title>
 <style>
-  :root {
-    --bg:#0b0f14; --panel:#141a22; --panel2:#1a222d; --line:#263140;
-    --text:#e8ecf2; --muted:#7d8b9e; --accent:#4f8ef7; --ok:#34c98e;
-    --warn:#e8b64c; --err:#e06c6c; --user:#2b4c8c;
-  }
-  * { box-sizing:border-box; margin:0; }
-  html,body { height:100%; }
-  body { background:var(--bg); color:var(--text); font:14px/1.7 "PingFang SC","Microsoft YaHei",system-ui,sans-serif; display:flex; flex-direction:column; }
-  header { padding:14px 22px; border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:12px; }
-  header b { font-size:16px; }
-  header span { color:var(--muted); font-size:12px; }
-  #who { margin-left:auto; color:var(--muted); font-size:12px; }
-  #who a { color:var(--accent); cursor:pointer; }
-  #log { flex:1; overflow-y:auto; padding:20px 22px; display:flex; flex-direction:column; gap:10px; scroll-behavior:smooth; }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 14px; max-width:820px; width:fit-content; min-width:280px; }
-  .card .head { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); margin-bottom:4px; }
-  .card .head .ico { font-size:14px; }
-  .card.user { background:var(--user); border-color:transparent; align-self:flex-end; }
-  .card.answer { border-color:var(--ok); }
-  .card.answer .body { line-height:1.75; }
-  .card.answer .body p { margin:6px 0; }
-  .card.answer .body ul { margin:6px 0 6px 18px; }
-  .card.answer .body code { background:#0d1420; padding:2px 6px; border-radius:4px; font-family:Consolas,monospace; font-size:13px; }
-  .card.answer .body pre { background:#0d1420; padding:10px; border-radius:8px; overflow-x:auto; margin:8px 0; }
-  .card.answer .body pre code { background:none; padding:0; }
-  .card.error { border-color:var(--err); }
-  .card .tool-args { color:var(--muted); font-family:Consolas,monospace; font-size:12px; word-break:break-all; }
-  .thinking { display:flex; align-items:center; gap:8px; color:var(--muted); padding:4px 22px 10px; font-size:13px; }
-  .thinking .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); animation:pulse 1.2s infinite; }
-  .thinking .dot:nth-child(2){ animation-delay:.2s } .thinking .dot:nth-child(3){ animation-delay:.4s }
-  @keyframes pulse { 0%,100%{opacity:.25} 50%{opacity:1} }
-  #login-section { max-width:380px; margin:60px auto; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:26px; }
-  #login-section h2 { font-size:15px; margin-bottom:6px; }
-  #login-section .hint { color:var(--muted); font-size:12px; margin-bottom:14px; }
-  #login-section input { width:100%; padding:10px 12px; margin-bottom:10px; border-radius:8px; border:1px solid var(--line); background:var(--panel2); color:var(--text); }
-  #login-section button { width:100%; padding:10px; border:0; border-radius:8px; background:var(--accent); color:#fff; cursor:pointer; font-size:14px; }
-  #login-err { color:var(--err); font-size:12px; min-height:16px; margin-bottom:6px; }
-  #confirm-bar { display:flex; align-items:center; gap:12px; padding:12px 22px; background:#2b2416; border-top:1px solid var(--warn); }
-  #confirm-bar[hidden] { display:none; }
-  #confirm-text { flex:1; color:var(--warn); }
-  #confirm-bar button { padding:7px 20px; border:0; border-radius:8px; cursor:pointer; font-weight:600; }
-  #btn-ok { background:var(--ok); color:#06281c; }
-  #btn-no { background:#4a4f57; color:#fff; }
-  form { display:flex; gap:10px; padding:14px 22px 18px; border-top:1px solid var(--line); }
-  input#message { flex:1; padding:12px 16px; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--text); font-size:14px; outline:none; }
-  input#message:focus { border-color:var(--accent); }
-  button.send { padding:12px 26px; border:0; border-radius:10px; background:var(--accent); color:#fff; font-size:14px; cursor:pointer; }
-  button.send:disabled { opacity:.45; cursor:not-allowed; }
-  .cursor { display:inline-block; width:8px; height:16px; background:var(--text); animation:blink .9s infinite; vertical-align:-2px; }
-  @keyframes blink { 50%{opacity:0} }
+/* ============================================================
+   任务遥测控制台 / Mission Telemetry Console
+   设计意图：这个产品的本质是「观察一个 Agent 在执行」，
+   所以事件流是一条带相位编号的执行轨迹，而非一堆卡片；
+   三道权限闸门做成左栏里随身份实时变化的可视化面板。
+   配色刻意避开蓝紫，用暖调近黑 + 琥珀/青绿/锈红。
+   ============================================================ */
+
+:root{
+  --ink:#0c0d10; --ink-2:#131418; --ink-3:#191b20; --ink-4:#1f2229;
+  --line:#25272e; --line-2:#33363f;
+  --bone:#e8e4da; --bone-dim:#a5a29a; --slate:#6a6d76; --slate-2:#4a4d55;
+  --amber:#ffb454; --amber-dim:#8a6224; --amber-wash:rgba(255,180,84,.09);
+  --teal:#58c9b9; --teal-dim:#2c6159; --teal-wash:rgba(88,201,185,.09);
+  --rust:#e0654f; --rust-wash:rgba(224,101,79,.1);
+
+  --mono:ui-monospace,"SF Mono","Cascadia Mono","JetBrains Mono",Consolas,"Liberation Mono",monospace;
+  --sans:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Source Han Sans SC","Noto Sans CJK SC",sans-serif;
+
+  --rail:56px;      /* 轨迹主干线的栅格列宽 */
+  --ease:cubic-bezier(.22,.8,.28,1);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+/* 必须显式声明：下方 #login/#console 的 ID 选择器会盖过 UA 样式的 [hidden] */
+[hidden]{display:none!important}
+html,body{height:100%}
+body{
+  background:var(--ink); color:var(--bone);
+  font:15px/1.65 var(--sans);
+  -webkit-font-smoothing:antialiased;
+  overflow:hidden;
+}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+::selection{background:var(--amber-dim);color:#fff}
+/* 焦点环：系统默认的白色描边在这套配色里很突兀，一律自己画 */
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.btn:focus,.send:focus,.btn-ok:focus,.btn-no:focus,.chip:focus{outline:none}
+.btn-ok:focus{box-shadow:0 0 0 3px rgba(88,201,185,.32)}
+.btn-no:focus{box-shadow:0 0 0 3px rgba(232,228,218,.18)}
+.chip:focus{border-color:var(--amber-dim);color:var(--amber)}
+
+/* ---------- 背景：网格 + 噪点 + 光晕 ---------- */
+.bg-grid,.bg-noise,.bg-glow{position:fixed;inset:0;pointer-events:none}
+.bg-grid{
+  background-image:
+    linear-gradient(var(--line) 1px,transparent 1px),
+    linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:44px 44px;
+  opacity:.4;
+  mask-image:radial-gradient(ellipse 120% 90% at 50% 0%,#000 25%,transparent 88%);
+  -webkit-mask-image:radial-gradient(ellipse 120% 90% at 50% 0%,#000 25%,transparent 88%);
+}
+.bg-glow{
+  background:radial-gradient(ellipse 60% 45% at 8% -8%,rgba(255,180,84,.10),transparent 62%),
+             radial-gradient(ellipse 50% 42% at 96% 104%,rgba(88,201,185,.07),transparent 62%);
+}
+.bg-noise{
+  opacity:.035;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------- 通用排版：工程标注（大写拉丁 + 中文小注） ---------- */
+.tag{
+  font-family:var(--mono); font-size:10px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--slate); white-space:nowrap;
+}
+.tag-cn{font-size:11px;letter-spacing:.06em;color:var(--slate)}
+
+/* ============================================================
+   登录屏：全屏分屏排版（左：自述 / 右：表单）
+   ============================================================ */
+#login{position:fixed;inset:0;display:grid;grid-template-columns:1.15fr .85fr;z-index:20}
+.login-l{
+  position:relative;padding:clamp(40px,7vw,88px);
+  display:flex;flex-direction:column;justify-content:center;gap:26px;
+  border-right:1px solid var(--line);
+}
+.brand{
+  font-family:var(--mono);font-size:11px;letter-spacing:.34em;
+  text-transform:uppercase;color:var(--amber);
+  display:flex;align-items:center;gap:10px;
+}
+.brand::before{content:"";width:26px;height:1px;background:var(--amber);opacity:.7}
+.login-l h1{
+  font-size:clamp(30px,3.6vw,50px);line-height:1.12;font-weight:600;
+  letter-spacing:-.02em;max-width:15ch;
+}
+.login-l h1 em{font-style:normal;color:var(--amber)}
+.login-l .lede{color:var(--bone-dim);max-width:46ch;font-size:15px}
+
+/* 登录页的三道闸门缩略图 */
+.gates-mini{display:flex;flex-direction:column;gap:0;margin-top:8px;max-width:420px}
+.gmin{
+  display:grid;grid-template-columns:22px 1fr;gap:14px;
+  padding:11px 0;border-top:1px solid var(--line);
+  opacity:0;animation:rise .5s var(--ease) forwards;
+}
+.gmin:last-child{border-bottom:1px solid var(--line)}
+.gmin .num{
+  font-family:var(--mono);font-size:10px;color:var(--amber);
+  letter-spacing:.1em;padding-top:3px;
+}
+.gmin b{display:block;font-size:13px;font-weight:600;margin-bottom:2px}
+.gmin span{font-size:12px;color:var(--slate)}
+
+.login-r{display:flex;align-items:center;justify-content:center;padding:40px}
+.login-form{width:100%;max-width:330px;display:flex;flex-direction:column;gap:16px}
+.login-form .tag{margin-bottom:2px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--slate)}
+.field input{
+  width:100%;padding:12px 14px;background:var(--ink-2);
+  border:1px solid var(--line-2);color:var(--bone);
+  font-family:var(--mono);font-size:14px;letter-spacing:.02em;
+  transition:border-color .18s,background .18s;
+}
+.field input:focus{outline:none;border-color:var(--amber);background:var(--ink-3)}
+.field input::placeholder{color:var(--slate-2)}
+
+.btn{
+  padding:13px 20px;background:var(--amber);color:#14100a;
+  font-weight:700;font-size:13px;letter-spacing:.08em;
+  transition:transform .12s var(--ease),filter .18s;
+}
+.btn:hover{filter:brightness(1.09)}
+.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.4;cursor:not-allowed;filter:none}
+
+.err{color:var(--rust);font-size:12px;min-height:17px;font-family:var(--mono)}
+.seed{font-size:11px;color:var(--slate);line-height:1.9}
+.seed code{
+  font-family:var(--mono);background:var(--ink-3);
+  padding:2px 6px;border:1px solid var(--line);color:var(--bone-dim);
+  cursor:pointer;transition:color .18s,border-color .18s;
+}
+.seed code:hover{color:var(--amber);border-color:var(--amber-dim)}
+
+/* ============================================================
+   控制台主界面
+   ============================================================ */
+#console{position:fixed;inset:0;display:flex;flex-direction:column;z-index:10}
+
+/* --- 顶栏 --- */
+.topbar{
+  display:flex;align-items:center;gap:18px;
+  height:52px;padding:0 20px;flex-shrink:0;
+  background:rgba(12,13,16,.86);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--line);z-index:5;
+}
+.topbar .logo{
+  font-family:var(--mono);font-size:12px;font-weight:700;
+  letter-spacing:.2em;color:var(--bone);
+}
+.topbar .logo i{color:var(--amber);font-style:normal}
+.topbar .sysname{font-size:12px;color:var(--slate);letter-spacing:.04em}
+.topbar .spacer{flex:1}
+
+/* 连接状态灯 */
+.status{display:flex;align-items:center;gap:7px}
+.status .lamp{
+  width:7px;height:7px;border-radius:50%;background:var(--slate-2);
+  transition:background .3s,box-shadow .3s;
+}
+.status[data-s="live"] .lamp{background:var(--teal);box-shadow:0 0 0 3px var(--teal-wash);animation:beat 1.6s ease-in-out infinite}
+.status[data-s="wait"] .lamp{background:var(--amber);box-shadow:0 0 0 3px var(--amber-wash);animation:beat .9s ease-in-out infinite}
+.status[data-s="idle"] .lamp{background:var(--slate-2)}
+@keyframes beat{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* 身份徽章 */
+.who{display:flex;align-items:center;gap:9px}
+.who .uname{font-family:var(--mono);font-size:12px;color:var(--bone)}
+.rolebadge{
+  font-family:var(--mono);font-size:9px;font-weight:700;
+  letter-spacing:.15em;padding:3px 7px;border:1px solid;
+}
+.rolebadge[data-r="ADMIN"]{color:var(--amber);border-color:var(--amber-dim);background:var(--amber-wash)}
+.rolebadge[data-r="STAFF"]{color:var(--teal);border-color:var(--teal-dim);background:var(--teal-wash)}
+.logout{
+  font-family:var(--mono);font-size:10px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--slate);padding:5px 2px;
+  border-bottom:1px solid transparent;transition:color .18s,border-color .18s;
+}
+.logout:hover{color:var(--rust);border-bottom-color:var(--rust)}
+
+/* --- 工作区：左栏 + 轨迹 --- */
+.workspace{flex:1;display:grid;grid-template-columns:272px 1fr;min-height:0}
+
+/* 左栏 */
+.rail{
+  border-right:1px solid var(--line);overflow-y:auto;padding:18px 0;
+  background:rgba(19,20,24,.5);
+}
+.rail::-webkit-scrollbar{width:8px}
+.rail::-webkit-scrollbar-thumb{background:var(--line-2)}
+.rail-sec{padding:0 18px 16px;margin-bottom:16px;border-bottom:1px solid var(--line)}
+.rail-sec:last-child{border-bottom:0;margin-bottom:0;padding-bottom:26px}
+.rail-sec > .tag{display:block;margin-bottom:11px}
+
+/* 身份卡 */
+.ident .row{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;gap:10px}
+.ident .k{font-size:11px;color:var(--slate)}
+.ident .v{font-family:var(--mono);font-size:12px;color:var(--bone-dim);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px}
+.ident .v.hl{color:var(--amber)}
+
+/* 闸门面板 —— 项目最强亮点的可视化 */
+.gate{padding:9px 0;border-top:1px dashed var(--line)}
+.gate:first-of-type{border-top:0;padding-top:2px}
+.gate-h{display:flex;align-items:baseline;gap:8px;margin-bottom:3px}
+.gate-h .n{font-family:var(--mono);font-size:10px;color:var(--slate-2)}
+.gate-h .t{font-size:12.5px;font-weight:600;color:var(--bone)}
+.gate-h .star{color:var(--amber);font-size:11px;line-height:1}
+.gate p{font-size:11px;color:var(--slate);line-height:1.55}
+.gate .live{
+  display:inline-flex;align-items:center;gap:6px;margin-top:5px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.03em;
+  padding:3px 7px;border-left:2px solid;
+}
+.gate .live[data-k="pass"]{color:var(--teal);border-color:var(--teal);background:var(--teal-wash)}
+.gate .live[data-k="block"]{color:var(--amber);border-color:var(--amber);background:var(--amber-wash)}
+.gate .live[data-k="n/a"]{color:var(--slate);border-color:var(--slate-2);background:transparent}
+
+/* 图例：两列，避免把左栏撑出视口 */
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}
+.lg{display:grid;grid-template-columns:16px 1fr;gap:8px;align-items:center}
+.lg span{font-size:11px;color:var(--slate)}
+
+/* --- 轨迹主区 --- */
+.stage{overflow-y:auto;position:relative;scroll-behavior:smooth}
+.stage::-webkit-scrollbar{width:10px}
+.stage::-webkit-scrollbar-thumb{background:var(--line-2)}
+.stage::-webkit-scrollbar-thumb:hover{background:var(--slate-2)}
+.trace{
+  max-width:940px;margin:0 auto;padding:30px 32px 40px;
+  display:flex;flex-direction:column;position:relative;
+}
+/* 主干线 */
+.trace::before{
+  content:"";position:absolute;left:calc(32px + var(--rail)/2 - .5px);top:38px;bottom:44px;
+  width:1px;background:linear-gradient(180deg,transparent,var(--line-2) 90px,var(--line-2) calc(100% - 60px),transparent);
+}
+.trace.empty::before{display:none}
+.trace.empty{padding-top:clamp(40px,11vh,120px)}
+
+/* 空态：还没发过消息时，主干线不画，改为一屏引导 */
+.empty-hint{padding:4px 0 0 18px;max-width:620px}
+.empty-hint .lead{
+  font-size:clamp(20px,2.3vw,27px);font-weight:600;line-height:1.35;
+  letter-spacing:-.01em;text-wrap:balance;   /* 中英混排下让两行字数均衡，避免把词拆开 */
+}
+.empty-hint .lead em{font-style:normal;color:var(--amber)}
+.empty-hint .sub{color:var(--slate);font-size:13.5px;line-height:1.75;margin-top:13px;max-width:56ch}
+.empty-hint .seq{display:flex;flex-wrap:wrap;gap:11px 24px;margin-top:26px}
+.empty-hint .sy{
+  display:flex;align-items:center;gap:9px;font-family:var(--mono);
+  font-size:11.5px;letter-spacing:.04em;color:var(--slate);
+}
+
+/* 单个节点 */
+.node{
+  display:grid;grid-template-columns:var(--rail) 1fr;gap:16px;
+  padding:9px 0;position:relative;
+  opacity:0;animation:rise .42s var(--ease) forwards;
+}
+@keyframes rise{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+
+.node .mk{display:grid;place-items:center;padding-top:3px;position:relative;z-index:1}
+.node .bd{min-width:0}
+
+/* 节点内的时间戳 + 类型标注 */
+.node .meta{
+  display:flex;align-items:baseline;gap:9px;margin-bottom:5px;
+}
+.node .meta .phase{font-family:var(--mono);font-size:10px;color:var(--slate-2);letter-spacing:.08em}
+.node .meta .kind{font-family:var(--mono);font-size:10px;letter-spacing:.17em;text-transform:uppercase;font-weight:600}
+.kind[data-k="plan"]{color:var(--bone-dim)}
+.kind[data-k="tool_call"]{color:var(--amber)}
+.kind[data-k="tool_result"]{color:var(--teal)}
+.kind[data-k="confirm"]{color:var(--amber)}
+.kind[data-k="answer"]{color:var(--teal)}
+.kind[data-k="error"]{color:var(--rust)}
+.kind[data-k="done"]{color:var(--slate)}
+.kind[data-k="user"]{color:var(--bone)}
+.node .meta .cn{font-size:11px;color:var(--slate)}
+
+/* 节点内容 */
+.node .content{font-size:14px;line-height:1.72}
+.node.user .content{
+  font-size:15px;color:var(--bone);font-weight:500;
+  padding-left:13px;border-left:2px solid var(--bone);
+}
+/* 计划 */
+.steps{display:flex;flex-direction:column;gap:5px;margin-top:2px}
+.step{display:grid;grid-template-columns:20px 1fr;gap:9px;font-size:13px;color:var(--bone-dim)}
+.step i{font-family:var(--mono);font-size:10px;color:var(--slate-2);font-style:normal;padding-top:3px}
+/* 工具调用：代码化 */
+.call{
+  font-family:var(--mono);font-size:12.5px;line-height:1.6;
+  background:var(--ink-2);border:1px solid var(--line);
+  border-left:2px solid var(--amber-dim);
+  padding:9px 13px;margin-top:3px;
+  overflow-wrap:anywhere;color:var(--bone-dim);
+}
+.call .fn{color:var(--amber);font-weight:600}
+.call .arg{color:var(--slate)}
+/* 工具结果 */
+.result{
+  font-family:var(--mono);font-size:12.5px;line-height:1.6;
+  background:var(--ink-2);border:1px solid var(--line);
+  border-left:2px solid var(--teal-dim);
+  padding:9px 13px;margin-top:3px;color:var(--bone-dim);
+  overflow-wrap:anywhere;
+}
+.result .rt{color:var(--teal)}
+/* 被闸门 2 拦下的结果不是"结果"，要读起来像一次拒绝 */
+.result[data-err]{
+  border-left-color:var(--rust);border-color:rgba(224,101,79,.28);
+  background:var(--rust-wash);color:var(--rust);
+}
+.result[data-err] .rt{color:var(--rust)}
+/* 错误 */
+.node.error .content{
+  font-size:13px;color:var(--rust);font-family:var(--mono);
+  background:var(--rust-wash);border:1px solid rgba(224,101,79,.28);
+  padding:9px 13px;
+}
+/* AI 回复 */
+.node.answer .content{
+  font-size:15px;line-height:1.8;color:var(--bone);
+  background:linear-gradient(180deg,var(--ink-3),var(--ink-2));
+  border:1px solid var(--line-2);
+  padding:15px 19px;
+}
+.node.answer .content p{margin:.5em 0}
+.node.answer .content p:first-child{margin-top:0}
+.node.answer .content p:last-child{margin-bottom:0}
+.node.answer .content ul,.node.answer .content ol{margin:.5em 0 .5em 1.35em}
+.node.answer .content li{margin:.22em 0}
+.node.answer .content h1,.node.answer .content h2,.node.answer .content h3{
+  font-size:15px;font-weight:700;margin:.85em 0 .35em;color:var(--amber)
+}
+.node.answer .content code{
+  font-family:var(--mono);font-size:12.5px;background:var(--ink);
+  padding:2px 6px;border:1px solid var(--line-2);color:var(--amber)
+}
+.node.answer .content pre{
+  background:var(--ink);border:1px solid var(--line-2);
+  padding:12px 14px;overflow-x:auto;margin:.7em 0;
+}
+.node.answer .content pre code{background:none;border:0;padding:0;color:var(--bone-dim)}
+.node.answer .content a{color:var(--teal)}
+.node.answer .content strong{color:#fff}
+.node.answer .content blockquote{
+  border-left:2px solid var(--amber-dim);padding-left:13px;
+  color:var(--bone-dim);margin:.6em 0
+}
+.node.answer .content table{
+  border-collapse:collapse;margin:.75em 0;font-size:13.5px;
+}
+.node.answer .content th,.node.answer .content td{
+  border:1px solid var(--line-2);padding:7px 12px;text-align:left;vertical-align:top
+}
+.node.answer .content th{
+  font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  font-weight:600;color:var(--slate);background:var(--ink)
+}
+.node.answer .content hr{border:0;border-top:1px solid var(--line-2);margin:.9em 0}
+/* 完成 */
+.node.done .content{font-size:12px;color:var(--slate);font-family:var(--mono)}
+
+/* 等待确认的节点：琥珀脉冲 */
+.node.confirm .bd{position:relative}
+.node.confirm .content{
+  background:var(--amber-wash);border:1px solid var(--amber-dim);
+  padding:11px 15px;color:var(--amber);font-size:13.5px;font-weight:500;
+  animation:glow 2s ease-in-out infinite;
+}
+@keyframes glow{
+  0%,100%{box-shadow:0 0 0 0 rgba(255,180,84,0)}
+  50%{box-shadow:0 0 0 3px rgba(255,180,84,.13)}
+}
+
+/* ---------- 几何标记（用 CSS 画，替代 emoji） ----------
+   .g-* 与 .glyph 是同一个元素：.glyph 划出 16px 见方的画布，
+   每个标记用 ::before/::after 在画布中自居中绘制。 */
+.glyph{position:relative;width:16px;height:16px;flex:none}
+.glyph::before,.glyph::after{content:"";position:absolute;inset:0;margin:auto}
+/* 实心方块 —— 用户输入 */
+.g-block::before{width:8px;height:8px;background:var(--bone)}
+/* 三条横杠 —— 计划 */
+.g-bars::before{
+  width:12px;height:9px;
+  background:
+    linear-gradient(var(--slate),var(--slate)) 0 0/100% 1.5px no-repeat,
+    linear-gradient(var(--slate),var(--slate)) 1px 50%/64% 1.5px no-repeat,
+    linear-gradient(var(--slate),var(--slate)) 0 100%/100% 1.5px no-repeat;
+}
+/* 实心菱形 —— 工具发出 */
+.g-send::before{width:10px;height:10px;background:var(--amber);transform:rotate(45deg)}
+/* 空心菱形 —— 工具返回 */
+.g-recv::before{width:10px;height:10px;border:1.5px solid var(--teal);transform:rotate(45deg)}
+/* 三角 —— 待确认 */
+.g-warnclip::before{width:12px;height:11px;background:var(--amber);clip-path:polygon(50% 0,100% 100%,0 100%)}
+/* 实心圆 —— 回答 */
+.g-dot::before{
+  width:9px;height:9px;border-radius:50%;background:var(--teal);
+  box-shadow:0 0 0 3.5px var(--teal-wash);
+}
+/* 叉 —— 错误 */
+.g-cross::before,.g-cross::after{width:11px;height:1.6px;background:var(--rust)}
+.g-cross::before{transform:rotate(45deg)}
+.g-cross::after{transform:rotate(-45deg)}
+/* 小方块 —— 完成 */
+.g-tick::before{width:6px;height:6px;background:var(--slate-2)}
+
+/* ---------- 思考中：主干线上流动的光点 ---------- */
+#busy{
+  display:grid;grid-template-columns:var(--rail) 1fr;gap:16px;
+  max-width:940px;margin:0 auto;padding:2px 32px 26px;
+  opacity:0;transition:opacity .3s;pointer-events:none;
+}
+#busy[data-on="1"]{opacity:1}
+#busy .railcell{display:grid;place-items:center;position:relative}
+#busy .railcell::before{
+  content:"";position:absolute;top:-2px;width:1px;height:22px;
+  background:linear-gradient(180deg,transparent,var(--amber),transparent);
+  animation:flow 1.15s linear infinite;
+}
+@keyframes flow{
+  0%{transform:translateY(-11px);opacity:0}
+  40%{opacity:1}
+  100%{transform:translateY(13px);opacity:0}
+}
+#busy .label{
+  font-family:var(--mono);font-size:11.5px;color:var(--amber);
+  letter-spacing:.1em;display:flex;align-items:center;gap:10px;padding-top:1px;
+}
+.bars{display:inline-flex;gap:2.5px;align-items:flex-end;height:11px}
+.bars i{width:2.5px;background:var(--amber);display:block;animation:eq .95s ease-in-out infinite}
+.bars i:nth-child(1){height:5px;animation-delay:0s}
+.bars i:nth-child(2){height:11px;animation-delay:.13s}
+.bars i:nth-child(3){height:7px;animation-delay:.26s}
+.bars i:nth-child(4){height:9px;animation-delay:.39s}
+@keyframes eq{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
+
+/* ---------- 输入区 ---------- */
+.composer{
+  flex-shrink:0;border-top:1px solid var(--line);
+  background:rgba(12,13,16,.9);backdrop-filter:blur(12px);
+  padding:14px 32px 16px;
+}
+.composer-in{max-width:940px;margin:0 auto;display:flex;gap:12px;align-items:flex-end}
+.composer .wrap{flex:1;position:relative}
+#message{
+  width:100%;padding:14px 16px;background:var(--ink-2);
+  border:1px solid var(--line-2);border-radius:0;color:var(--bone);
+  font-size:14.5px;font-family:var(--sans);
+  transition:border-color .18s,background .18s;
+}
+#message:focus{outline:none;border-color:var(--amber);background:var(--ink-3)}
+#message::placeholder{color:var(--slate-2)}
+#message:disabled{opacity:.5}
+.send{
+  padding:14px 26px;background:var(--amber);color:#14100a;
+  font-weight:700;font-size:13px;letter-spacing:.1em;flex-shrink:0;
+  transition:filter .18s,transform .12s var(--ease);
+}
+.send:hover:not(:disabled){filter:brightness(1.09)}
+.send:active:not(:disabled){transform:translateY(1px)}
+.send:disabled{opacity:1;background:var(--ink-4);color:var(--slate-2);cursor:not-allowed}
+.hint{
+  max-width:940px;margin:9px auto 0;display:flex;gap:16px;align-items:center;
+  font-family:var(--mono);font-size:10px;color:var(--slate-2);letter-spacing:.06em;
+}
+.hint kbd{
+  font-family:var(--mono);font-size:9.5px;background:var(--ink-3);
+  border:1px solid var(--line-2);padding:2px 5px;color:var(--slate);
+}
+
+/* ---------- 示例指令 chips ---------- */
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px}
+.chip{
+  font-size:12px;padding:7px 13px;background:var(--ink-2);
+  border:1px solid var(--line-2);color:var(--bone-dim);
+  transition:border-color .18s,color .18s,background .18s;text-align:left;
+}
+.chip:hover{border-color:var(--amber-dim);color:var(--amber);background:var(--amber-wash)}
+.chips-lead{font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--slate-2);align-self:center}
+
+/* ---------- 确认覆盖层 ---------- */
+#confirm{position:fixed;inset:0;z-index:30;display:grid;place-items:end center}
+#confirm[hidden]{display:none}
+.scrim{position:absolute;inset:0;background:rgba(8,9,11,.72);backdrop-filter:blur(3px);animation:fade .25s}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.confirm-panel{
+  position:relative;width:min(640px,92vw);margin-bottom:26px;
+  background:var(--ink-3);border:1px solid var(--amber-dim);
+  border-top:3px solid var(--amber);
+  padding:22px 24px;display:flex;flex-direction:column;gap:16px;
+  animation:slideup .32s var(--ease);
+  box-shadow:0 -22px 60px rgba(0,0,0,.6);
+}
+@keyframes slideup{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
+.confirm-h{display:flex;align-items:center;gap:10px}
+.confirm-h .kind{color:var(--amber)}
+.confirm-panel .msg{font-size:15px;line-height:1.65;color:var(--bone)}
+.confirm-acts{display:flex;gap:10px;justify-content:flex-end}
+.btn-ok{
+  padding:11px 24px;background:var(--teal);color:#06231f;
+  font-weight:700;font-size:13px;letter-spacing:.06em;
+}
+.btn-no{
+  padding:11px 24px;background:transparent;color:var(--bone-dim);
+  border:1px solid var(--line-2);font-size:13px;letter-spacing:.06em;
+}
+.btn-no:hover{border-color:var(--rust);color:var(--rust)}
+
+/* ---------- 打字光标 ---------- */
+.caret{
+  display:inline-block;width:8px;height:15px;background:var(--teal);
+  vertical-align:-2px;margin-left:2px;animation:blink .9s steps(1) infinite;
+}
+@keyframes blink{50%{opacity:0}}
+
+/* ---------- 响应式 ---------- */
+@media(max-width:900px){
+  #login{grid-template-columns:1fr}
+  .login-l{display:none}
+  .workspace{grid-template-columns:1fr}
+  .rail{display:none}
+  .trace,.composer-in,.hint,#busy{max-width:100%}
+  .trace{padding:22px 18px 30px}
+  .trace::before{left:calc(18px + var(--rail)/2 - .5px)}
+  .composer{padding:12px 18px 14px}
+  #busy{padding-left:18px;padding-right:18px}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+  .node{opacity:1}
+}
 </style>
 </head>
 <body>
-<header><b>AI 助手 · 会议预约</b><span>ReAct 运行时 + OpenAPI 工具接入</span><span id="who"></span></header>
 
-<div id="login-section">
-  <h2>登录</h2>
-  <div class="hint">企业统一账号（演示种子：admin/admin123 · staff01/staff123）</div>
-  <div id="login-err"></div>
-  <input id="login-user" placeholder="用户名" autocomplete="username">
-  <input id="login-pass" type="password" placeholder="密码" autocomplete="current-password">
-  <button onclick="login()">登录</button>
-</div>
+<div class="bg-glow"></div>
+<div class="bg-grid"></div>
+<div class="bg-noise"></div>
 
-<div id="log" hidden>
-  <div class="card">
-    <div class="body">
-      👋 我是会议预约助手。试试：
-      <ul>
-        <li>“帮我看看明天下午有哪些会议室可用，然后直接帮我预订容量最小的那间”</li>
-        <li>“取消我最近的一个预订”</li>
-      </ul>
+<!-- ============ 登录屏 ============ -->
+<section id="login">
+  <div class="login-l">
+    <div class="brand">Agent Platform</div>
+    <h1>让大模型<em>安全地</em>操作真实业务系统</h1>
+    <p class="lede">
+      业务系统交一份 OpenAPI 文档即可注册为 AI 可调用工具，零代码改动。
+      运行时以显式 ReAct 循环驱动，全程可观察、可拦截、可确认。
+    </p>
+    <div class="gates-mini">
+      <div class="gmin" style="animation-delay:.1s">
+        <div class="num">01</div>
+        <div><b>可见性过滤</b><span>工具清单按角色下发，模型看不见越权的工具</span></div>
+      </div>
+      <div class="gmin" style="animation-delay:.18s">
+        <div class="num">02</div>
+        <div><b>执行点鉴权 ★</b><span>校验会话绑定的用户身份——幻觉与提示注入都无效</span></div>
+      </div>
+      <div class="gmin" style="animation-delay:.26s">
+        <div class="num">03</div>
+        <div><b>敏感操作确认</b><span>危险动作执行前挂起，由人拍板</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="login-r">
+    <form class="login-form" id="login-form">
+      <div>
+        <div class="tag">Sign in</div>
+        <div class="tag-cn" style="margin-top:5px">企业统一账号登录</div>
+      </div>
+      <div class="field">
+        <label for="login-user">Username / 用户名</label>
+        <input id="login-user" autocomplete="username" placeholder="admin" required>
+      </div>
+      <div class="field">
+        <label for="login-pass">Password / 密码</label>
+        <input id="login-pass" type="password" autocomplete="current-password" placeholder="••••••••" required>
+      </div>
+      <div class="err" id="login-err"></div>
+      <button class="btn" type="submit" id="login-btn">进入控制台</button>
+      <div class="seed">
+        演示账号：<code data-u="admin" data-p="admin123">admin / admin123</code>
+        · <code data-u="staff01" data-p="staff123">staff01 / staff123</code>
+        <br><span style="color:var(--slate-2)">后者可以现场看到闸门 2 拦截</span>
+      </div>
+    </form>
+  </div>
+</section>
+
+<!-- ============ 控制台 ============ -->
+<div id="console" hidden>
+  <header class="topbar">
+    <span class="logo"><i>▚</i> AGENT CONSOLE</span>
+    <span class="sysname">AI 助手平台 · ReAct 运行时</span>
+    <span class="spacer"></span>
+    <div class="status" id="status" data-s="idle">
+      <span class="lamp"></span><span class="tag" id="status-text">idle</span>
+    </div>
+    <div class="who">
+      <span class="uname" id="who-name"></span>
+      <span class="rolebadge" id="who-role" data-r=""></span>
+      <button class="logout" id="logout">退出</button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="rail">
+      <div class="rail-sec ident">
+        <span class="tag">Identity / 身份</span>
+        <div class="row"><span class="k">会话</span><span class="v" id="ident-session">—</span></div>
+        <div class="row"><span class="k">角色</span><span class="v hl" id="ident-role">—</span></div>
+        <div class="row"><span class="k">本轮步数</span><span class="v" id="ident-steps">0</span></div>
+      </div>
+
+      <div class="rail-sec">
+        <span class="tag">Access Gates / 权限闸门</span>
+
+        <div class="gate" id="gate-1">
+          <div class="gate-h"><span class="n">01</span><span class="t">可见性过滤</span></div>
+          <p>工具清单按角色下发，模型看不见越权工具。体验优化，非安全边界。</p>
+          <span class="live" data-k="n/a" id="gate-1-live">所有已启用工具</span>
+        </div>
+
+        <div class="gate" id="gate-2">
+          <div class="gate-h"><span class="n">02</span><span class="t">执行点鉴权</span><span class="star">★</span></div>
+          <p>执行前校验会话绑定的身份，不经过模型——幻觉与提示注入均无效。</p>
+          <span class="live" data-k="n/a" id="gate-2-live">—</span>
+        </div>
+
+        <div class="gate" id="gate-3">
+          <div class="gate-h"><span class="n">03</span><span class="t">敏感操作确认</span></div>
+          <p>敏感写操作执行前挂起，等人工拍板；超时视为拒绝。</p>
+          <span class="live" data-k="n/a" id="gate-3-live">随调用触发</span>
+        </div>
+      </div>
+
+      <div class="rail-sec">
+        <span class="tag">Trace Legend / 轨迹图例</span>
+        <div class="legend">
+          <div class="lg"><span class="glyph g-block"></span><span>你的输入</span></div>
+          <div class="lg"><span class="glyph g-bars"></span><span>执行计划</span></div>
+          <div class="lg"><span class="glyph g-send"></span><span>工具调用</span></div>
+          <div class="lg"><span class="glyph g-recv"></span><span>工具结果</span></div>
+          <div class="lg"><span class="glyph g-warnclip"></span><span>等待确认</span></div>
+          <div class="lg"><span class="glyph g-dot"></span><span>最终回复</span></div>
+          <div class="lg"><span class="glyph g-cross"></span><span>出错</span></div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="stage" id="stage">
+      <div class="trace empty" id="trace">
+        <div class="empty-hint" id="empty-hint">
+          <p class="lead">说一句话，Agent 会规划并<em>真实调用</em>已接入的业务接口。</p>
+          <p class="sub">
+            执行过程以事件流逐条展开在这里：每一次工具调用都先过闸门 2 鉴权，
+            敏感操作会停下来等你确认。
+          </p>
+          <div class="seq">
+            <span class="sy"><span class="glyph g-bars"></span>执行计划</span>
+            <span class="sy"><span class="glyph g-send"></span>工具调用</span>
+            <span class="sy"><span class="glyph g-recv"></span>工具结果</span>
+            <span class="sy"><span class="glyph g-dot"></span>最终回复</span>
+          </div>
+        </div>
+      </div>
+      <div id="busy" data-on="0">
+        <div class="railcell"></div>
+        <div class="label">
+          <span class="bars"><i></i><i></i><i></i><i></i></span>
+          <span id="busy-text">推理中…</span>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="composer">
+    <form class="composer-in" id="chat-form">
+      <div class="wrap">
+        <input id="message" placeholder="描述你的需求，Agent 会规划并调用已接入的工具…" autocomplete="off">
+      </div>
+      <button class="send" id="send" type="submit" disabled>执行</button>
+    </form>
+    <div class="hint">
+      <span><kbd>Enter</kbd> 发送</span>
+      <span>工具调用前会经过闸门 2 鉴权</span>
+      <span id="hint-session"></span>
+    </div>
+    <div class="chips" id="chips" hidden>
+      <span class="chips-lead">已接入工具</span>
+      <!-- 按钮由 loadToolExamples() 按当前用户可见的工具生成：示例跟着接入的系统走，平台里不留业务词汇 -->
     </div>
   </div>
 </div>
-<div class="thinking" id="thinking" hidden>
-  <div class="dot"></div><div class="dot"></div><div class="dot"></div> AI 正在思考与执行…
+
+<!-- ============ 确认覆盖层 ============ -->
+<div id="confirm" hidden>
+  <div class="scrim"></div>
+  <div class="confirm-panel">
+    <div class="confirm-h">
+      <span class="glyph g-warnclip"></span>
+      <span class="kind">CONFIRM REQUIRED</span>
+      <span class="tag-cn">此操作需要你确认后才会执行</span>
+    </div>
+    <div class="msg" id="confirm-text"></div>
+    <div class="confirm-acts">
+      <button class="btn-no" id="btn-no" type="button">拒绝</button>
+      <button class="btn-ok" id="btn-ok" type="button">同意执行</button>
+    </div>
+  </div>
 </div>
-<div id="confirm-bar" hidden>
-  <span id="confirm-text"></span>
-  <button id="btn-ok" onclick="confirmAction(true)">✓ 同意执行</button>
-  <button id="btn-no" onclick="confirmAction(false)">✕ 拒绝</button>
-</div>
-<form id="chat-form" hidden>
-  <input id="message" placeholder="输入你的需求…" autocomplete="off">
-  <button class="send" id="send" type="submit">发送</button>
-</form>
 
 <script>
+"use strict";
 const $ = id => document.getElementById(id);
-const logEl = $("log");
+const traceEl = $("trace"), stageEl = $("stage");
+const ZWSP = String.fromCharCode(0x200b);   // 零宽空格：给长 JSON 造可折行点
+
 let sessionKey = localStorage.getItem("sessionKey") || null;
-let token = localStorage.getItem("token") || null;
-let myName = localStorage.getItem("myName") || "";
+let token      = localStorage.getItem("token") || null;
+let myName     = localStorage.getItem("myName") || "";
+let myRole     = localStorage.getItem("myRole") || "";
 let pendingToken = null;
 let busy = false;
+let stepNo = 0;        // 轨迹节点的序号（节点左上角的 01/02/…，含输入、计划、回复）
+let toolSteps = 0;     // 本轮工具调用次数——这才是「步数」，与节点数不是一回事
+
+/* ---------------- 工具函数 ---------------- */
 
 function authHeaders(extra) {
   const h = Object.assign({ "Content-Type": "application/json" }, extra || {});
   if (token) h["Authorization"] = "Bearer " + token;
   return h;
 }
-function showLogin() {
-  $("login-section").hidden = false;
-  $("log").hidden = true; $("chat-form").hidden = true;
-  $("thinking").hidden = true; $("confirm-bar").hidden = true;
-  $("who").textContent = "";
+
+/** 极简 markdown 渲染器。刻意不引 marked / DOMPurify 之类的 CDN——
+ *  现场演示不能赌网络，而威胁模型只是自家 LLM 的输出。
+ *  做法：先把整段文本的 HTML 转义掉，再只插我们自己的标签，
+ *  因此模型输出在结构上不可能注入标签或事件属性。 */
+function mdToHtml(src) {
+  const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+  /** 行内：代码 → 粗体 → 斜体 → 链接。代码先用 NUL 哨兵抽出，避免其中的 * 被当成强调。
+   *  哨兵不能用「空格+数字+空格」这类可见串——正文里的「可坐 6 人」会被误认为占位符。 */
+  const inline = s => {
+    const codes = [];
+    s = s.replace(/`([^`]+)`/g, (_, c) => "\u0000" + (codes.push(c) - 1) + "\u0000");
+    s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+    s = s.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,
+                  '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    s = s.replace(/\u0000(\d+)\u0000/g, (_, i) => "<code>" + codes[+i] + "</code>");
+    return s;
+  };
+
+  const isRow   = r => r.indexOf("|") >= 0;
+  const isAlign = r => /^[\s|:-]+$/.test(r) && r.indexOf("-") >= 0;
+  const split   = r => r.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map(c => c.trim());
+
+  const lines = esc(src).replace(/\r\n?/g, "\n").split("\n");
+  const out = [];
+  let i = 0, para = [], list = null;
+
+  const flushPara = () => { if (para.length) { out.push("<p>" + para.map(inline).join("<br>") + "</p>"); para = []; } };
+  const flushList = () => {
+    if (!list) return;
+    out.push("<" + list.tag + ">" + list.items.map(t => "<li>" + inline(t) + "</li>").join("") + "</" + list.tag + ">");
+    list = null;
+  };
+  const flushAll = () => { flushPara(); flushList(); };
+
+  while (i < lines.length) {
+    const ln = lines[i];
+
+    // 围栏代码块
+    if (/^\s*```/.test(ln)) {
+      flushAll();
+      const lang = ln.replace(/^\s*```/, "").trim().replace(/[^\w-]/g, "");
+      const buf = [];
+      while (++i < lines.length && !/^\s*```/.test(lines[i])) buf.push(lines[i]);
+      i++;
+      out.push("<pre><code" + (lang ? ' class="lang-' + lang + '"' : "") + ">" + buf.join("\n") + "</code></pre>");
+      continue;
+    }
+
+    // 表格：本行含 | 且下一行是分隔行
+    if (isRow(ln) && i + 1 < lines.length && isAlign(lines[i + 1])) {
+      flushAll();
+      const head = split(ln);
+      i += 2;
+      const body = [];
+      while (i < lines.length && isRow(lines[i]) && lines[i].trim()) body.push(split(lines[i++]));
+      out.push("<table><thead><tr>" + head.map(h => "<th>" + inline(h) + "</th>").join("") + "</tr></thead><tbody>" +
+               body.map(r => "<tr>" + head.map((_, k) => "<td>" + inline(r[k] || "") + "</td>").join("") + "</tr>").join("") +
+               "</tbody></table>");
+      continue;
+    }
+
+    // 分隔线
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(ln)) { flushAll(); out.push("<hr>"); i++; continue; }
+
+    // 标题（只到 h3：轨迹里的回复不需要更深的层级）
+    const h = ln.match(/^\s*(#{1,6})\s+(.*)$/);
+    if (h) { flushAll(); const n = Math.min(h[1].length, 3); out.push("<h" + n + ">" + inline(h[2]) + "</h" + n + ">"); i++; continue; }
+
+    // 引用（注意：走到这里 > 已经被 esc 转义成 &gt;，匹配的必须是转义后的形式）
+    if (/^\s*&gt;\s?/.test(ln)) {
+      flushAll();
+      const buf = [];
+      while (i < lines.length && /^\s*&gt;\s?/.test(lines[i])) buf.push(lines[i++].replace(/^\s*&gt;\s?/, ""));
+      out.push("<blockquote>" + buf.map(inline).join("<br>") + "</blockquote>");
+      continue;
+    }
+
+    // 列表
+    const ul = ln.match(/^\s*[-*+]\s+(.*)$/);
+    const ol = ln.match(/^\s*\d+\.\s+(.*)$/);
+    if (ul || ol) {
+      flushPara();
+      const tag = ul ? "ul" : "ol";
+      if (!list || list.tag !== tag) { flushList(); list = { tag: tag, items: [] }; }
+      list.items.push(ul ? ul[1] : ol[1]);
+      i++;
+      continue;
+    }
+
+    if (!ln.trim()) { flushAll(); i++; continue; }
+    para.push(ln);
+    i++;
+  }
+  flushAll();
+  return out.join("");
 }
-function showChat() {
-  $("login-section").hidden = true;
-  $("log").hidden = false; $("chat-form").hidden = false;
-  $("who").innerHTML = myName + ' · <a onclick="logout()">退出</a>';
+
+/** 时间戳（本地时钟，仅供轨迹阅读） */
+function stamp() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, "0");
+  return p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+}
+
+const KIND = {
+  user:          { cls: "user",         label: "INPUT",        cn: "用户输入",   glyph: "g-block"    },
+  plan:          { cls: "plan",         label: "PLAN",         cn: "执行计划",   glyph: "g-bars"     },
+  tool_call:     { cls: "tool_call",    label: "TOOL CALL",    cn: "调用工具",   glyph: "g-send"     },
+  tool_result:   { cls: "tool_result",  label: "TOOL RESULT",  cn: "工具结果",   glyph: "g-recv"     },
+  confirm_request:{cls: "confirm",      label: "CONFIRM",      cn: "等待确认",   glyph: "g-warnclip" },
+  answer:        { cls: "answer",       label: "ANSWER",       cn: "最终回复",   glyph: "g-dot"      },
+  error:         { cls: "error",        label: "ERROR",        cn: "出错",       glyph: "g-cross"    },
+  done:          { cls: "done",         label: "DONE",         cn: "本轮完成",   glyph: "g-tick"     }
+};
+
+/** 在轨迹上追加一个节点，返回其内容容器 */
+function node(type) {
+  const k = KIND[type] || { cls: "done", label: type, cn: "", glyph: "g-tick" };
+  traceEl.classList.remove("empty");
+  const hint = $("empty-hint");
+  if (hint) hint.remove();          // 空态引导只在第一条事件到达之前有意义
+
+  const el = document.createElement("div");
+  el.className = "node " + k.cls;
+
+  const mk = document.createElement("div");
+  mk.className = "mk";
+  const g = document.createElement("span");
+  g.className = "glyph " + k.glyph;
+  mk.appendChild(g);
+
+  const bd = document.createElement("div");
+  bd.className = "bd";
+
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  const ph = document.createElement("span");
+  ph.className = "phase";
+  ph.textContent = String(++stepNo).padStart(2, "0");
+  const kd = document.createElement("span");
+  kd.className = "kind";
+  kd.dataset.k = k.cls;
+  kd.textContent = k.label;
+  const cn = document.createElement("span");
+  cn.className = "cn";
+  cn.textContent = k.cn;
+  const ts = document.createElement("span");
+  ts.className = "phase";
+  ts.style.marginLeft = "auto";
+  ts.textContent = stamp();
+  meta.append(ph, kd, cn, ts);
+
+  const content = document.createElement("div");
+  content.className = "content";
+
+  bd.append(meta, content);
+  el.append(mk, bd);
+  traceEl.appendChild(el);
+  scrollDown();
+  return content;
+}
+
+function scrollDown() {
+  requestAnimationFrame(() => { stageEl.scrollTop = stageEl.scrollHeight; });
+}
+
+/* ---------------- 状态与左栏 ---------------- */
+
+function setStatus(s, text) {
+  $("status").dataset.s = s;
+  $("status-text").textContent = text;
+}
+function setBusy(on, text) {
+  $("busy").dataset.on = on ? "1" : "0";
+  if (text) $("busy-text").textContent = text;
+}
+function setComposerEnabled(on) {
+  $("message").disabled = !on;
+  $("send").disabled = !on || !$("message").value.trim();
+}
+
+/** 依据当前角色刷新闸门面板——让抽象的安全模型成为界面上看得见的东西 */
+function renderGates() {
+  const isAdmin = myRole === "ADMIN";
+
+  $("gate-1-live").dataset.k = "pass";
+  $("gate-1-live").textContent = "按角色过滤已启用";
+
+  const g2 = $("gate-2-live");
+  if (isAdmin) {
+    g2.dataset.k = "pass";
+    g2.textContent = "ADMIN 全部放行";
+  } else {
+    g2.dataset.k = "block";
+    g2.textContent = "STAFF 拦截 required_role=ADMIN 的工具";
+  }
+
+  const g3 = $("gate-3-live");
+  g3.dataset.k = "n/a";
+  g3.textContent = "随调用触发";
+}
+
+/** 收到闸门 2 的拒绝时，让左栏那格同步亮起——把"界面"与"后端校验"对上 */
+function flagGate2Blocked() {
+  const g2 = $("gate-2-live");
+  g2.dataset.k = "block";
+  g2.textContent = "刚刚拦截了一次越权调用";
+  $("gate-2").animate(
+    [{ background: "var(--amber-wash)" }, { background: "transparent" }],
+    { duration: 1400, easing: "ease-out" }
+  );
+}
+
+/* ---------------- 登录 ---------------- */
+
+function showLogin() {
+  $("login").hidden = false;
+  $("console").hidden = true;
+  $("confirm").hidden = true;
+}
+function showConsole() {
+  $("login").hidden = true;
+  $("console").hidden = false;
+  $("who-name").textContent = myName;
+  const rb = $("who-role");
+  rb.textContent = myRole || "—";
+  rb.dataset.r = myRole;
+  $("ident-role").textContent = myRole || "—";
+  $("ident-session").textContent = sessionKey ? sessionKey.slice(0, 8) : "待建立";
+  $("hint-session").textContent = sessionKey ? "会话 " + sessionKey.slice(0, 8) : "";
+  renderGates();
+  setComposerEnabled(!busy);
+  $("message").focus();
+  loadToolExamples();
 }
 function logout() {
-  token = null; sessionKey = null; myName = "";
-  localStorage.removeItem("token"); localStorage.removeItem("sessionKey"); localStorage.removeItem("myName");
+  ["token", "sessionKey", "myName", "myRole"].forEach(k => localStorage.removeItem(k));
   location.reload();
 }
-async function login() {
-  const username = $("login-user").value.trim(), password = $("login-pass").value;
-  $("login-err").textContent = "";
+
+$("login-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const btn = $("login-btn"), err = $("login-err");
+  err.textContent = "";
+  btn.disabled = true; btn.textContent = "验证中…";
   try {
-    const resp = await fetch("/api/v1/auth/login", { method:"POST",
-      headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, password }) });
+    const resp = await fetch("/api/v1/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: $("login-user").value.trim(), password: $("login-pass").value })
+    });
     if (!resp.ok) {
       const j = await resp.json().catch(() => ({}));
-      $("login-err").textContent = (j.message || ("登录失败 " + resp.status));
+      err.textContent = j.message || ("登录失败 " + resp.status);
       return;
     }
     const j = await resp.json();
-    token = j.token; myName = username;
-    localStorage.setItem("token", token); localStorage.setItem("myName", myName);
-    showChat();
-    logEl.innerHTML = "";
+    token = j.token;
+    myName = $("login-user").value.trim();
+    myRole = j.role || "";
+    localStorage.setItem("token", token);
+    localStorage.setItem("myName", myName);
+    localStorage.setItem("myRole", myRole);
+    showConsole();
+  } catch (ex) {
+    err.textContent = "网络异常：" + ex.message;
+  } finally {
+    btn.disabled = false; btn.textContent = "进入控制台";
+  }
+});
+
+// 演示账号一键填充
+document.querySelectorAll(".seed code").forEach(c => c.addEventListener("click", () => {
+  $("login-user").value = c.dataset.u;
+  $("login-pass").value = c.dataset.p;
+  $("login-user").focus();
+}));
+
+$("logout").addEventListener("click", logout);
+
+/* ---------------- 确认流 ---------------- */
+
+/** 收起确认面板并作废当前 token：挂起项要么已被消耗，要么随运行中止一并失效 */
+function closeConfirm() {
+  if ($("confirm").hidden) return;
+  pendingToken = null;
+  $("confirm").hidden = true;
+}
+function askConfirm(token, message) {
+  pendingToken = token;
+  $("confirm-text").textContent = message;
+  $("confirm").hidden = false;
+  setStatus("wait", "awaiting confirm");
+  setBusy(false);
+  $("btn-ok").focus();
+}
+async function confirmAction(approved) {
+  const t = pendingToken;
+  if (!t) return;
+  closeConfirm();
+  $("message").focus();          // 输入框若仍 disabled（流未结束）会静默忽略，由 send() 的 finally 兜底
+  addUserLine(approved ? "✓ 已授权执行" : "✕ 已拒绝");
+  setStatus("live", "streaming");
+  try {
+    const resp = await fetch("/api/v1/confirm", {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify({ confirmToken: t, approved })
+    });
+    if (resp.status === 401) return expire();
+    setBusy(true, approved ? "正在执行…" : "正在收尾…");
   } catch (e) {
-    $("login-err").textContent = "网络异常：" + e.message;
+    addError("确认请求失败：" + e.message);
   }
 }
+$("btn-ok").addEventListener("click", () => confirmAction(true));
+$("btn-no").addEventListener("click", () => confirmAction(false));
 
-const ICONS = { user:"🧑", plan:"🗺️", tool_call:"🔧", tool_result:"📦",
-  confirm_request:"⚠️", answer:"🤖", error:"❌", done:"✅" };
-const LABELS = { user:"你", plan:"执行计划", tool_call:"调用工具", tool_result:"工具结果",
-  confirm_request:"需要确认", answer:"AI 助手", error:"出错了", done:"完成" };
+function expire() {
+  ["token", "sessionKey", "myName", "myRole"].forEach(k => localStorage.removeItem(k));
+  token = null; sessionKey = null;
+  showLogin();
+  $("login-err").textContent = "登录已过期，请重新登录";
+}
 
-function card(type) {
-  const div = document.createElement("div");
-  div.className = "card " + type;
-  const ico = ICONS[type] || "•";
-  div.innerHTML = '<div class="head"><span class="ico">'+ico+'</span>'+(LABELS[type]||type)+'</div><div class="body"></div>';
-  logEl.appendChild(div);
-  logEl.scrollTop = logEl.scrollHeight;
-  return div.querySelector(".body");
+/* ---------------- 轨迹渲染 ---------------- */
+
+function addUserLine(text) {
+  node("user").textContent = text;
 }
-function addText(type, text) { card(type).textContent = text; }
-function renderMarkdown(el, md) {
-  if (window.marked) { el.innerHTML = marked.parse(md); } else { el.textContent = md; }
+function addError(text) {
+  node("error").textContent = text;
 }
-function typewriter(el, md) {
-  const plain = md.replace(/[#*`>]/g, m => m === "\n" ? "\n" : m);
+
+/** 打字机：先用去格式的纯文本打出来，打完再整体换成渲染后的 HTML——
+ *  避免逐字插入标签导致中途布局反复跳动。长回复按目标总时长压缩步长。 */
+function typewriter(contentEl, md) {
+  const plain = md.replace(/[#*`>|]/g, " ").replace(/\s+/g, " ").trim();
+  const caret = document.createElement("span");
+  caret.className = "caret";
+  contentEl.appendChild(caret);
+
   let i = 0;
-  const timer = setInterval(() => {
-    i = Math.min(i + 3, plain.length);
-    el.textContent = plain.slice(0, i);
-    logEl.scrollTop = logEl.scrollHeight;
-    if (i >= plain.length) { clearInterval(timer); renderMarkdown(el, md); }
-  }, 18);
+  const step = Math.max(2, Math.ceil(plain.length / 70));
+  const t = setInterval(() => {
+    i = Math.min(i + step, plain.length);
+    contentEl.textContent = plain.slice(0, i);
+    contentEl.appendChild(caret);
+    scrollDown();
+    if (i >= plain.length) {
+      clearInterval(t);
+      caret.remove();
+      contentEl.innerHTML = mdToHtml(md);
+      scrollDown();
+    }
+  }, 16);
 }
-function showThinking(on) { $("thinking").hidden = !on; }
+
+function renderPlan(c) {
+  const wrap = document.createElement("div");
+  wrap.className = "steps";
+  (c.steps || []).forEach((s, i) => {
+    const row = document.createElement("div");
+    row.className = "step";
+    const n = document.createElement("i");
+    n.textContent = String(i + 1).padStart(2, "0");
+    const tx = document.createElement("span");
+    tx.textContent = s;
+    row.append(n, tx);
+    wrap.appendChild(row);
+  });
+  const holder = node("plan");
+  holder.appendChild(wrap);
+}
+
+function renderToolCall(c) {
+  const holder = node("tool_call");
+  const box = document.createElement("div");
+  box.className = "call";
+  const fn = document.createElement("span");
+  fn.className = "fn";
+  fn.textContent = c.tool;                       // textContent —— 不拼 innerHTML，避免工具名注入
+  const arg = document.createElement("span");
+  arg.className = "arg";
+  let args = c.arguments || "{}";
+  try { args = JSON.stringify(JSON.parse(args)); } catch (e) { /* 原样展示 */ }
+  arg.textContent = "(" + args.replace(/,/g, "," + ZWSP) + ")";
+  box.append(fn, arg);
+  holder.appendChild(box);
+}
+
+function renderToolResult(c) {
+  const holder = node("tool_result");
+  const box = document.createElement("div");
+  box.className = "result";
+  const name = document.createElement("span");
+  name.className = "rt";
+  name.textContent = c.tool + " ";
+
+  const raw = c.summary || "";
+  let summary = raw.slice(0, 240), bad = false;
+  try {
+    const j = JSON.parse(raw);
+    if (j && typeof j.code === "number") bad = j.code !== 0;   // 业务码非 0 即失败
+    if (j && Array.isArray(j.data))      summary = "返回 " + j.data.length + " 条记录";
+    else if (j && j.message)             summary = j.message;
+    else if (j && typeof j === "object") summary = JSON.stringify(j).slice(0, 240);
+  } catch (e) {
+    // 非 JSON 的纯文本结果：闸门 2 的拒绝就是这种形态
+    bad = /权限不足|失败|error/i.test(raw);
+  }
+  if (bad) box.dataset.err = "1";
+
+  const body = document.createElement("span");
+  body.textContent = "→ " + summary;
+  box.append(name, body);
+  holder.appendChild(box);
+}
+
+/* ---------------- SSE 事件处理 ---------------- */
 
 function handle(event, data) {
   switch (event) {
     case "session":
       sessionKey = data.sessionKey;
       localStorage.setItem("sessionKey", sessionKey);
+      $("ident-session").textContent = sessionKey.slice(0, 8);
+      $("hint-session").textContent = "会话 " + sessionKey.slice(0, 8);
       break;
+
     case "plan":
-      addText("plan", "执行计划：" + (data.steps || []).join(" → "));
-      showThinking(true);
+      setBusy(false);
+      renderPlan(data);
       break;
-    case "tool_call": {
-      showThinking(false);
-      const el = card("tool_call");
-      el.innerHTML = '<div class="tool-args">🔧 ' + data.tool + '(' + (data.arguments||"{}") + ')</div>';
-      logEl.scrollTop = logEl.scrollHeight;
+
+    case "tool_call":
+      $("ident-steps").textContent = ++toolSteps;
+      setBusy(true, "调用 " + (data.tool || "工具") + "…");
+      renderToolCall(data);
       break;
-    }
-    case "tool_result": {
-      let summary = data.summary || "";
-      try { const j = JSON.parse(summary);
-        if (j.data && Array.isArray(j.data)) summary = "返回 " + j.data.length + " 条结果";
-      } catch(e){}
-      addText("tool_result", data.tool + " → " + summary);
-      showThinking(true);
+
+    case "tool_result":
+      renderToolResult(data);
+      // 闸门 2 的拒绝在事件契约里只体现为这段文案（后端刻意保留的措辞），
+      // 命中就把左栏那一格点亮——让界面与后端校验对上
+      if (/权限不足/.test(data.summary || "")) flagGate2Blocked();
+      setBusy(true, "推理中…");
       break;
-    }
+
     case "confirm_request":
-      showThinking(false);
-      pendingToken = data.confirmToken;
-      $("confirm-text").textContent = data.message;
-      $("confirm-bar").hidden = false;
-      addText("confirm_request", data.message);
+      setBusy(false);
+      node("confirm_request").textContent = data.message;   // 键必须是 KIND 里的键（事件名），否则落到兜底样式
+      askConfirm(data.confirmToken, data.message);
       break;
+
     case "answer":
-      showThinking(false);
-      typewriter(card("answer"), data.content);
-      logEl.scrollTop = logEl.scrollHeight;
+      setBusy(false);
+      typewriter(node("answer"), data.content || "");
       break;
+
     case "error":
-      showThinking(false);
-      addText("error", data.message);
+      setBusy(false);
+      setStatus("idle", "idle");
+      closeConfirm();          // 运行已中止，挂起的确认项随之作废，面板不能留着
+      addError(data.message || "未知错误");
       break;
+
     case "done":
-      showThinking(false);
-      addText("done", "本轮完成");
-      break;
-    case "unauthorized":
-      token = null; localStorage.removeItem("token");
-      showLogin();
-      $("login-err").textContent = "登录已过期，请重新登录";
+      setBusy(false);
+      setStatus("idle", "idle");
+      closeConfirm();
+      node("done").textContent = "本轮执行结束";
       break;
   }
 }
 
-async function confirmAction(approved) {
-  if (!pendingToken) return;
-  const t = pendingToken; pendingToken = null;
-  $("confirm-bar").hidden = true;
-  addText("user", approved ? "✓ 同意执行" : "✕ 已拒绝");
-  const resp = await fetch("/api/v1/confirm", { method:"POST",
-    headers: authHeaders(), body: JSON.stringify({ confirmToken: t, approved }) });
-  if (resp.status === 401) { token = null; showLogin(); }
-}
+/* ---------------- 发送 ---------------- */
 
-$("chat-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  if (busy) return;
-  const input = $("message");
-  const message = input.value.trim();
-  if (!message) return;
-  input.value = ""; busy = true; $("send").disabled = true;
-  addText("user", message);
-  showThinking(true);
+$("message").addEventListener("input", () => {
+  $("send").disabled = busy || !$("message").value.trim();
+});
+
+async function send(message) {
+  if (busy || !message) return;
+  busy = true;
+  stepNo = 0;
+  toolSteps = 0;
+  $("ident-steps").textContent = "0";
+  $("message").value = "";
+  setComposerEnabled(false);
+
+  addUserLine(message);
+  setBusy(true, "推理中…");
+  setStatus("live", "streaming");
 
   try {
-    const resp = await fetch("/api/v1/chat", { method:"POST", headers: authHeaders(),
-      body: JSON.stringify({ sessionKey, message }) });
-    if (resp.status === 401) {
-      token = null; localStorage.removeItem("token");
-      showLogin(); $("login-err").textContent = "登录已过期，请重新登录";
-      return;
-    }
+    const resp = await fetch("/api/v1/chat", {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify({ sessionKey, message })
+    });
+    if (resp.status === 401) { expire(); return; }
+    if (!resp.ok) { addError("请求失败 HTTP " + resp.status); return; }
+
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
-    while (true) {
+    for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream:true });
-      const blocks = buffer.split("\n\n"); buffer = blocks.pop();
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split("\n\n");
+      buffer = blocks.pop();
       for (const block of blocks) {
-        let event = "message", data = "";
+        let ev = "message", data = "";
         for (const line of block.split("\n")) {
-          if (line.startsWith("event:")) event = line.slice(6).trim();
+          if (line.startsWith("event:")) ev = line.slice(6).trim();
           else if (line.startsWith("data:")) data += line.slice(5).trim();
         }
-        if (data) { try { handle(event, JSON.parse(data)); } catch(e){} }
+        if (!data) continue;
+        try { handle(ev, JSON.parse(data)); } catch (e) { /* 忽略坏帧 */ }
       }
     }
   } catch (err) {
-    showThinking(false);
-    addText("error", "连接异常：" + err.message);
+    setBusy(false);
+    setStatus("idle", "idle");
+    addError("连接异常：" + err.message);
   } finally {
-    busy = false; $("send").disabled = false;
+    busy = false;
+    setBusy(false);
+    // 挂起等确认时不改动状态灯——askConfirm 已把它置为 awaiting confirm
+    if ($("confirm").hidden) setStatus("idle", "idle");
+    setComposerEnabled(true);
+    $("message").focus();
   }
+}
+
+$("chat-form").addEventListener("submit", e => {
+  e.preventDefault();
+  send($("message").value.trim());
 });
 
-// 启动：有 token 直接进聊天，否则显示登录
-if (token) { showChat(); } else { showLogin(); }
+// 示例指令 chips：只填入输入框、不直接发送。chip 文案取自工具描述（OpenAPI summary），
+// 是"这个工具能做什么"，不是一句完整的请求——由用户补全细节后再按 Enter。
+$("chips").addEventListener("click", e => {
+  const chip = e.target.closest(".chip");
+  if (!chip || busy) return;
+  const box = $("message");
+  box.value = chip.textContent.trim();
+  $("send").disabled = false;
+  box.focus();
+  box.setSelectionRange(box.value.length, box.value.length);
+});
+
+/**
+ * 示例指令取自"当前用户可见的工具"（闸门 1 已按角色过滤）。
+ * 不写死业务词汇——写死等于平台绑定了某个业务系统，换个系统接入示例就成了错的。
+ */
+async function loadToolExamples() {
+  const box = $("chips");
+  box.querySelectorAll(".chip").forEach(c => c.remove());
+  box.hidden = true;
+  try {
+    const resp = await fetch("/api/v1/tools", { headers: authHeaders() });
+    if (!resp.ok) return;
+    const tools = await resp.json();
+    // OpenAPI summary 本就是动作句，直接当示例指令用
+    const picks = tools.filter(t => (t.description || "").trim()).slice(0, 2);
+    if (!picks.length) return;
+    picks.forEach(t => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip";
+      b.textContent = t.description.trim();
+      box.appendChild(b);
+    });
+    box.hidden = false;
+  } catch (e) {
+    // 拿不到工具清单只是没有示例，不影响对话
+  }
+}
+
+/* ---------------- 启动 ---------------- */
+
+if (token) { showConsole(); } else { showLogin(); }
 </script>
 </body>
 </html>
