@@ -50,7 +50,7 @@ mvn spring-boot:run -Dspring-boot.run.profiles=local
 
 种子账号：`admin/admin123`（ADMIN）、`staff01/staff123`（STAFF）。
 
-不带 `mysql` 参数直接 `docker compose up -d` 则连平台自身一起容器化运行（需先 `mvn -DskipTests package`）。
+不带 `mysql` 参数直接 `docker compose up -d` 则连平台自身一起容器化运行（需先 `mvn -DskipTests package`；平台容器从仓库根的 `.env` 读 `LLM_API_KEY`，已 gitignore）。
 
 可选——起三个业务系统（会议室预订 :8090 + 两个 WireMock 模拟后端：报销 :8091 / 报修 :8092），用于演示跨系统聚合与差异化权限：
 
