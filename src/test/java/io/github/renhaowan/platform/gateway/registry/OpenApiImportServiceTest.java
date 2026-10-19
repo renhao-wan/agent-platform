@@ -179,6 +179,80 @@ class OpenApiImportServiceTest {
         assertThat(tools.get(0).getRequireConfirm()).isZero();
     }
 
+    @Test
+    void requestBodyRefIsInlinedSoTheModelSeesARealSchema() {
+        // 工具 schema 是脱离原文档发给模型的，$ref 指向的 components 在模型侧不存在，
+        // 不展开就会被 OpenAI 兼容接口整轮拒绝（"Pointer ... does not exist"）
+        String openapi = """
+                {"openapi":"3.0.0","servers":[{"url":"http://h"}],
+                 "components":{"schemas":{
+                   "CreateBookingRequest":{"type":"object","required":["roomId"],
+                     "properties":{"roomId":{"type":"integer"},"title":{"type":"string","maxLength":50}}}}},
+                 "paths":{"/api/v1/bookings":{"post":{"operationId":"create",
+                   "summary":"创建预订","requestBody":{"required":true,"content":{"application/json":
+                     {"schema":{"$ref":"#/components/schemas/CreateBookingRequest"}}}}}}}}
+                """;
+        var tools = service.parse("gw1", openapi, null);
+
+        JsonNode body = json(tools.get(0).getInputSchema()).get("properties").get("body");
+        assertThat(body.has("$ref")).isFalse();
+        assertThat(body.get("type").asText()).isEqualTo("object");
+        assertThat(body.get("properties").get("roomId").get("type").asText()).isEqualTo("integer");
+        assertThat(body.get("properties").get("title").get("maxLength").asInt()).isEqualTo(50);
+        assertThat(body.get("required").toString()).contains("roomId");
+    }
+
+    @Test
+    void nestedRefIsInlinedRecursively() {
+        String openapi = """
+                {"openapi":"3.0.0","servers":[{"url":"http://h"}],
+                 "components":{"schemas":{
+                   "Booking":{"type":"object","properties":{"room":{"$ref":"#/components/schemas/Room"}}},
+                   "Room":{"type":"object","properties":{"id":{"type":"integer"}}}}},
+                 "paths":{"/api/v1/bookings":{"post":{"operationId":"create","summary":"创建预订",
+                   "requestBody":{"content":{"application/json":{
+                     "schema":{"$ref":"#/components/schemas/Booking"}}}}}}}}
+                """;
+        var tools = service.parse("gw1", openapi, null);
+
+        JsonNode room = json(tools.get(0).getInputSchema())
+                .get("properties").get("body").get("properties").get("room");
+        assertThat(room.has("$ref")).isFalse();
+        assertThat(room.get("properties").get("id").get("type").asText()).isEqualTo("integer");
+    }
+
+    @Test
+    void selfReferencingSchemaStopsInsteadOfLoopingForever() {
+        String openapi = """
+                {"openapi":"3.0.0","servers":[{"url":"http://h"}],
+                 "components":{"schemas":{
+                   "Node":{"type":"object","properties":{"child":{"$ref":"#/components/schemas/Node"}}}}},
+                 "paths":{"/api/v1/nodes":{"post":{"operationId":"create_node","summary":"建节点",
+                   "requestBody":{"content":{"application/json":{
+                     "schema":{"$ref":"#/components/schemas/Node"}}}}}}}}
+                """;
+        var tools = service.parse("gw1", openapi, null);
+
+        JsonNode body = json(tools.get(0).getInputSchema()).get("properties").get("body");
+        // 首层展开、再往下绕回自身时截断成宽松的 object，既不报错也不无限展开
+        assertThat(body.get("properties").get("child").get("type").asText()).isEqualTo("object");
+    }
+
+    @Test
+    void parameterRefIsInlinedAndKeepsItsType() {
+        String openapi = """
+                {"openapi":"3.0.0","servers":[{"url":"http://h"}],
+                 "components":{"schemas":{"PageSize":{"type":"integer","format":"int32"}}},
+                 "paths":{"/api/v1/bookings":{"get":{"operationId":"list","summary":"查询预订",
+                   "parameters":[{"name":"pageSize","in":"query","schema":{"$ref":"#/components/schemas/PageSize"}}]}}}}
+                """;
+        var tools = service.parse("gw1", openapi, null);
+
+        JsonNode pageSize = json(tools.get(0).getInputSchema()).get("properties").get("pageSize");
+        assertThat(pageSize.get("type").asText()).isEqualTo("integer");
+        assertThat(pageSize.get("format").asText()).isEqualTo("int32");
+    }
+
     private JsonNode json(String raw) {
         try {
             return new com.fasterxml.jackson.databind.ObjectMapper().readTree(raw);

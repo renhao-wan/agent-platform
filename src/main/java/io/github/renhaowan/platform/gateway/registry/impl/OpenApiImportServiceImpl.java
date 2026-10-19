@@ -54,14 +54,14 @@ public class OpenApiImportServiceImpl implements OpenApiImportService {
                 if (!HTTP_METHODS.contains(method)) {
                     continue;
                 }
-                tools.add(buildTool(gatewayId, baseUrl, path, method, methodEntry.getValue()));
+                tools.add(buildTool(gatewayId, baseUrl, path, method, methodEntry.getValue(), root));
             }
         }
         return tools;
     }
 
     private ToolDefinition buildTool(String gatewayId, String baseUrl,
-                                     String path, String method, JsonNode operation) {
+                                     String path, String method, JsonNode operation, JsonNode root) {
         ToolDefinition tool = new ToolDefinition();
         tool.setGatewayId(gatewayId);
         tool.setName(operation.hasNonNull("operationId")
@@ -76,9 +76,62 @@ public class OpenApiImportServiceImpl implements OpenApiImportService {
                 || extensionFlag(operation, "x-require-confirm") ? 1 : 0);
         tool.setRequiredRole(extensionText(operation, "x-required-role"));
         tool.setEnabled(1);
-        tool.setInputSchema(buildInputSchema(operation).toString());
+        tool.setInputSchema(buildInputSchema(operation, root).toString());
         tool.setCreatedAt(LocalDateTime.now());
         return tool;
+    }
+
+    /**
+     * 工具 schema 是脱离原文档、单独发给模型的片段，因此文档内引用必须就地展开：
+     * {@code {"$ref": "#/components/schemas/CreateBookingRequest"}} 这样的写法在模型侧
+     * 没有 components 可查，OpenAI 兼容接口会以 "Pointer ... does not exist" 拒绝整轮请求。
+     */
+    private JsonNode resolveRefs(JsonNode node, JsonNode root, Set<String> visiting) {
+        if (node == null || node.isMissingNode()) {
+            return MAPPER.createObjectNode();
+        }
+        if (node.isObject() && node.hasNonNull("$ref")) {
+            String ref = node.get("$ref").asText();
+            JsonNode target = dereference(ref, root);
+            if (target == null || visiting.contains(ref)) {
+                // 指不到或绕回自身：留一个宽松的 object 骨架，模型仍能构造参数，且不会无限展开
+                ObjectNode fallback = MAPPER.createObjectNode();
+                fallback.put("type", "object");
+                return fallback;
+            }
+            Set<String> next = new LinkedHashSet<>(visiting);
+            next.add(ref);
+            return resolveRefs(target, root, next);
+        }
+        if (node.isObject()) {
+            ObjectNode copy = MAPPER.createObjectNode();
+            Iterator<Map.Entry<String, JsonNode>> fields = node.fields();
+            while (fields.hasNext()) {
+                Map.Entry<String, JsonNode> field = fields.next();
+                copy.set(field.getKey(), resolveRefs(field.getValue(), root, visiting));
+            }
+            return copy;
+        }
+        if (node.isArray()) {
+            ArrayNode copy = MAPPER.createArrayNode();
+            for (JsonNode element : node) {
+                copy.add(resolveRefs(element, root, visiting));
+            }
+            return copy;
+        }
+        return node.deepCopy();
+    }
+
+    /** 只处理文档内引用（{@code #/components/...}）；指向外部文件的引用不在单份契约的范围内，按解析不到处理。 */
+    private JsonNode dereference(String ref, JsonNode root) {
+        if (!ref.startsWith("#/")) {
+            return null;
+        }
+        JsonNode current = root;
+        for (String segment : ref.substring(2).split("/")) {
+            current = current.path(segment.replace("~1", "/").replace("~0", "~"));
+        }
+        return current.isMissingNode() ? null : current;
     }
 
     /**
@@ -110,19 +163,21 @@ public class OpenApiImportServiceImpl implements OpenApiImportService {
                 && Boolean.parseBoolean(node.get("value").asText());
     }
 
-    private ObjectNode buildInputSchema(JsonNode operation) {
+    private ObjectNode buildInputSchema(JsonNode operation, JsonNode root) {
         ObjectNode schema = MAPPER.createObjectNode();
         schema.put("type", "object");
         ObjectNode properties = schema.putObject("properties");
         Set<String> required = new LinkedHashSet<>();
 
-        for (JsonNode parameter : operation.path("parameters")) {
+        for (JsonNode rawParameter : operation.path("parameters")) {
+            // parameter 本身也可能写成 $ref，先展开再取字段
+            JsonNode parameter = resolveRefs(rawParameter, root, Set.of());
             String name = parameter.path("name").asText();
             if (name.isBlank()) {
                 continue;
             }
             ObjectNode property = properties.putObject(name);
-            JsonNode paramSchema = parameter.path("schema");
+            JsonNode paramSchema = resolveRefs(parameter.path("schema"), root, Set.of());
             property.put("type", paramSchema.path("type").asText("string"));
             if (paramSchema.hasNonNull("format")) {
                 property.put("format", paramSchema.get("format").asText());
@@ -139,7 +194,7 @@ public class OpenApiImportServiceImpl implements OpenApiImportService {
         if (requestBody.isObject()) {
             JsonNode jsonSchema = requestBody.path("content").path("application/json").path("schema");
             if (jsonSchema.isObject()) {
-                properties.set("body", jsonSchema.deepCopy());
+                properties.set("body", resolveRefs(jsonSchema, root, Set.of()));
                 if (requestBody.path("required").asBoolean(true)) {
                     required.add("body");
                 }
