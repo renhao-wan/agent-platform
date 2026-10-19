@@ -22,12 +22,17 @@ services:
     build: .
     ports:
       - "8000:8000"
+    extra_hosts:
+      # 让容器能经宿主机访问兄弟仓库发布出来的业务系统端口（Linux 需显式声明，Windows 自带）
+      - "host.docker.internal:host-gateway"
     environment:
       SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/agent_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai"
       # 从本目录 .env 读（已 gitignore）；照 .env.example 复制一份
       LLM_API_KEY: ${LLM_API_KEY:-missing-key}
       LLM_MODEL: ${LLM_MODEL:-deepseek-flash}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}
+      # 业务系统跑在隔壁 business-systems 栈里，与本栈不在一个 docker 网络，故经宿主机发布端口访问
+      GATEWAY_BACKEND_HOST: host.docker.internal
     depends_on:
       mysql:
         condition: service_healthy

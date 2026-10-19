@@ -34,6 +34,25 @@ platform:
       # 转发到业务系统的超时（毫秒）；测试用极短值验证超时路径
       connect-timeout-ms: 2000
       read-timeout-ms: 10000
+    # 启动时自动注册的工具来源：每项是业务系统暴露 OpenAPI 契约的地址（统一为 /v3/api-docs，
+    # WireMock 模拟的两个系统也用一条映射把自己的契约挂在同一路径上）。
+    # 平台启动时逐个拉取、解析、注册，于是"契约可访问"就等于"工具可用"，不必手工导入；
+    # 改了业务系统的 @Operation 说明或 x-required-role 声明，重启平台即生效。
+    #
+    # GATEWAY_BACKEND_HOST 是唯一的拓扑开关：平台跑在容器里时由 docker-compose 覆盖成
+    # host.docker.internal——两个仓库各自一份 compose、各占一个 docker 网络，容器解析不到
+    # 兄弟栈的服务名，只能经宿主机发布端口过去。
+    # 列表清空则跳过自动注册，改为 POST /admin/protocols/import 手工导入。
+    sources:
+      - url: http://${GATEWAY_BACKEND_HOST:localhost}:8090/v3/api-docs
+        service-key-name: X-Service-Key
+        service-key-value: ${BOOKING_SERVICE_KEY:booking-service-key}
+      - url: http://${GATEWAY_BACKEND_HOST:localhost}:8091/v3/api-docs
+        service-key-name: X-Service-Key
+        service-key-value: ${STUB_SERVICE_KEY:stub-service-key}
+      - url: http://${GATEWAY_BACKEND_HOST:localhost}:8092/v3/api-docs
+        service-key-name: X-Service-Key
+        service-key-value: ${STUB_SERVICE_KEY:stub-service-key}
   agent:
     gateway-id: ${AGENT_GATEWAY_ID:gw1}
     max-steps: 8
