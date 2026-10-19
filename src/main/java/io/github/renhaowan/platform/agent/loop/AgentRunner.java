@@ -50,7 +50,7 @@ public class AgentRunner {
     /**
      * ReAct 主循环（全项目核心流程）：
      * <ol>
-     *   <li>意图分类（规则通道，仅用于前端事件展示）-> 载入历史（裁剪后）-> 追加本轮用户输入；</li>
+     *   <li>载入历史（裁剪后）-> 追加本轮用户输入；</li>
      *   <li>每轮 Planner.decide 拿模型决策：无 toolCalls 即回答并结束；
      *       有 toolCalls 则逐个执行——敏感工具先经 ConfirmManager 挂起等用户确认；</li>
      *   <li>工具执行经 ToolGateway 进程内调用工具层（工具层再转发到业务系统）；
@@ -61,7 +61,7 @@ public class AgentRunner {
      * 失败语义：工具报错/用户拒绝/步数超限都不抛异常——或转述或熔断，对话永不因单点失败中断。
      *
      * @param principal 当前会话用户身份（uid/role）——ThreadLocal 不跨线程池，
-     *                  由 ChatController 在 HTTP 线程显式取出传入，驱动工具可见性与执行鉴权
+     *                  由 ChatController 在 HTTP 线程显式取出传入，驱动执行点鉴权
      */
     public void run(String sessionKey, String userText, AgentEventEmitter events, UserPrincipal principal) {
 
@@ -79,7 +79,7 @@ public class AgentRunner {
             sessionService.saveCheckpoint(sessionKey, trim.summary());
         }
 
-        List<ToolCallback> allTools = toolRegistry.callbacks(principal);
+        List<ToolCallback> allTools = toolRegistry.callbacks();
         // 路由责任链（ADR-004）：节点弃权/失败都回落全量，orElse 只是契约兜底
         List<ToolCallback> tools = new ArrayList<>(toolSelector.select(userText, allTools).orElse(allTools));
         // 平台自有内部工具不参与业务路由，始终在册（会话记忆调回，领域中立、角色无关，ADR-005）
@@ -117,7 +117,7 @@ public class AgentRunner {
             List<ToolResponseMessage.ToolResponse> responses = new ArrayList<>();
             for (AssistantMessage.ToolCall call : calls) {
                 boolean approved = true;
-                if (toolRegistry.requireConfirm(call.name(), principal)) {
+                if (toolRegistry.requireConfirm(call.name())) {
                     String token = confirmManager.request(sessionKey, call.name(), call.arguments());
                     events.confirmRequest(token, "即将执行敏感操作：" + call.name() + "，请确认");
                     approved = Boolean.TRUE.equals(confirmManager.await(token, properties.getConfirmTimeoutSeconds()));

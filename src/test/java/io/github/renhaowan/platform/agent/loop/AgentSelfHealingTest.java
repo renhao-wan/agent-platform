@@ -154,8 +154,8 @@ class AgentSelfHealingTest {
                 .willReturn(aResponse().withStatus(200).withBody("{\"code\":0,\"data\":{\"id\":7}}")));
 
         when(sessionService.loadHistory("s1")).thenReturn(List.of());
-        when(toolRegistry.callbacks(any())).thenReturn(List.of());
-        when(toolRegistry.requireConfirm(anyString(), any())).thenReturn(false);
+        when(toolRegistry.callbacks()).thenReturn(List.of());
+        when(toolRegistry.requireConfirm(anyString())).thenReturn(false);
         when(registryService.find("gw1", "create_booking")).thenReturn(Optional.of(createBookingTool()));
         when(planner.decide(anyList(), any()))
                 .thenReturn(toolCall("c1", "{\"roomId\":2}"),

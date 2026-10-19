@@ -97,8 +97,8 @@ class AgentRunnerTest {
         when(planner.decide(anyList(), any()))
                 .thenReturn(toolCallResponse("c1", "search_rooms", "{\"date\":\"2026-10-01\"}"),
                         answerResponse("已为你找到 3 间可用会议室"));
-        when(toolRegistry.requireConfirm(eq("search_rooms"), any())).thenReturn(false);
-        when(toolRegistry.callbacks(any())).thenReturn(List.of());
+        when(toolRegistry.requireConfirm(eq("search_rooms"))).thenReturn(false);
+        when(toolRegistry.callbacks()).thenReturn(List.of());
         when(toolGateway.callTool(eq("search_rooms"), anyString(), any())).thenReturn("{\"rooms\":3}");
 
         runner().run("s1", "帮我订周三下午的会议室", events, staff);
@@ -120,7 +120,7 @@ class AgentRunnerTest {
         when(planner.decide(anyList(), any()))
                 .thenReturn(toolCallResponse("c1", "recallHistory", "{\"keyword\":\"B305\"}"),
                         answerResponse("你之前查过 B305，当时还有空位"));
-        when(toolRegistry.callbacks(any())).thenReturn(List.of());
+        when(toolRegistry.callbacks()).thenReturn(List.of());
         ChatMessage hit = new ChatMessage();
         hit.setId(7L);
         hit.setRole(ChatMessage.ROLE_USER);
@@ -147,8 +147,8 @@ class AgentRunnerTest {
         when(planner.decide(anyList(), any()))
                 .thenReturn(toolCallResponse("c1", "cancel_booking", "{\"id\":42}"),
                         answerResponse("已取消"));
-        when(toolRegistry.requireConfirm(eq("cancel_booking"), any())).thenReturn(true);
-        when(toolRegistry.callbacks(any())).thenReturn(List.of());
+        when(toolRegistry.requireConfirm(eq("cancel_booking"))).thenReturn(true);
+        when(toolRegistry.callbacks()).thenReturn(List.of());
         when(toolGateway.callTool(eq("cancel_booking"), anyString(), any())).thenReturn("{\"status\":\"CANCELLED\"}");
 
         // confirm_request 事件发出后，异步线程模拟用户点击"同意"
@@ -178,8 +178,8 @@ class AgentRunnerTest {
         when(planner.decide(anyList(), any()))
                 .thenReturn(toolCallResponse("c1", "cancel_booking", "{\"id\":42}"),
                         answerResponse("好的，未取消"));
-        when(toolRegistry.requireConfirm(eq("cancel_booking"), any())).thenReturn(true);
-        when(toolRegistry.callbacks(any())).thenReturn(List.of());
+        when(toolRegistry.requireConfirm(eq("cancel_booking"))).thenReturn(true);
+        when(toolRegistry.callbacks()).thenReturn(List.of());
 
         org.mockito.Mockito.doAnswer(invocation -> {
             String token = invocation.getArgument(0);
@@ -208,8 +208,8 @@ class AgentRunnerTest {
         AtomicInteger counter = new AtomicInteger();
         when(planner.decide(anyList(), any()))
                 .thenAnswer(inv -> toolCallResponse("c" + counter.incrementAndGet(), "search_rooms", "{}"));
-        when(toolRegistry.requireConfirm(anyString(), any())).thenReturn(false);
-        when(toolRegistry.callbacks(any())).thenReturn(List.of());
+        when(toolRegistry.requireConfirm(anyString())).thenReturn(false);
+        when(toolRegistry.callbacks()).thenReturn(List.of());
         when(toolGateway.callTool(anyString(), anyString(), any())).thenReturn("{}");
 
         runner().run("s1", "随便查查", events, staff);

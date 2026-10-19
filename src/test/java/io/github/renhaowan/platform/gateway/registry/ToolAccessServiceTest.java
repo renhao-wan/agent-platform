@@ -15,7 +15,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-/** 两道权限闸门的契约测试——这两处是平台的安全边界，断言必须直白可见。 */
+/** 清单组装与执行点鉴权的契约测试——闸门 2 是平台的安全边界，断言必须直白可见。 */
 @ExtendWith(MockitoExtension.class)
 class ToolAccessServiceTest {
 
@@ -39,37 +39,29 @@ class ToolAccessServiceTest {
         return tool;
     }
 
-    private void givenVisible(ToolDefinition... tools) {
+    private void givenEnabled(ToolDefinition... tools) {
         when(registryService.listEnabled(GATEWAY)).thenReturn(List.of(tools));
     }
 
-    // ---------- 闸门 1：可见性过滤 ----------
+    // ---------- 闸门 1：清单组装（不做角色裁剪） ----------
 
     @Test
-    void staffDoesNotSeeAdminOnlyTool() {
-        givenVisible(tool("search_rooms", null), tool("cancel_booking", "ADMIN"));
+    void modelSeesEveryEnabledToolRegardlessOfRole() {
+        givenEnabled(tool("search_rooms", null), tool("cancel_booking", "ADMIN"));
 
-        assertThat(service().listVisible(GATEWAY, "STAFF"))
-                .extracting(ToolDefinition::getName)
-                .containsExactly("search_rooms");
-    }
-
-    @Test
-    void adminSeesBothPublicAndAdminOnlyTools() {
-        givenVisible(tool("search_rooms", null), tool("cancel_booking", "ADMIN"));
-
-        assertThat(service().listVisible(GATEWAY, "ADMIN"))
+        // 无权工具也下发——在这里裁掉，模型只会答"我没有这个功能"，把权限问题说成能力问题
+        assertThat(service().listForModel(GATEWAY))
                 .extracting(ToolDefinition::getName)
                 .containsExactly("search_rooms", "cancel_booking");
     }
 
     @Test
-    void anonymousRoleSeesOnlyPublicTools() {
-        givenVisible(tool("search_rooms", null), tool("cancel_booking", "ADMIN"));
+    void roleRequirementTravelsWithTheToolSoDescriptionCanDiscloseIt() {
+        givenEnabled(tool("search_rooms", null), tool("cancel_booking", "ADMIN"));
 
-        assertThat(service().listVisible(GATEWAY, null))
-                .extracting(ToolDefinition::getName)
-                .containsExactly("search_rooms");
+        assertThat(service().listForModel(GATEWAY))
+                .extracting(ToolDefinition::getRequiredRole)
+                .containsExactly(null, "ADMIN");
     }
 
     // ---------- 闸门 2：执行点鉴权 ----------

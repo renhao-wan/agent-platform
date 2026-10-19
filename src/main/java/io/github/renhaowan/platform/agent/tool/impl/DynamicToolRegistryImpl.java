@@ -1,6 +1,5 @@
 package io.github.renhaowan.platform.agent.tool.impl;
 
-import io.github.renhaowan.platform.agent.auth.UserPrincipal;
 import io.github.renhaowan.platform.agent.tool.DynamicToolRegistry;
 import io.github.renhaowan.platform.agent.tool.ToolGateway;
 import io.github.renhaowan.platform.gateway.registry.entity.ToolDefinition;
@@ -13,74 +12,62 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Service;
 
-/** DynamicToolRegistry 接口实现：工具清单按用户角色分桶缓存。 */
+/** DynamicToolRegistry 接口实现：工具清单整份缓存。 */
 @Slf4j
 @RequiredArgsConstructor
 @Service
 public class DynamicToolRegistryImpl implements DynamicToolRegistry {
 
     private static final long REFRESH_INTERVAL_MS = 5 * 60_000L;
-    /** 匿名（无身份）缓存桶键 */
-    private static final String ANON_KEY = "";
 
     private final ToolGateway toolGateway;
 
-    /** 角色分桶缓存：STAFF 与 ADMIN 各看到各的清单（网关侧闸门 1 过滤后的结果） */
-    private final Map<String, RoleBucket> roleBuckets = new ConcurrentHashMap<>();
+    /** 清单与身份无关（角色差异在执行点判定），一份缓存即可。 */
+    private volatile Bucket bucket = new Bucket(List.of(), Map.of(), 0L);
 
     @Override
-    public synchronized List<ToolCallback> callbacks(UserPrincipal user) {
-        return List.copyOf(bucketOf(user).callbacks);
-    }
-
-    @Override
-    public boolean requireConfirm(String toolName, UserPrincipal user) {
-        // 只读已有缓存不触发刷新：AgentRunner 总是先 callbacks(user) 再进入循环，
-        // 敏感标记与可见清单同源（同一次 tools/list），不会出现跨角色串桶
-        RoleBucket bucket = roleBuckets.get(bucketKey(user));
-        return bucket != null && bucket.confirmFlags.getOrDefault(toolName, false);
-    }
-
-    private RoleBucket bucketOf(UserPrincipal user) {
-        String key = bucketKey(user);
-        RoleBucket bucket = roleBuckets.get(key);
-        if (bucket == null || System.currentTimeMillis() - bucket.refreshedAt > REFRESH_INTERVAL_MS) {
-            bucket = refresh(user, key);
-            roleBuckets.put(key, bucket);
+    public List<ToolCallback> callbacks() {
+        Bucket current = bucket;
+        if (System.currentTimeMillis() - current.refreshedAt() > REFRESH_INTERVAL_MS) {
+            current = refresh();
         }
-        return bucket;
+        return List.copyOf(current.callbacks());
     }
 
-    private static String bucketKey(UserPrincipal user) {
-        return user == null ? ANON_KEY : user.role();
+    @Override
+    public boolean requireConfirm(String toolName) {
+        // 只读已有缓存不触发刷新：AgentRunner 总是先 callbacks() 再进入循环，敏感标记与清单同源
+        return bucket.confirmFlags().getOrDefault(toolName, false);
     }
 
     /**
-     * 重拉当前角色的工具清单并整体替换该桶（先构建后切换，失败保留旧数据——注册失败不影响在跑对话）。
+     * 重拉清单并整体替换该桶（先构建后切换，失败保留旧数据——查库失败不影响在跑对话）。
      * <p>故障形态提示：工具清单来自数据库，MySQL 不可用时首次刷新会拿到空桶，
      * 表现为"模型看不到任何工具"，而非报错。
      */
-    private RoleBucket refresh(UserPrincipal user, String key) {
-        RoleBucket previous = roleBuckets.get(key);
+    private synchronized Bucket refresh() {
+        Bucket previous = bucket;
         try {
             List<ToolCallback> rebuilt = new ArrayList<>();
             Map<String, Boolean> flags = new ConcurrentHashMap<>();
-            for (ToolDefinition tool : toolGateway.listTools(user)) {
+            for (ToolDefinition tool : toolGateway.listTools()) {
                 String name = tool.getName();
                 boolean requireConfirm = tool.getRequireConfirm() != null && tool.getRequireConfirm() == 1;
                 rebuilt.add(new GatewayToolCallback(tool, toolGateway));
                 flags.put(name, requireConfirm);
             }
-            log.info("tool registry refreshed for role [{}]: {} tools", key.isEmpty() ? "-" : key, rebuilt.size());
-            return new RoleBucket(rebuilt, flags, System.currentTimeMillis());
+            log.info("tool registry refreshed: {} tools", rebuilt.size());
+            Bucket refreshed = new Bucket(rebuilt, flags, System.currentTimeMillis());
+            bucket = refreshed;
+            return refreshed;
         } catch (Exception e) {
-            log.warn("tool registry refresh failed for role [{}], keep previous: {}", key, e.getMessage());
-            return previous != null ? previous : new RoleBucket(List.of(), new ConcurrentHashMap<>(), 0L);
+            log.warn("tool registry refresh failed, keep previous: {}", e.getMessage());
+            return previous;
         }
     }
 
-    /** 单个角色的缓存桶：可见回调 + 敏感标记 + 刷新时间。 */
-    private record RoleBucket(List<ToolCallback> callbacks, Map<String, Boolean> confirmFlags, long refreshedAt) {
+    /** 缓存桶：回调清单 + 敏感标记 + 刷新时间。 */
+    private record Bucket(List<ToolCallback> callbacks, Map<String, Boolean> confirmFlags, long refreshedAt) {
     }
 
     /** schema 广告位 + 执行委托 ToolGateway 的手写 ToolCallback。 */
@@ -98,9 +85,18 @@ public class DynamicToolRegistryImpl implements DynamicToolRegistry {
         public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
             return org.springframework.ai.tool.definition.ToolDefinition.builder()
                     .name(tool.getName())
-                    .description(tool.getDescription() == null ? "" : tool.getDescription())
+                    .description(describe(tool))
                     .inputSchema(tool.getInputSchema() == null ? "{}" : tool.getInputSchema())
                     .build();
+        }
+
+        /** 角色要求写进描述：模型据此知道"这个能力存在、但当前身份不够"，可先告知用户而非盲目尝试。 */
+        private static String describe(ToolDefinition tool) {
+            String description = tool.getDescription() == null ? "" : tool.getDescription();
+            if (tool.getRequiredRole() == null || tool.getRequiredRole().isBlank()) {
+                return description;
+            }
+            return description + "（此操作需要 " + tool.getRequiredRole() + " 权限）";
         }
 
         @Override

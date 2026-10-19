@@ -25,8 +25,8 @@ public class InProcessToolGateway implements ToolGateway {
     private final AgentProperties properties;
 
     @Override
-    public List<ToolDefinition> listTools(UserPrincipal user) {
-        return toolAccessService.listVisible(properties.getGatewayId(), roleOf(user));
+    public List<ToolDefinition> listTools() {
+        return toolAccessService.listForModel(properties.getGatewayId());
     }
 
     @Override
