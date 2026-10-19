@@ -183,7 +183,7 @@ if (requiredRole != null && !requiredRole.equals(userRole)) {
 
 - 模型**只被 Agent 运行时使用**（工具层、业务系统均不依赖 LLM）；
 - 平台统一供给：OpenAI 兼容协议，`yml` 配置供应商（默认 DeepSeek，`LLM_BASE_URL`/`LLM_MODEL`/`LLM_API_KEY` 三个环境变量一改即切厂商）；
-- Embedding 独立配置（默认 SiliconFlow `BAAI/bge-m3`）：聊天供应商不提供 embeddings 接口，两者不能共用同一组凭证；未配置 key 时知识库整体不装配；
+- Embedding 独立配置（默认 SiliconFlow `BAAI/bge-m3`）：聊天供应商不提供 embeddings 接口，两者不能共用同一组凭证；未配置 key 时知识库整体不装配；外部调用带 3s/20s 超时与指数退避重试（仅可恢复错误），用量按模型计入 `knowledge_usage`；
 - 演进路径：单模型（现状）→ 模型配置入库热切换 → 按接入方/场景路由不同模型（触发条件：成本分摊或需求分化）。
 
 ## 6. 关键设计决策（详见 docs/adr/）
@@ -203,4 +203,4 @@ if (requiredRole != null && !requiredRole.equals(userRole)) {
 |---|---|
 | SSE 并发 | 40 并发 200/200，P50 1.03s / P99 1.35s |
 | Token 裁剪 | 30 轮长会话总量降 31.8%；单次调用 prompt 降 78.6% |
-| 自动化测试 | 128 项（转发拼装与超时故障/裁剪策略/循环三态/越权拦截/契约导入与自动注册/路由责任链/端到端自愈/切块与知识检索） |
+| 自动化测试 | 147 项（转发拼装与超时故障/裁剪策略/循环三态/越权拦截/契约导入与自动注册/路由责任链/端到端自愈/切块与知识检索/索引任务与评估） |

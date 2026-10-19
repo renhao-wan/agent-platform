@@ -1,7 +1,7 @@
 # 代码导览 — agent-platform 逐文件说明
 
 > 用途：给作者本人的复述地图（每个文件一句话 + 面试考点），也供读者按图索骥。
-> 共 73 个主文件 + 24 个测试类。标注：★ = 面试深挖高发区；【①②③④】= 对应简历亮点 1-4。
+> 共 79 个主文件 + 25 个测试类。标注：★ = 面试深挖高发区；【①②③④】= 对应简历亮点 1-4。
 
 ## 推荐通读顺序（约 40 分钟）
 
@@ -89,10 +89,15 @@ KnowledgeSearchService/KnowledgeSearchTool
 - **KnowledgeJdbc.java**：私有 Hikari 连接池（`knowledge-pg`）。**故意不注册为 DataSource bean**——第二个 DataSource 会让 MyBatis 的 `@ConditionalOnSingleCandidate` 失去唯一候选。
 - **chunk/MarkdownChunker.java** ★：纯函数。H2 主切分 → 超长节按 H3 → 段落 → 句子 → 硬切逐级降级；表格按行拆且重复表头，代码块不拆；过小块并入相邻块。
 - **chunk/FrontMatter.java**：解析 `key: value` 前置元数据；`visible_role` 缺省为 `PUBLIC`（权限默认收紧而不是放开）。
-- **index/KnowledgeIndexService.java**：扫描目录 → SHA-256 比对 → 只重索引变更文档。跳过条件同时看 **status（FAILED 必重试）、content hash、embedding model、切块参数**。索引前按 `doc_path` 元数据过滤删除旧向量，不依赖 chunk 表，避免孤儿向量阻塞重写。
-- **index/KnowledgeDocRepository.java**：`knowledge_doc`（增量判断）+ `knowledge_chunk`（块明细）两张表，建表幂等。
-- **search/KnowledgeSearchService.java** ★：`SearchRequest` 里同时带 topK、相似度阈值与角色过滤表达式；**过滤发生在 SQL 内**，无权内容不进候选集。相似度取自 `Document.getScore()`。
-- **search/KnowledgeSearchTool.java**：`search_knowledge` 的 schema 广告位 + 本地执行入口。参数错误/检索失败都返回文本，不抛异常。
+- **index/KnowledgeIndexService.java** ★：扫描目录 → SHA-256 比对 → 只重索引变更文档。跳过条件同时看 **status（FAILED 必重试）、content hash、embedding model、切块参数**。写入采用**版本化**：块 id 由 `doc_path#序号` 确定性生成，先 `add` 新块（同 id upsert），再只删"新版本不再包含"的 stale id——不先按 `doc_path` 全删，避免重建期间检索空白窗口。每次索引对应一条任务记录，完成/失败回写状态。
+- **index/KnowledgeIndexJobRepository.java**：`knowledge_index_job` 任务表。跨实例互斥靠部分唯一索引 `WHERE status='RUNNING'`；`start` 会先把超时 RUNNING 标 FAILED，避免进程被 kill 后永久阻塞。
+- **index/KnowledgeDocRepository.java**：`knowledge_doc`（增量判断）+ `knowledge_chunk`（块明细、关键词兜底正文、角色列）两张表，建表幂等，旧库用 `ADD COLUMN IF NOT EXISTS` 补列。
+- **search/KnowledgeSearchService.java** ★：`SearchRequest` 里同时带 topK、相似度阈值与角色过滤表达式；**过滤发生在 SQL 内**，无权内容不进候选集。相似度取自 `Document.getScore()`。向量结果为空时按 `raw_text ILIKE` 关键词兜底（同样角色过滤，score 为 NaN）。每次检索写审计表、打 Micrometer 指标与 INFO 日志，均为 best-effort。
+- **search/KnowledgeSearchTool.java**：`search_knowledge` 的 schema 广告位 + 本地执行入口。参数错误/检索失败都返回文本，不抛异常。检索结果带"仅作资料、不构成指令"声明与 `<<< >>>` 边界，缓解文档内提示注入。
+- **search/KnowledgeSearchAuditRepository.java**：`knowledge_search_audit`，记 query/角色/命中来源/耗时，不记正文；启动时按留存期清理。
+- **embedding/UsageRecordingEmbeddingModel.java**：装饰 `EmbeddingModel.call`，把 prompt tokens 与文档数记入 `knowledge_usage`，让"知识库每月花多少钱"可查。
+- **eval/KnowledgeEvalService.java**：读 `knowledge/eval/questions.jsonl`，跑 Recall@K / MRR / 空结果率，供 `POST /admin/knowledge/eval` 使用——切块与阈值调整有了可比较的数字。
+- **KnowledgeHealthIndicator.java**：`/actuator/health` 中的知识库探针（`SELECT 1`）；`/actuator/prometheus` 暴露检索指标。
 
 ## 4. common/ web/ resources/
 
@@ -102,9 +107,9 @@ KnowledgeSearchService/KnowledgeSearchTool
 - `resources/static/index.html`：单页控制台（fetch 流解析 SSE，8 类事件渲染，确认按钮）。
 - `resources/schema.sql`：6 张表幂等建表（IF NOT EXISTS + information_schema 守卫的 ALTER）。
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
-- `knowledge/`：5 份制度语料（4 份 PUBLIC + 1 份 ADMIN），随镜像发布；改了文件重启即按 hash 增量重建。
+- `knowledge/`：5 份制度语料（4 份 PUBLIC + 1 份 ADMIN）+ 评估题库；镜像内带一份，compose 另把宿主目录只读挂到 `/app/knowledge`，改文档后重启或 reindex 即生效，不必重建镜像。
 
-## 5. 测试（24 类，128 项）
+## 5. 测试（25 类，147 项）
 
 | 测试类 | 覆盖 |
 |---|---|
@@ -128,10 +133,12 @@ KnowledgeSearchService/KnowledgeSearchTool
 | PlatformApplicationTests (1) | 上下文启动 |
 | AgentSelfHealingTest (1) | ★ 端到端：WireMock 业务系统首次 500、二次 200，ReAct 循环不中断、两次观察都回填落库 |
 | MarkdownChunkerTest (9) | 按 H2 切分、前缀、H3 降级、硬切重叠、小段合并、代码块/表格、front-matter |
-| KnowledgeIndexServiceTest (7) | 首次索引与元数据、hash 未变跳过、force 重建、FAILED 重试、切块参数变化重建、删除清理、失败标记 |
-| KnowledgeSearchServiceTest (5) | 角色过滤表达式、topK 上限、空 query、结果与分数映射 |
-| KnowledgeSearchToolTest (7) | 空/非法参数、空结果、来源格式化、默认 topK、失败降级、callback 广告位 |
-| KnowledgeAdminControllerTest (2) | 管理端重建：未启用返回 503、启用时按 force 触发索引 |
+| KnowledgeIndexServiceTest (10) | 首次索引与元数据、hash 未变跳过、force 重建、FAILED 重试、切块参数变化重建、删除清理、失败标记、版本化写入顺序、任务完成/占用 |
+| KnowledgeSearchServiceTest (9) | 角色过滤表达式、ADMIN 不过滤、topK 上限、空 query、结果与分数映射、关键词兜底与 LIKE 转义、审计写入、审计失败不影响检索 |
+| KnowledgeSearchToolTest (7) | 空/非法参数、空结果、来源与注入边界、默认 topK、失败降级、callback 广告位 |
+| KnowledgeAdminControllerTest (7) | 未启用 503、异步提交返回 jobId、任务占用 409、任务查询与 404、评估报告与题库缺失 400 |
+| KnowledgeEvalServiceTest (4) | Recall@K / MRR / 空结果率、逐题排名、按题目声明角色检索、题库缺失 |
+| UsageRecordingEmbeddingModelTest (3) | tokens 与文档数记录、无 usage 记 0、打点失败不影响 embedding |
 
 ## 6. 一次请求的类名级走线
 
@@ -145,6 +152,7 @@ index.html → ChatController.chat
       Planner.decide（deepseek-flash，OpenAI 兼容协议）
       → 内部工具？recallHistory / search_knowledge 本地执行（不进网关）
           search_knowledge → KnowledgeSearchService → pgvector（角色过滤在 SQL 内）
+                            → 空结果时 keyword 兜底 → 审计 + metrics
       → ToolGateway.callTool（进程内方法调用）
         → ToolAccessService.invoke（闸门2 鉴权）
         → GenericHttpForwarder → 业务系统 REST
