@@ -30,6 +30,15 @@ public class GenericHttpForwarder {
     public static final int MAX_BODY_CHARS = 8192;
     private static final Pattern PATH_PARAM = Pattern.compile("\\{(\\w+)}");
 
+    /**
+     * 以系统凭证调用业务系统时，声明"我代表哪个最终用户"的透传头。
+     * <p>
+     * 业务系统只在服务级凭证（{@code X-Service-Key}）校验通过时才采信该头，因此它不构成
+     * 越权入口。接收端实现在业务系统仓库（meeting-booking 的 {@code JwtFilter}），
+     * 跨仓库无法共享常量，改动本常量时需两边同步。
+     */
+    public static final String ON_BEHALF_OF_HEADER = "X-On-Behalf-Of-User";
+
     private final RestClient restClient;
 
     public GenericHttpForwarder(ForwardProperties properties) {
@@ -45,7 +54,10 @@ public class GenericHttpForwarder {
     public record ForwardResult(boolean success, int status, String body, String error) {
     }
 
-    public ForwardResult forward(ToolDefinition tool, JsonNode arguments) {
+    /**
+     * @param onBehalfOfUserId 最终用户 id，用于业务系统按人归属数据；null 表示不带（无用户上下文）
+     */
+    public ForwardResult forward(ToolDefinition tool, JsonNode arguments, Long onBehalfOfUserId) {
         try {
             Map<String, String> pathValues = extractPathValues(tool.getUrlTemplate(), arguments);
             String url = fillTemplate(tool.getUrlTemplate(), pathValues);
@@ -76,6 +88,10 @@ public class GenericHttpForwarder {
             }
             if (tool.getAuthHeaderName() != null && !tool.getAuthHeaderName().isBlank()) {
                 spec.header(tool.getAuthHeaderName(), tool.getAuthHeaderValue() == null ? "" : tool.getAuthHeaderValue());
+            }
+            if (onBehalfOfUserId != null) {
+                // 不带此头时，业务系统会把所有操作记在系统账号名下，"查我的预订"就查不出真实数据
+                spec.header(ON_BEHALF_OF_HEADER, String.valueOf(onBehalfOfUserId));
             }
 
             return spec.exchange((request, response) -> {

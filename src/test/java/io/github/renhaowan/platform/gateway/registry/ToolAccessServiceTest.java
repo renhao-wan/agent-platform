@@ -2,6 +2,7 @@ package io.github.renhaowan.platform.gateway.registry;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -72,37 +73,50 @@ class ToolAccessServiceTest {
                 .thenReturn(Optional.of(tool("cancel_booking", "ADMIN")));
 
         ToolAccessService.ToolCallResult result =
-                service().invoke(GATEWAY, "STAFF", "cancel_booking", "{\"id\":13}");
+                service().invoke(GATEWAY, "STAFF", 9L, "cancel_booking", "{\"id\":13}");
 
         assertThat(result.isError()).isTrue();
         assertThat(result.text()).contains("权限不足").contains("ADMIN");
-        verify(forwarder, never()).forward(any(), any());
+        verify(forwarder, never()).forward(any(), any(), any());
     }
 
     @Test
     void matchingRoleIsForwarded() {
         when(registryService.find(GATEWAY, "cancel_booking"))
                 .thenReturn(Optional.of(tool("cancel_booking", "ADMIN")));
-        when(forwarder.forward(any(ToolDefinition.class), any()))
+        when(forwarder.forward(any(ToolDefinition.class), any(), any()))
                 .thenReturn(new GenericHttpForwarder.ForwardResult(
                         true, 200, "{\"status\":\"CANCELLED\"}", null));
 
         ToolAccessService.ToolCallResult result =
-                service().invoke(GATEWAY, "ADMIN", "cancel_booking", "{\"id\":13}");
+                service().invoke(GATEWAY, "ADMIN", 9L, "cancel_booking", "{\"id\":13}");
 
         assertThat(result.isError()).isFalse();
         assertThat(result.text()).contains("CANCELLED");
-        verify(forwarder).forward(any(), any());
+        verify(forwarder).forward(any(), any(), any());
     }
 
     @Test
     void publicToolIsForwardedWithoutRole() {
         when(registryService.find(GATEWAY, "search_rooms"))
                 .thenReturn(Optional.of(tool("search_rooms", null)));
-        when(forwarder.forward(any(ToolDefinition.class), any()))
+        when(forwarder.forward(any(ToolDefinition.class), any(), any()))
                 .thenReturn(new GenericHttpForwarder.ForwardResult(true, 200, "{\"rooms\":3}", null));
 
-        assertThat(service().invoke(GATEWAY, "STAFF", "search_rooms", "{}").isError()).isFalse();
+        assertThat(service().invoke(GATEWAY, "STAFF", 9L, "search_rooms", "{}").isError()).isFalse();
+    }
+
+    @Test
+    void callerIdTravelsWithTheCallSoBackendCanOwnDataPerUser() {
+        when(registryService.find(GATEWAY, "list_bookings"))
+                .thenReturn(Optional.of(tool("list_bookings", null)));
+        when(forwarder.forward(any(ToolDefinition.class), any(), any()))
+                .thenReturn(new GenericHttpForwarder.ForwardResult(true, 200, "[]", null));
+
+        service().invoke(GATEWAY, "STAFF", 42L, "list_bookings", "{}");
+
+        // 身份必须显式下穿到转发层——少了它，业务系统会把所有请求都记在系统账号名下
+        verify(forwarder).forward(any(ToolDefinition.class), any(), eq(42L));
     }
 
     // ---------- 失败一律回喂文本，不抛异常 ----------
@@ -112,23 +126,23 @@ class ToolAccessServiceTest {
         when(registryService.find(GATEWAY, "nope")).thenReturn(Optional.empty());
 
         ToolAccessService.ToolCallResult result =
-                service().invoke(GATEWAY, "ADMIN", "nope", "{}");
+                service().invoke(GATEWAY, "ADMIN", 9L, "nope", "{}");
 
         assertThat(result.isError()).isTrue();
         assertThat(result.text()).contains("unknown tool");
-        verify(forwarder, never()).forward(any(), any());
+        verify(forwarder, never()).forward(any(), any(), any());
     }
 
     @Test
     void backendFailureIsCarriedBackAsErrorText() {
         when(registryService.find(GATEWAY, "create_booking"))
                 .thenReturn(Optional.of(tool("create_booking", null)));
-        when(forwarder.forward(any(ToolDefinition.class), any()))
+        when(forwarder.forward(any(ToolDefinition.class), any(), any()))
                 .thenReturn(new GenericHttpForwarder.ForwardResult(
                         false, 500, "", "backend responded 500"));
 
         ToolAccessService.ToolCallResult result =
-                service().invoke(GATEWAY, "STAFF", "create_booking", "{}");
+                service().invoke(GATEWAY, "STAFF", 9L, "create_booking", "{}");
 
         assertThat(result.isError()).isTrue();
         assertThat(result.text()).contains("500");
@@ -140,20 +154,20 @@ class ToolAccessServiceTest {
                 .thenReturn(Optional.of(tool("search_rooms", null)));
 
         ToolAccessService.ToolCallResult result =
-                service().invoke(GATEWAY, "STAFF", "search_rooms", "{not json");
+                service().invoke(GATEWAY, "STAFF", 9L, "search_rooms", "{not json");
 
         assertThat(result.isError()).isTrue();
         assertThat(result.text()).contains("JSON");
-        verify(forwarder, never()).forward(any(), any());
+        verify(forwarder, never()).forward(any(), any(), any());
     }
 
     @Test
     void blankArgumentsAreTreatedAsNoArguments() {
         when(registryService.find(GATEWAY, "list_rooms"))
                 .thenReturn(Optional.of(tool("list_rooms", null)));
-        when(forwarder.forward(any(ToolDefinition.class), any()))
+        when(forwarder.forward(any(ToolDefinition.class), any(), any()))
                 .thenReturn(new GenericHttpForwarder.ForwardResult(true, 200, "[]", null));
 
-        assertThat(service().invoke(GATEWAY, "STAFF", "list_rooms", "").isError()).isFalse();
+        assertThat(service().invoke(GATEWAY, "STAFF", 9L, "list_rooms", "").isError()).isFalse();
     }
 }

@@ -31,8 +31,8 @@ public class InProcessToolGateway implements ToolGateway {
 
     @Override
     public String callTool(String name, String argumentsJson, UserPrincipal user) {
-        ToolAccessService.ToolCallResult result =
-                toolAccessService.invoke(properties.getGatewayId(), roleOf(user), name, argumentsJson);
+        ToolAccessService.ToolCallResult result = toolAccessService.invoke(properties.getGatewayId(),
+                roleOf(user), user == null ? null : user.uid(), name, argumentsJson);
         return result.isError() ? ERROR_PREFIX + result.text() : result.text();
     }
 

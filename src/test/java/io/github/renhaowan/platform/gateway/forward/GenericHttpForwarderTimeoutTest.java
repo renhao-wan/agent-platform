@@ -60,7 +60,7 @@ class GenericHttpForwarderTimeoutTest {
         server.stubFor(get(urlEqualTo("/slow"))
                 .willReturn(aResponse().withStatus(200).withBody("{\"ok\":true}").withFixedDelay(1500)));
 
-        var result = forwarderWithTimeouts(2000, 200).forward(tool("/slow"), null);
+        var result = forwarderWithTimeouts(2000, 200).forward(tool("/slow"), null, null);
 
         assertThat(result.success()).isFalse();
         assertThat(result.error()).contains("timed out");
@@ -71,7 +71,7 @@ class GenericHttpForwarderTimeoutTest {
         server.stubFor(get(urlEqualTo("/hang"))
                 .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
 
-        var result = forwarderWithTimeouts(2000, 500).forward(tool("/hang"), null);
+        var result = forwarderWithTimeouts(2000, 500).forward(tool("/hang"), null, null);
 
         assertThat(result.success()).isFalse();
         assertThat(result.error()).isNotBlank();
@@ -82,7 +82,7 @@ class GenericHttpForwarderTimeoutTest {
         server.stubFor(get(urlEqualTo("/plain"))
                 .willReturn(aResponse().withStatus(200).withBody("<html>service up</html>")));
 
-        var result = forwarderWithTimeouts(2000, 2000).forward(tool("/plain"), null);
+        var result = forwarderWithTimeouts(2000, 2000).forward(tool("/plain"), null, null);
 
         assertThat(result.success()).isTrue();
         assertThat(result.body()).isEqualTo("<html>service up</html>");
@@ -93,7 +93,7 @@ class GenericHttpForwarderTimeoutTest {
         server.stubFor(get(urlEqualTo("/big"))
                 .willReturn(aResponse().withStatus(200).withBody("x".repeat(10000))));
 
-        var result = forwarderWithTimeouts(2000, 2000).forward(tool("/big"), null);
+        var result = forwarderWithTimeouts(2000, 2000).forward(tool("/big"), null, null);
 
         assertThat(result.body().length()).isEqualTo(GenericHttpForwarder.MAX_BODY_CHARS);
     }

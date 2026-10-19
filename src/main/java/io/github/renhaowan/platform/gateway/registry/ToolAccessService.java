@@ -36,8 +36,14 @@ public class ToolAccessService {
         return registryService.listEnabled(gatewayId);
     }
 
-    /** 闸门 2，通过后泛化转发。任何失败都包装成可读文本回喂模型。 */
-    public ToolCallResult invoke(String gatewayId, String userRole, String name, String argsJson) {
+    /**
+     * 闸门 2，通过后泛化转发。任何失败都包装成可读文本回喂模型。
+     * <p>
+     * {@code userId} 与 {@code userRole} 都取自会话绑定的身份：角色用于闸门 2 判定，
+     * 用户 id 作为 {@code X-On-Behalf-Of-User} 透传给业务系统，使数据按最终用户归属。
+     */
+    public ToolCallResult invoke(String gatewayId, String userRole, Long userId,
+                                 String name, String argsJson) {
         Optional<ToolDefinition> tool = registryService.find(gatewayId, name);
         if (tool.isEmpty()) {
             return new ToolCallResult(true, "unknown tool: " + name);
@@ -56,7 +62,7 @@ public class ToolAccessService {
             return new ToolCallResult(true, "参数解析失败，需要合法 JSON 对象");
         }
 
-        GenericHttpForwarder.ForwardResult result = forwarder.forward(tool.get(), arguments);
+        GenericHttpForwarder.ForwardResult result = forwarder.forward(tool.get(), arguments, userId);
         if (result.success()) {
             return new ToolCallResult(false, result.body());
         }

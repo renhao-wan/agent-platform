@@ -68,7 +68,7 @@ class GenericHttpForwarderTest {
     @Test
     void getForwardsRemainingArgsAsQuery() throws Exception {
         var result = forwarder.forward(tool("GET", "http://localhost:" + port + "/ping"),
-                args("{\"name\":\"room-a\",\"capacity\":8}"));
+                args("{\"name\":\"room-a\",\"capacity\":8}"), null);
 
         assertThat(result.success()).isTrue();
         assertThat(result.status()).isEqualTo(200);
@@ -79,7 +79,7 @@ class GenericHttpForwarderTest {
     @Test
     void postForwardsRemainingArgsAsJsonBody() throws Exception {
         var result = forwarder.forward(tool("POST", "http://localhost:" + port + "/echo"),
-                args("{\"roomId\":1,\"title\":\"周会\"}"));
+                args("{\"roomId\":1,\"title\":\"周会\"}"), null);
 
         assertThat(result.success()).isTrue();
         assertThat(result.body()).contains("\"roomId\":1").contains("周会");
@@ -89,7 +89,7 @@ class GenericHttpForwarderTest {
     @Test
     void pathParamsFilledAndExcludedFromBody() throws Exception {
         var result = forwarder.forward(tool("POST", "http://localhost:" + port + "/echo/{id}/cancel"),
-                args("{\"id\":42,\"reason\":\"日程冲突\"}"));
+                args("{\"id\":42,\"reason\":\"日程冲突\"}"), null);
 
         assertThat(result.success()).isTrue();
         assertThat(lastBody.get()).doesNotContain("\"id\"");
@@ -98,7 +98,7 @@ class GenericHttpForwarderTest {
 
     @Test
     void oversizedResponseTruncatedTo8KB() {
-        var result = forwarder.forward(tool("GET", "http://localhost:" + port + "/big"), null);
+        var result = forwarder.forward(tool("GET", "http://localhost:" + port + "/big"), null, null);
 
         assertThat(result.success()).isTrue();
         assertThat(result.body().length()).isEqualTo(GenericHttpForwarder.MAX_BODY_CHARS);
@@ -106,7 +106,7 @@ class GenericHttpForwarderTest {
 
     @Test
     void backendErrorBecomesFailedResult() {
-        var result = forwarder.forward(tool("GET", "http://localhost:" + port + "/broken"), null);
+        var result = forwarder.forward(tool("GET", "http://localhost:" + port + "/broken"), null, null);
 
         assertThat(result.success()).isFalse();
         assertThat(result.error()).contains("500");
@@ -114,7 +114,7 @@ class GenericHttpForwarderTest {
 
     @Test
     void unreachableBackendBecomesFailedResult() {
-        var result = forwarder.forward(tool("GET", "http://localhost:1/ping"), null);
+        var result = forwarder.forward(tool("GET", "http://localhost:1/ping"), null, null);
 
         assertThat(result.success()).isFalse();
         assertThat(result.error()).isNotBlank();
@@ -134,10 +134,44 @@ class GenericHttpForwarderTest {
         secureTool.setAuthHeaderName("X-Service-Key");
         secureTool.setAuthHeaderValue("booking-service-key");
 
-        var result = forwarder.forward(secureTool, null);
+        var result = forwarder.forward(secureTool, null, null);
 
         assertThat(result.success()).isTrue();
         assertThat(receivedKey.get()).isEqualTo("booking-service-key");
+    }
+
+    @Test
+    void onBehalfOfUserHeaderCarriesCallerId() {
+        AtomicReference<String> received = new AtomicReference<>();
+        server.createContext("/whoami", exchange -> {
+            received.set(exchange.getRequestHeaders().getFirst(GenericHttpForwarder.ON_BEHALF_OF_HEADER));
+            byte[] body = "{}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+
+        var result = forwarder.forward(tool("GET", "http://localhost:" + port + "/whoami"), null, 7L);
+
+        assertThat(result.success()).isTrue();
+        assertThat(received.get()).isEqualTo("7");
+    }
+
+    @Test
+    void onBehalfOfUserHeaderOmittedWhenNoIdentity() {
+        AtomicReference<String> received = new AtomicReference<>();
+        server.createContext("/whoami-guest", exchange -> {
+            received.set(exchange.getRequestHeaders().getFirst(GenericHttpForwarder.ON_BEHALF_OF_HEADER));
+            byte[] body = "{}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+
+        var result = forwarder.forward(tool("GET", "http://localhost:" + port + "/whoami-guest"), null, null);
+
+        assertThat(result.success()).isTrue();
+        assertThat(received.get()).isNull();
     }
 
     @Test
@@ -147,7 +181,7 @@ class GenericHttpForwarderTest {
                 + "\"type\":\"object\",\"properties\":{\"roomId\":{\"type\":\"integer\"}}}}}");
 
         var result = forwarder.forward(wrapped,
-                args("{\"body\":{\"roomId\":2,\"title\":\"周会\"}}"));
+                args("{\"body\":{\"roomId\":2,\"title\":\"周会\"}}"), null);
 
         assertThat(result.success()).isTrue();
         assertThat(lastBody.get()).contains("\"roomId\":2").contains("周会");
