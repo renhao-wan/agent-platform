@@ -240,7 +240,8 @@ public class KnowledgeIndexService {
     }
 
     private String chunkConfig() {
-        return properties.getMaxChars() + "-" + properties.getMinChars() + "-" + properties.getOverlapChars();
+        return MarkdownChunker.VERSION + "-" + properties.getMaxChars() + "-"
+                + properties.getMinChars() + "-" + properties.getOverlapChars();
     }
 
     private void markFailedQuietly(String docPath) {

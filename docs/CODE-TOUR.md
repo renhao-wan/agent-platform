@@ -87,7 +87,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 
 - **KnowledgeConfig.java**：手动装配 pgvector 与 embedding 模型（不走 starter，避免自动配置抓主 DataSource / 复用 DeepSeek 的 base-url）。Postgres 连不上时抛带指引的异常（fail fast，不静默摘掉知识库）。
 - **KnowledgeJdbc.java**：私有 Hikari 连接池（`knowledge-pg`）。**故意不注册为 DataSource bean**——第二个 DataSource 会让 MyBatis 的 `@ConditionalOnSingleCandidate` 失去唯一候选。
-- **chunk/MarkdownChunker.java** ★：纯函数。H2 主切分 → 超长节按 H3 → 段落 → 句子 → 硬切逐级降级；表格按行拆且重复表头，代码块不拆；过小块并入相邻块。
+- **chunk/MarkdownChunker.java** ★：纯函数。H2 主切分 → 超长节按 H3 → 段落 → 句子 → 硬切逐级降级；表格按行拆且重复表头，代码块不拆；过小块并入相邻块（导语并入首节时采用首节标题，否则"住宿标准"这类标题会被吞掉）。`VERSION` 参与 `chunk_config` 指纹——改切分规则必须加一，否则文档 hash 未变时旧索引不会被重建。
 - **chunk/FrontMatter.java**：解析 `key: value` 前置元数据；`visible_role` 缺省为 `PUBLIC`（权限默认收紧而不是放开）。
 - **index/KnowledgeIndexService.java** ★：扫描目录 → SHA-256 比对 → 只重索引变更文档。跳过条件同时看 **status（FAILED 必重试）、content hash、embedding model、切块参数**。写入采用**版本化**：块 id 由 `doc_path#序号` 确定性生成，先 `add` 新块（同 id upsert），再只删"新版本不再包含"的 stale id——不先按 `doc_path` 全删，避免重建期间检索空白窗口。每次索引对应一条任务记录，完成/失败回写状态。
 - **index/KnowledgeIndexJobRepository.java**：`knowledge_index_job` 任务表。跨实例互斥靠部分唯一索引 `WHERE status='RUNNING'`；`start` 会先把超时 RUNNING 标 FAILED，避免进程被 kill 后永久阻塞。
@@ -109,7 +109,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
 - `knowledge/`：5 份制度语料（4 份 PUBLIC + 1 份 ADMIN）+ 评估题库；镜像内带一份，compose 另把宿主目录只读挂到 `/app/knowledge`，改文档后重启或 reindex 即生效，不必重建镜像。
 
-## 5. 测试（26 类，150 项）
+## 5. 测试（26 类，151 项）
 
 | 测试类 | 覆盖 |
 |---|---|
@@ -132,7 +132,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 | ToolRegistryServiceTest (2) | upsert 插入/更新 |
 | PlatformApplicationTests (1) | 上下文启动 |
 | AgentSelfHealingTest (1) | ★ 端到端：WireMock 业务系统首次 500、二次 200，ReAct 循环不中断、两次观察都回填落库 |
-| MarkdownChunkerTest (9) | 按 H2 切分、前缀、H3 降级、硬切重叠、小段合并、代码块/表格、front-matter |
+| MarkdownChunkerTest (10) | 按 H2 切分、前缀、H3 降级、硬切重叠、小段合并、导语并入首节时保留小节名、代码块/表格、front-matter |
 | KnowledgeIndexServiceTest (10) | 首次索引与元数据、hash 未变跳过、force 重建、FAILED 重试、切块参数变化重建、删除清理、失败标记、版本化写入顺序、任务完成/占用 |
 | KnowledgeIndexJobRepositoryTest (3) | 全部失败标 FAILED（避免任务"成功"但检索全空）、部分失败仍 SUCCEEDED、全跳过仍 SUCCEEDED |
 | KnowledgeSearchServiceTest (9) | 角色过滤表达式、ADMIN 不过滤、topK 上限、空 query、结果与分数映射、关键词兜底与 LIKE 转义、审计写入、审计失败不影响检索 |

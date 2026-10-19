@@ -101,7 +101,7 @@ class KnowledgeIndexServiceTest {
                 .containsEntry("raw_text", "一线城市每晚不超过 600 元，二线城市不超过 400 元。");
 
         verify(repository).upsertDoc(argThat(doc -> doc.chunkCount() == 1
-                && "800-50-100".equals(doc.chunkConfig())
+                && "2-800-50-100".equals(doc.chunkConfig())
                 && KnowledgeDoc.STATUS_INDEXED.equals(doc.status())
                 && "BAAI/bge-m3".equals(doc.embeddingModel())));
         // 首次索引也按 doc_path 清一遍旧向量：不依赖上次的 chunk 记录

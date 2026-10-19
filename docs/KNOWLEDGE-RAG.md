@@ -321,7 +321,7 @@ bad case，且只用了两行 SQL。
 CREATE TABLE knowledge_doc (
     doc_path        VARCHAR(255) PRIMARY KEY,   -- 相对 knowledge/ 的路径
     content_hash    CHAR(64) NOT NULL,          -- SHA-256
-    chunk_config    VARCHAR(64) NOT NULL,       -- 切块参数指纹（改参数即需重建）
+    chunk_config    VARCHAR(64) NOT NULL,       -- 切块算法版本 + 参数指纹（任一变化即需重建）
     chunk_count     INT NOT NULL,
     embedding_model VARCHAR(64) NOT NULL,       -- 换模型即需重建
     indexed_at      TIMESTAMP NOT NULL,
@@ -343,8 +343,9 @@ CREATE TABLE knowledge_index_job ( ... );       -- 索引任务与进度，见 �
 
 向量本体由 Spring AI 的 `vector_store` 表承载，`metadata` 中存 `doc_path`、`doc_title`、
 `section`、`visible_role`、`chunk_index`、`raw_text`。**跳过重建的条件必须同时满足**：
-status=INDEXED、content hash、embedding 模型、切块参数四项一致。只看 hash 会让 FAILED 文档
-永不重试，也会让改了切块参数后继续用旧索引。
+status=INDEXED、content hash、embedding 模型、切块算法版本与参数四项一致。只看 hash 会让 FAILED 文档
+永不重试，也会让改了切块参数后继续用旧索引；`chunk_config` 带上 `MarkdownChunker.VERSION`，
+因此升级切分/合并规则（文档内容未变）也会自动重建。
 
 ### 9.2 流程
 
@@ -521,7 +522,7 @@ status=INDEXED、content hash、embedding 模型、切块参数四项一致。�
 | 3 | embedding 客户端 + 目录扫描 + hash 增量 | 二次启动零 embedding 调用；改一份只重算一份 | 已完成（单测 10 项） |
 | 4 | `search_knowledge` + 接入 `AgentRunner` 两个位置 | 单测；模型能自主调用并引用来源 | 已完成（检索 9 + 工具 7 项） |
 | 5 | 四份语料（报销制度 / 差旅标准 / 会议室规定 / 报修流程） | 内容与 stub 数据可对撞 | 已完成（另加 1 份 ADMIN 文档） |
-| 6 | 任务表 / 审计 / 指标 / 用量 / 评估集 | 管理端可查任务、审计、成本；评估集可跑出 Recall@K 与 MRR | 已完成（管理端 7、评估 4、用量 3 项；全量 150 项） |
+| 6 | 任务表 / 审计 / 指标 / 用量 / 评估集 | 管理端可查任务、审计、成本；评估集可跑出 Recall@K 与 MRR | 已完成（管理端 7、评估 4、用量 3 项；全量 151 项） |
 | 7 | 端到端 | 问"差旅住宿上限是多少" → 检索；问"我这月报销超标了吗" → 检索 + 查单据协同 | **部分验证（2026-10-19）**：LLM 自主调用 `search_knowledge`、失败降级、"暂不可用"转述、审计与指标写点均已实测。真实索引被 SiliconFlow 402（账户余额不足）阻塞，5 份文档如实标 FAILED，任务标 FAILED；充值后重启即自动重试，无需改代码 |
 
 **语料设计原则**：制度里的数字要与 stub 业务数据能对撞（例如制度写"差旅单次上限 3000 元"，

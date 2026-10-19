@@ -11,6 +11,12 @@ import java.util.List;
  */
 public class MarkdownChunker {
 
+    /**
+     * 切块算法版本，参与 chunk_config 指纹。改切分/合并规则时必须加一——否则文档 hash 与
+     * 三个参数都没变，旧索引会被继续沿用，新规则永远不生效。
+     */
+    public static final String VERSION = "2";
+
     private final int maxChars;
     private final int minChars;
     private final int overlapChars;
@@ -265,8 +271,9 @@ public class MarkdownChunker {
             if (!out.isEmpty()) {
                 KnowledgeChunk previous = out.get(out.size() - 1);
                 if (previous.text().length() < minChars) {
-                    out.set(out.size() - 1,
-                            new KnowledgeChunk(previous.section(), previous.text() + "\n\n" + chunk.text()));
+                    out.set(out.size() - 1, new KnowledgeChunk(
+                            mergeSection(previous.section(), chunk.section()),
+                            previous.text() + "\n\n" + chunk.text()));
                     continue;
                 }
             }
@@ -278,6 +285,17 @@ public class MarkdownChunker {
             out.add(new KnowledgeChunk(previous.section(), previous.text() + "\n\n" + last.text()));
         }
         return out;
+    }
+
+    /**
+     * H1 与首个 H2 之间的导语通常过短，会先与首个 H2 合并。此时必须采用后者的小节名，
+     * 否则"住宿标准"这类标题被吞掉：前缀丢失关键词（降低召回），来源标注也退化成文档标题。
+     */
+    private static String mergeSection(String first, String second) {
+        if (first == null || first.isBlank()) {
+            return second == null ? "" : second;
+        }
+        return first;
     }
 
     private static void flushSection(List<Section> sections, String heading, StringBuilder body) {

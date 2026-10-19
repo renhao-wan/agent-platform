@@ -92,6 +92,26 @@ class MarkdownChunkerTest {
     }
 
     @Test
+    void leadingIntroKeepsFirstSectionHeadingWhenMerged() {
+        MarkdownChunker chunker = new MarkdownChunker(500, 50, 10);
+        String markdown = """
+                # 差旅费用标准
+
+                本文件规定员工因公出差的标准。
+
+                ## 住宿标准
+                一线城市每晚不超过 600 元，二线城市不超过 400 元。超过标准的需提前审批。
+                """;
+
+        List<KnowledgeChunk> chunks = chunker.chunk(markdown);
+
+        assertThat(chunks).hasSize(1);
+        // 导语并入首节时，标题必须取首节的"住宿标准"而不是导语的空标题
+        assertThat(chunks.get(0).section()).isEqualTo("住宿标准");
+        assertThat(chunks.get(0).text()).contains("本文件规定").contains("一线城市");
+    }
+
+    @Test
     void codeBlockIsNeverSplit() {
         MarkdownChunker chunker = new MarkdownChunker(100, 20, 10);
         String code = "```java\n" + "System.out.println(\"长行\");\n".repeat(20) + "```";
