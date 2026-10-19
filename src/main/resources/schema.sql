@@ -104,7 +104,8 @@ SET @ddl = IF(@col_exists > 0, 'ALTER TABLE chat_session DROP COLUMN title', 'SE
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- M4.2：工具级角色闸门（幂等：information_schema 守卫，已存在则跳过）。
--- required_role NULL=全员可用；ADMIN|STAFF=仅该角色可见可调
+-- required_role NULL=全员可调；ADMIN|STAFF=仅执行点鉴权（闸门 2）放行该角色。
+-- 该值由业务系统在 OpenAPI 扩展字段 x-required-role 声明，平台导入时读取，不在平台侧硬编码
 SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS 
   WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_definition' AND COLUMN_NAME='required_role');
 SET @ddl = IF(@col_exists = 0, 'ALTER TABLE tool_definition ADD COLUMN required_role VARCHAR(16) NULL AFTER require_confirm', 'SELECT 1');

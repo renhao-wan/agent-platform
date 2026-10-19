@@ -17,7 +17,7 @@
 │         │ ToolGateway（进程内方法调用）        │
 │  gateway 模块（工具层）                        │
 │   OpenAPI→Tool 自动注册                       │
-│   可见性过滤 · 执行点鉴权 · 泛化 HTTP 转发       │
+│   清单组装 · 执行点鉴权 · 泛化 HTTP 转发       │
 └─────────┬───────────────────────────────────┘
           │ 泛化 HTTP 转发
           ▼
@@ -27,10 +27,10 @@
 ## 核心特性
 
 1. **进程内工具调用**：Agent 与工具层同进程，越权校验、泛化转发、结果回喂都在一次方法调用内完成——没有协议层、没有网络跳转
-2. **零代码工具接入**：存量 OpenAPI 接口自动解析注册为标准化 Tool（path/query/body 参数 → inputSchema）；DELETE 与"取消/cancel"类接口自动标记敏感
+2. **零代码工具接入**：存量 OpenAPI 接口自动解析注册为标准化 Tool（path/query/body 参数 → inputSchema，文档内 `$ref` 就地对模型展开）；角色要求与敏感度由业务系统在契约里用扩展字段声明（`x-required-role` / `x-require-confirm`），平台不猜测接口语义
 3. **ReAct 显式循环**：规划-执行-反思逐步驱动，SSE 分阶段推送（plan / tool_call / tool_result / confirm_request / answer）
 4. **上下文工程**：滑动窗口 + 工具轨迹摘要混合裁剪，Token usage 全链路打点
-5. **三道权限闸门**：可见性过滤（闸门 1）· 执行点鉴权（闸门 2，★ 安全边界）· 敏感操作人工二次确认（闸门 3）——校验依据是代码里的用户身份，不是模型说了什么
+5. **三道权限闸门**：清单组装（闸门 1，把能力与角色要求一并下发给模型——裁掉会让模型把权限问题答成能力问题）· 执行点鉴权（闸门 2，★ 安全边界）· 敏感操作人工二次确认（闸门 3）——校验依据是代码里的用户身份，不是模型说了什么
 
 ## 快速开始
 
@@ -53,7 +53,7 @@ docker compose up -d --build
 
 ```bash
 cd ../business-systems && docker compose up -d --build
-# 再以 ADMIN 身份登录，POST /admin/protocols/import 导入各自的 openapi.json
+# 再以 ADMIN 身份登录——平台启动时会自动拉取三个系统的契约并注册，无需手工导入
 ```
 
 ## 设计决策（ADR）
@@ -64,6 +64,7 @@ cd ../business-systems && docker compose up -d --build
 | [ADR-004](docs/adr/ADR-004-tool-routing-deferred.md) | 工具前置路由：接口先行，默认休眠 | 工具数未达阈值时整链休眠、全量直通——规模化前不为主流程添一分开销 |
 | [ADR-005](docs/adr/ADR-005-session-memory-recall.md) | 会话记忆用内部工具调回，不用 RAG | 对话消息短碎、上下文依赖强，嵌入质量天然差；把 RAG 推迟到数据规模证明它必要的时刻 |
 | [ADR-006](docs/adr/ADR-006-in-process-tool-invocation.md) | 进程内工具调用，删除 MCP 协议层与 HTTP 自环 | 自环的理由只有"预留拆分部署"一句且从未兑现，代价是每次调用多一跳网络、异常跨协议层 |
+| [ADR-007](docs/adr/ADR-007-contract-driven-authorization.md) | 权限要求与工具来源一律从业务契约读取 | 角色与敏感度由业务方在契约里声明、工具来源启动时自动拉取——平台不编码业务语义，"零改造接入"才成立 |
 
 ## 性能数据
 
@@ -82,5 +83,5 @@ Java 17 · Spring Boot 3.4 · Spring AI 1.1（OpenAI 兼容协议）· MyBatis-P
 ## 测试
 
 ```bash
-mvn test    # 86 项：转发拼装与超时故障 / OpenAPI 解析 / 裁剪策略 / 循环三态（执行·同意·拒绝·超步数）/ 越权拦截 / 工具路由责任链 / 端到端自愈
+mvn test    # 98 项：转发拼装与超时故障 / OpenAPI 解析与 $ref 展开 / 契约自动注册 / 裁剪策略 / 循环三态（执行·同意·拒绝·超步数）/ 越权拦截 / 工具路由责任链 / 端到端自愈
 ```

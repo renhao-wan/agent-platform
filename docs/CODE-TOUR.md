@@ -1,7 +1,7 @@
 # 代码导览 — agent-platform 逐文件说明
 
 > 用途：给作者本人的复述地图（每个文件一句话 + 面试考点），也供读者按图索骥。
-> 共 57 个主文件 + 17 个测试类。标注：★ = 面试深挖高发区；【①②③④】= 对应简历亮点 1-4。
+> 共 61 个主文件 + 19 个测试类。标注：★ = 面试深挖高发区；【①②③④】= 对应简历亮点 1-4。
 
 ## 推荐通读顺序（约 40 分钟）
 
@@ -23,20 +23,24 @@ ContextTrimmer → ConfirmManager
 > 与 `agent/` 同处一个 Spring 应用，被 `ToolGateway` 以普通方法调用触达。
 
 ### registry/ 工具注册与访问控制
-- **OpenApiImportService.java** ★【②】：OpenAPI JSON → 工具定义。规则：`operationId`→工具名（缺失则 slug 兜底）、`summary`→描述（模型选工具的依据）、path 参数填 `url_template` 占位、query/requestBody 合并生成 `inputSchema`、**DELETE 或"取消/退订/cancel"字样自动标 require_confirm**。
-- **ToolRegistryService.java**：按 gatewayId 作用域查询/更新；同名工具更新不重复插入。
+- **OpenApiSourceRegistrar.java**【②】：启动时按 `platform.gateway.sources` 逐个拉取业务系统的 OpenAPI 契约、解析、注册。**"契约可访问"就等于"工具可用"**——不必手工导入，改了业务系统的 `@Operation` 说明或角色声明，重启平台即生效。契约地址的 origin 直接作为该来源工具的调用基地址，故契约本身不必写死主机名。单个来源失败只告警跳过，不阻断启动。
+- **OpenApiImportService.java** ★【②】：OpenAPI JSON → 工具定义。规则：`operationId`→工具名（缺失则 slug 兜底）、`summary`→描述（模型选工具的依据）、path 参数填 `url_template` 占位、query/requestBody 合并生成 `inputSchema`、**敏感与角色一律读业务系统的扩展字段**（`x-require-confirm` / `x-required-role`，DELETE 天然算敏感）——平台不猜测接口语义，所以"取消"二字本身不再触发任何标记。
+  `$ref` 必须**就地展开**：工具 schema 是脱离原契约、单独发给模型的片段，`#/components/schemas/...` 在模型侧查不到，OpenAI 兼容接口会以 "Pointer ... does not exist" 拒绝整轮请求。自引用按层截断成宽松 object 骨架，不会无限展开。
+- **ToolRegistryService.java**：按 gatewayId 作用域查询/更新；同名工具更新不重复插入。**工具名在同一网关内是全局命名空间**，多个业务系统共用一个 gatewayId 时后来的同名工具会顶掉先前的——导入时若发现同名但"主机与路径都不同"，留下来源变更告警（只改地址、改端口属正常操作，不告警）。
 - **ToolAccessService.java** ★★【① 安全边界】：系统里**唯一的工具访问入口**，两道闸门都在这一个类里。
-  `listVisible(gatewayId, userRole)` 做**闸门 1**——`required_role` 为空全员可见，标了角色的只对该角色可见；
-  `invoke(gatewayId, userRole, name, argsJson)` 做**闸门 2**——定位工具 → 角色不匹配直接返回 `ToolCallResult(true, "权限不足：需要 X 角色")` → 参数非法 JSON 也如实回喂 → 通过后交 `GenericHttpForwarder`。
+  `listForModel(gatewayId)` 做**闸门 1·清单组装**——下发该网关**全部启用工具，不按角色裁剪**；角色要求写进工具描述随清单一起给模型，于是模型知道"这个能力存在、但当前身份可能不够"。
+  面试点：为什么不在清单里就把没权限的工具裁掉？裁掉的话模型只会答"我没有这个功能"，**把权限问题说成了能力问题**，用户拿不到"你需要找管理员开权限"这个正确结论。
+  `invoke(gatewayId, userRole, userId, name, argsJson)` 做**闸门 2·执行点鉴权**——定位工具 → 角色不匹配直接返回 `ToolCallResult(true, "权限不足：需要 X 角色")` → 参数非法 JSON 也如实回喂 → 通过后交 `GenericHttpForwarder`。
   面试点：为什么拒绝要包装成文本结果而不是抛异常？因为抛异常会打断 ReAct 循环，而模型需要"看到失败、自己决定重试还是转述用户"。
-- **ToolDefinition.java / ToolDefinitionMapper.java**：`tool_definition` 表实体（url_template、inputSchema、require_confirm、auth_header、required_role）。
+- **ToolDefinition.java / ToolDefinitionMapper.java**：`tool_definition` 表实体（url_template、inputSchema、require_confirm、auth_header、required_role）。`description`/`required_role`/`auth_header_*` 标了 `updateStrategy = ALWAYS`——MyBatis-Plus 默认跳过 null 字段，会让"业务系统已撤销的声明"永远留在库里。
+- **GatewayProperties.java**：`platform.gateway.sources` 配置项（契约地址 + 服务凭证），供 `OpenApiSourceRegistrar` 读取。
 
 ### forward/ 泛化转发
-- **GenericHttpForwarder.java** ★★【②】：工具层的"手"。拼装规则：`url_template` 的 `{param}` 从 arguments 取值（URL 编码）；GET/DELETE 余参拼 query；POST/PUT/PATCH 余参作 UTF-8 JSON body；**inputSchema 若声明了 `properties.body` 则自动解包**（导入规则的逆向）；`auth_header_name/value` 存在则附带服务凭证。执行：connect 2s / read 10s；响应 **8KB 截断**（防打爆模型上下文）；非 2xx 与异常统一转为 `ForwardResult(success=false, error=...)`（由模型决策下一步，不抛异常）。用 `exchange()` 而非 `retrieve()` 正是为了保住原始状态码。
+- **GenericHttpForwarder.java** ★★【②】：工具层的"手"。拼装规则：`url_template` 的 `{param}` 从 arguments 取值（URL 编码）；GET/DELETE 余参拼 query；POST/PUT/PATCH 余参作 UTF-8 JSON body；**inputSchema 若声明了 `properties.body` 则自动解包**（导入规则的逆向）；`auth_header_name/value` 存在则附带服务凭证，**另附 `X-On-Behalf-Of-User: {uid}` 声明代表哪个最终用户**（业务系统仅在服务凭证校验通过时才采信）。执行：connect 2s / read 10s；响应 **8KB 截断**（防打爆模型上下文）；非 2xx 与异常统一转为 `ForwardResult(success=false, error=...)`（由模型决策下一步，不抛异常）。用 `exchange()` 而非 `retrieve()` 正是为了保住原始状态码。
 - **ForwardProperties.java**：`platform.gateway.forward.connect-timeout-ms` / `read-timeout-ms`（默认 2000 / 10000，原先硬编码在类里）。
 
 ### web/ 管理端
-- **ProtocolAdminController.java** ★：`POST /admin/protocols/import`（gatewayId + openapi + baseUrl + requiredRole + 服务级 auth header）与 `GET /admin/tools`。整个 `/admin/**` 由 `JwtAuthFilter` 要求 ADMIN 角色——**没有第二套凭证体系**。
+- **ProtocolAdminController.java** ★：`POST /admin/protocols/import`（gatewayId + openapi + baseUrl + 服务级 auth header；**角色与敏感度不在这里传**——它们是业务系统写在契约里的声明）与 `GET /admin/tools`。整个 `/admin/**` 由 `JwtAuthFilter` 要求 ADMIN 角色——**没有第二套凭证体系**。
 
 ---
 
@@ -55,7 +59,7 @@ ContextTrimmer → ConfirmManager
   接口两个方法：`listTools(user)` / `callTool(name, argsJson, user)`，约定**失败也返回文本、不抛异常**。
   进程内实现直接把调用转给 `ToolAccessService`，gatewayId 从 `AgentProperties` 取；失败文本加 `tool error: ` 前缀供模型识别。
   面试点：为什么留接口？——将来工具层若真拆成独立部署，换个实现即可，Agent 循环不用动。目前**没有第二实现**，"进程内"就是唯一形态。
-- **DynamicToolRegistry.java** ★：工具层返回的工具定义 → 手写 `GatewayToolCallback`（实现 Spring AI ToolCallback，**仅作 schema 广告位**——`call()` 留给 Spring AI 的隐式路径，本项目不走；真正执行在 `AgentRunner` 手动通道）；`require_confirm` 列映射为敏感标记；**按角色分桶缓存 5 分钟**（STAFF 与 ADMIN 各看各的清单，不串桶）；刷新是"先构建后整体切换"，失败保留旧桶——注册失败不影响在跑对话。
+- **DynamicToolRegistry.java** ★：工具层返回的工具定义 → 手写 `GatewayToolCallback`（实现 Spring AI ToolCallback，**仅作 schema 广告位**——`call()` 留给 Spring AI 的隐式路径，本项目不走；真正执行在 `AgentRunner` 手动通道）；`require_confirm` 列映射为敏感标记；缓存 5 分钟（清单对所有人一样，无需按角色分桶）；刷新是"先构建后整体切换"，失败保留旧桶——注册失败不影响在跑对话。
 - **ToolSelector.java / impl/ToolSelectorChain.java / impl/WattAiToolSelector.java**【ADR-004】：工具前置路由责任链。`AgentRunner` 进主模型前先过链：工具数未达 `routing-tool-count-threshold`（默认 20）整链休眠、全量直通；达到后按 `routing-handlers` 顺序逐环尝试，节点以 `Optional.empty` 弃权（前置不满足/异常）传下一环，任一环节点接管即短路，全部弃权回落全量——路由层任何故障不影响主流程。wattai 节点：调决策模型（state=用户话术，choices=工具名），高置信单选、低置信 top-k 降级、argmax 落空/异常弃权。当前规模下链休眠（收益为负），扩展位预留 jev/本地语义路由。
 
 ### auth/ 用户身份
@@ -84,24 +88,25 @@ ContextTrimmer → ConfirmManager
 - `resources/schema.sql`：6 张表幂等建表（IF NOT EXISTS + information_schema 守卫的 ALTER）。
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
 
-## 4. 测试（18 类，86 项）
+## 4. 测试（19 类，98 项）
 
 | 测试类 | 覆盖 |
 |---|---|
-| ToolAccessServiceTest (10) | 闸门 1 各角色可见性、闸门 2 拒绝/放行、未知工具、非法 JSON、转发失败回喂 |
-| OpenApiImportServiceTest (8) | 三类参数解析、slug 兜底、baseUrl 覆盖、非法 JSON、取消类敏感 |
-| GenericHttpForwarderTest (8) | query/body/path 填充、UTF-8、8KB 截断、后端 500、不可达 |
-| GenericHttpForwarderTimeoutTest (4) | WireMock：读超时、连接中断、非 JSON 响应体、截断边界 |
+| OpenApiImportServiceTest (13) | 三类参数解析、slug 兜底、baseUrl 覆盖、非法 JSON、扩展字段声明敏感/角色（裸值与 springdoc 嵌套两种形状）、`$ref` 内联与自引用截断 |
+| ToolAccessServiceTest (10) | 闸门 1 全量下发、闸门 2 拒绝/放行、未知工具、非法 JSON、转发失败回喂 |
+| GenericHttpForwarderTest (10) | query/body/path 填充、UTF-8、8KB 截断、后端 500、不可达 |
 | ToolSelectorChainTest (7) | 阈值休眠、逐环弃权传递、短路、全弃权回落、异常降级、argmax 越界 |
 | HistoryRecallToolTest (7) | 关键词检索、跨表合并、条数/长度上限、未命中如实回喂 |
 | WattAiToolSelectorTest (5) | 高置信单选、低置信 top-k、到点异常弃权 |
 | JwtServiceTest (5) | 签发/解析、过期、篡改签名 |
 | ChatAuthFilterTest (5) | 401 三态、放行、admin 范围（403） |
 | AgentRunnerTest (5) | 循环三态：执行/同意/拒绝/超步数、recall 本地执行 |
-| DynamicToolRegistryTest (4) | 角色分桶、确认映射、空清单、刷新失败保留旧桶 |
+| OpenApiSourceRegistrarTest (5) | 启动注册、基地址随契约来源而非其声明、显式覆盖、来源不可达不阻断启动、空清单跳过 |
+| GenericHttpForwarderTimeoutTest (4) | WireMock：读超时、连接中断、非 JSON 响应体、截断边界 |
+| DynamicToolRegistryTest (4) | 确认映射、空清单、刷新失败保留旧桶 |
 | ConfirmManagerTest (4) | 同意/拒绝/超时/未知 token |
 | AuthControllerTest (4) | 登录成功/密码错/用户不存在/参数校验 |
-| ToolCatalogControllerTest (3) | 工具目录端点：未登录 401、闸门 1 身份透传、服务凭证不外泄 |
+| ToolCatalogControllerTest (3) | 工具目录端点：未登录 401、身份透传、服务凭证不外泄 |
 | ContextTrimmerTest (3) | 不裁剪/裁剪结构/摘要计数 |
 | ToolRegistryServiceTest (2) | upsert 插入/更新 |
 | PlatformApplicationTests (1) | 上下文启动 |
@@ -113,13 +118,13 @@ ContextTrimmer → ConfirmManager
 index.html → ChatController.chat
   → AgentSessionService.createSession / loadHistory
   → ContextTrimmer.trim
-  → DynamicToolRegistry.callbacks（→ ToolGateway.listTools → ToolAccessService.listVisible 闸门1）
+  → DynamicToolRegistry.callbacks（→ ToolGateway.listTools → ToolAccessService.listForModel 闸门1）
   → ToolSelectorChain.route（工具数 <20 整链休眠）
   → AgentRunner 循环：
       Planner.decide（deepseek-flash，OpenAI 兼容协议）
       → ToolGateway.callTool（进程内方法调用）
         → ToolAccessService.invoke（闸门2 鉴权）
-        → GenericHttpForwarder → meeting-booking REST
+        → GenericHttpForwarder → 业务系统 REST
       → 观察回填 ToolResponseMessage → 下一轮
   → AgentEventEmitter.send（SSE）→ 浏览器
 ```
