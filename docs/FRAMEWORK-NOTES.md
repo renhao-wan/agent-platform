@@ -21,8 +21,12 @@
   1. `messages`：`[{role:"system",content:...},{role:"user",content:...},...]`（上面 Message 体系的线上形态）
   2. `tools`：`[{type:"function",function:{name,description,parameters(JSON Schema)}}]`（工具"菜单"）
   3. 响应里 `choices[0].message.tool_calls`：`[{id,function:{name,arguments}}]`（模型点菜）
-- **为什么 DashScope/智谱/GLM 都能接**：大家约定都用这套报文，只换 `base-url` 和 `api-key`。本项目 `application.yml` 的 `spring.ai.openai.base-url` 默认指向 DashScope compatible-mode，`LLM_BASE_URL` 环境变量一改即切厂商。
-- 兼容性小坑：qwen3 系在非流式调用下要求 `enable_thinking=false`，通过 `extraBody` 透传 → `OpenAiPlanner.decide()`。
+- **为什么百炼/DeepSeek 都能接**：大家约定都用这套报文，只换 `base-url` 和 `api-key`。本项目 `application.yml` 默认指向 DeepSeek（`https://api.deepseek.com`；`/v1` 与不带 `/v1` 的路径实测都可用），`LLM_BASE_URL`/`LLM_MODEL`/`LLM_API_KEY` 三个环境变量一改即切厂商。
+- **厂商特有的"思考开关"只能走代码透传**（2026-10 实测）：
+  - 形态各家不同——qwen3 非流式要求 `enable_thinking=false`；DeepSeek 的 thinking **默认开启**，关闭是 `{"thinking":{"type":"disabled"}}`。→ `OpenAiPlanner.decide()` 按模型名前缀分支调 `extraBody(...)`。
+  - **别用 yml 的 `spring.ai.openai.chat.extra-body.*`**：实测它绑出来是空对象（报文里 `"extra_body":{}`），根本不生效——这版 Spring AI 上它是一个看起来对、实则静默失效的配置。
+  - 代码版 extraBody 发出去时参数会**出现两次**：包一份在 `extra_body` 里、再展开一份到顶层（实测 `…,"extra_body":{"thinking":{"type":"disabled"}},"thinking":{"type":"disabled"}}`）。DeepSeek 认的是顶层那份。⚠️ 多出来的 `extra_body` 字段是否被 DeepSeek 容忍，**首次真实调用要确认没有 400**。
+  - **DeepSeek 必须关 thinking**，两个理由：① thinking 模式下 `temperature` 被静默忽略（不报错、也不生效）；② 带 `tools` 的请求要求把每轮 `reasoning_content` 回传并拼进上下文，而本项目 ReAct 循环手动构造 `ToolResponseMessage`、不保留该字段。
 
 ## 3. RestClient（Spring 6）：RestTemplate 的接班人
 

@@ -56,7 +56,7 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Agent 运行时：ChatClient + OpenAI 兼容协议（DashScope） -->
+        <!-- Agent 运行时：ChatClient + OpenAI 兼容协议（默认 DeepSeek，可换任意兼容厂商） -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-openai</artifactId>

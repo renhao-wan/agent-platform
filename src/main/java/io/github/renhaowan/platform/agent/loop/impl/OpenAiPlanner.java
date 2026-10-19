@@ -14,12 +14,14 @@ import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 /**
- * OpenAI 兼容协议规划器（DashScope compatible-mode）。
+ * OpenAI 兼容协议规划器（默认供应商 DeepSeek）。
  * 关键：internalToolExecutionEnabled(false) 关闭框架内隐式工具执行，
  * 每轮只取回模型的 toolCalls 决策，执行权在 AgentRunner（插桩：SSE 事件、确认、步数上限）。
  * <p>
- * 兼容性：qwen3 开源思考混合模型在非流式调用下强制要求 enable_thinking=false，
- * 通过 extraBody 透传（其他模型不受影响）——免费档 qwen3-8b 因此可用。
+ * 兼容性：各家"思考开关"的字段形态不同，统一走 extraBody 透传，互不影响。
+ * qwen3 非流式调用强制 enable_thinking=false；DeepSeek 的 thinking 默认开启，必须显式关闭——
+ * 它带 tools 时要求把每轮 reasoning_content 回传并拼进上下文，而本循环手动构造
+ * ToolResponseMessage，不保留该字段；thinking 模式下 temperature 参数也会被静默忽略。
  */
 @Component
 public class OpenAiPlanner implements Planner {
@@ -57,6 +59,8 @@ public class OpenAiPlanner implements Planner {
                 .internalToolExecutionEnabled(false);
         if (modelName != null && modelName.startsWith("qwen3")) {
             options.extraBody(Map.of("enable_thinking", false));
+        } else if (modelName != null && modelName.startsWith("deepseek")) {
+            options.extraBody(Map.of("thinking", Map.of("type", "disabled")));
         }
         return chatClient.prompt()
                 .messages(history)

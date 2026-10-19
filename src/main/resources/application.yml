@@ -6,11 +6,14 @@ spring:
     name: agent-platform
   ai:
     openai:
-      base-url: ${LLM_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
+      # 默认指向 DeepSeek 的 OpenAI 兼容端点（/v1 与不带 /v1 的路径均可用）。
+      # 换供应商只改这三个变量；换到路径不合 OpenAI 约定的服务时，另需设
+      # spring.ai.openai.chat.completions-path 覆盖默认的 /v1/chat/completions。
+      base-url: ${LLM_BASE_URL:https://api.deepseek.com}
       api-key: ${LLM_API_KEY:missing-key}
       chat:
         options:
-          model: ${LLM_MODEL:qwen-plus}
+          model: ${LLM_MODEL:deepseek-flash}
           temperature: 0.2
   datasource:
     url: jdbc:mysql://localhost:3306/agent_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai

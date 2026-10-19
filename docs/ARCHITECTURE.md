@@ -171,7 +171,7 @@ if (requiredRole != null && !requiredRole.equals(userRole)) {
 ## 5. 模型策略
 
 - 模型**只被 Agent 运行时使用**（工具层、业务系统均不依赖 LLM）；
-- 平台统一供给：OpenAI 兼容协议，`yml` 配置供应商（已实测 DashScope qwen-plus/qwen-turbo 无缝切换）；
+- 平台统一供给：OpenAI 兼容协议，`yml` 配置供应商（默认 DeepSeek，`LLM_BASE_URL`/`LLM_MODEL`/`LLM_API_KEY` 三个环境变量一改即切厂商）；
 - 演进路径：单模型（现状）→ 模型配置入库热切换 → 按接入方/场景路由不同模型（触发条件：成本分摊或需求分化）。
 
 ## 6. 关键设计决策（详见 docs/adr/）

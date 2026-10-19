@@ -8,8 +8,8 @@ spring:
 
 spring.ai:
   openai:
-    base-url: https://dashscope.aliyuncs.com/compatible-mode   # 或 https://open.bigmodel.cn/api/paas/v4
-    api-key: <你的模型 API Key>
+    base-url: https://api.deepseek.com            # OpenAI 兼容端点；换供应商改这里
+    api-key: <你的 DeepSeek API Key>
     chat:
       options:
-        model: qwen-turbo                                      # qwen-plus / glm-4-flash 等 OpenAI 兼容模型
+        model: deepseek-flash                     # 另一选项 deepseek-v4-pro（更强、更贵）
