@@ -35,22 +35,19 @@
 ## 快速开始
 
 ```bash
-# 1. 启动 MySQL（容器映射 3307，与宿主机实例刻意隔离）
-docker compose up -d mysql
+# 1. 填模型 API Key（.env 已 gitignore，照 .env.example 复制一份即可）
+cp .env.example .env
+#    编辑 .env，填入 LLM_API_KEY（供应商与模型名见 LLM_BASE_URL / LLM_MODEL）
 
-# 2. 生成本地 profile（已 gitignore）：DB 指向容器 3307 + 填模型 API Key
-cp src/main/resources/application-local.yml.example \
-   src/main/resources/application-local.yml
+# 2. 起 MySQL(3307) + 应用(8000)
+docker compose up -d --build
 
-# 3. 启动应用
-mvn spring-boot:run -Dspring-boot.run.profiles=local
-
-# 4. 浏览器打开 http://localhost:8000/ 开始对话
+# 3. 浏览器打开 http://localhost:8000/ 开始对话
 ```
 
 种子账号：`admin/admin123`（ADMIN）、`staff01/staff123`（STAFF）。
 
-不带 `mysql` 参数直接 `docker compose up -d --build` 则连平台自身一起容器化运行——镜像由本目录 `Dockerfile` 多阶段构建、自带 jar，无需宿主机先 `mvn package`；模型配置从同目录 `.env` 读（照 `.env.example` 复制一份填 `LLM_API_KEY`，`.env` 已 gitignore）。
+镜像由本目录 `Dockerfile` 多阶段构建、自带 jar，无需宿主机先 `mvn package`（改了代码要 `--build` 重建）。
 
 可选——起三个业务系统（会议室预订 :8090 + 两个 WireMock 模拟后端：报销 :8091 / 报修 :8092），用于演示跨系统聚合与差异化权限：
 
