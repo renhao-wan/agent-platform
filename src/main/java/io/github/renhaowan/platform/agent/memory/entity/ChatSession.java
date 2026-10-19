@@ -16,7 +16,6 @@ public class ChatSession {
     @TableId(type = IdType.AUTO)
     private Long id;
     private String sessionKey;
-    private String title;
     /** 归属用户 id（app_user.id）；NULL 为历史遗留无主会话，续聊放行 */
     private Long userId;
     private LocalDateTime createdAt;

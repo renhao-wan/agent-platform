@@ -93,9 +93,7 @@ public class ChatController {
 
         String sessionKey;
         if (request.sessionKey() == null || request.sessionKey().isBlank()) {
-            sessionKey = sessionService.createSession(
-                    request.message().substring(0, Math.min(20, request.message().length())),
-                    principal.uid());
+            sessionKey = sessionService.createSession(principal.uid());
         } else {
             sessionKey = request.sessionKey();
             if (!ownsSession(sessionKey, principal)) {

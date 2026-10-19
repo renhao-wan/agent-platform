@@ -11,7 +11,7 @@ import io.github.renhaowan.platform.agent.memory.entity.ChatSession;
 public interface AgentSessionService {
 
     /** 创建会话并绑定归属用户（user_id 决定续聊时的归属校验）。 */
-    String createSession(String title, Long userId);
+    String createSession(Long userId);
 
     void appendMessage(String sessionKey, String role, String content, String toolName);
 

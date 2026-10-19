@@ -24,11 +24,10 @@ public class AgentSessionServiceImpl implements AgentSessionService {
     private final CheckpointMapper checkpointMapper;
 
     @Override
-    public String createSession(String title, Long userId) {
+    public String createSession(Long userId) {
         String sessionKey = java.util.UUID.randomUUID().toString();
         ChatSession session = new ChatSession();
         session.setSessionKey(sessionKey);
-        session.setTitle(title);
         session.setUserId(userId);
         sessionMapper.insert(session);
         return sessionKey;

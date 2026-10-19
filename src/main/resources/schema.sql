@@ -37,7 +37,6 @@ PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 CREATE TABLE IF NOT EXISTS chat_session (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
     session_key CHAR(36)   NOT NULL,
-    title      VARCHAR(128) NULL,
     created_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uk_chat_session_key (session_key)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'Agent 会话';
@@ -91,9 +90,17 @@ CREATE TABLE IF NOT EXISTS app_user (
 
 -- M4.1：会话归属用户（幂等：information_schema 守卫，已存在则跳过；
 -- NULL 表示历史遗留的无主会话，续聊放行但新会话一律绑定）
-SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS 
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='chat_session' AND COLUMN_NAME='user_id');
-SET @ddl = IF(@col_exists = 0, 'ALTER TABLE chat_session ADD COLUMN user_id BIGINT NULL AFTER title', 'SELECT 1');
+SET @ddl = IF(@col_exists = 0, 'ALTER TABLE chat_session ADD COLUMN user_id BIGINT NULL AFTER session_key', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- 删 title：它唯一的下游是「会话列表」的展示名，而会话列表不做——
+-- createSession 辛苦截出来的前 20 字，全项目没有一处读它。
+-- 必须排在 user_id 那条之后：那条的定位锚点原本是 title。
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='chat_session' AND COLUMN_NAME='title');
+SET @ddl = IF(@col_exists > 0, 'ALTER TABLE chat_session DROP COLUMN title', 'SELECT 1');
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- M4.2：工具级角色闸门（幂等：information_schema 守卫，已存在则跳过）。

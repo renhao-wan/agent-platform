@@ -95,7 +95,7 @@ class ChatAuthFilterTest {
         assertThat(body).contains("event:error").contains("403");
         // 归属校验失败：不进入对话循环，也不产生新会话
         verify(agentRunner, never()).run(anyString(), anyString(), any(), any());
-        verify(sessionService, never()).createSession(anyString(), any());
+        verify(sessionService, never()).createSession(any());
     }
 
     @Test
