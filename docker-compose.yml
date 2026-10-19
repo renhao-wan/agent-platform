@@ -4,6 +4,8 @@
 # 应用镜像由本目录 Dockerfile 多阶段构建（自带 jar），无需宿主机先 mvn package
 services:
   mysql:
+    # 显式定名，否则默认是 <目录名>-<服务名>-<序号>（这里会叠成 agent-platform-mysql-1）
+    container_name: agent-platform-mysql
     image: mysql:8.4
     environment:
       MYSQL_ROOT_PASSWORD: root
@@ -19,6 +21,7 @@ services:
       retries: 30
 
   agent-platform:
+    container_name: agent-platform-app
     build: .
     ports:
       - "8000:8000"
