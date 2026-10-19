@@ -1,7 +1,7 @@
 # 代码导览 — agent-platform 逐文件说明
 
 > 用途：给作者本人的复述地图（每个文件一句话 + 面试考点），也供读者按图索骥。
-> 共 79 个主文件 + 25 个测试类。标注：★ = 面试深挖高发区；【①②③④】= 对应简历亮点 1-4。
+> 共 79 个主文件 + 26 个测试类。标注：★ = 面试深挖高发区；【①②③④】= 对应简历亮点 1-4。
 
 ## 推荐通读顺序（约 40 分钟）
 
@@ -109,7 +109,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
 - `knowledge/`：5 份制度语料（4 份 PUBLIC + 1 份 ADMIN）+ 评估题库；镜像内带一份，compose 另把宿主目录只读挂到 `/app/knowledge`，改文档后重启或 reindex 即生效，不必重建镜像。
 
-## 5. 测试（25 类，147 项）
+## 5. 测试（26 类，150 项）
 
 | 测试类 | 覆盖 |
 |---|---|
@@ -134,6 +134,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 | AgentSelfHealingTest (1) | ★ 端到端：WireMock 业务系统首次 500、二次 200，ReAct 循环不中断、两次观察都回填落库 |
 | MarkdownChunkerTest (9) | 按 H2 切分、前缀、H3 降级、硬切重叠、小段合并、代码块/表格、front-matter |
 | KnowledgeIndexServiceTest (10) | 首次索引与元数据、hash 未变跳过、force 重建、FAILED 重试、切块参数变化重建、删除清理、失败标记、版本化写入顺序、任务完成/占用 |
+| KnowledgeIndexJobRepositoryTest (3) | 全部失败标 FAILED（避免任务"成功"但检索全空）、部分失败仍 SUCCEEDED、全跳过仍 SUCCEEDED |
 | KnowledgeSearchServiceTest (9) | 角色过滤表达式、ADMIN 不过滤、topK 上限、空 query、结果与分数映射、关键词兜底与 LIKE 转义、审计写入、审计失败不影响检索 |
 | KnowledgeSearchToolTest (7) | 空/非法参数、空结果、来源与注入边界、默认 topK、失败降级、callback 广告位 |
 | KnowledgeAdminControllerTest (7) | 未启用 503、异步提交返回 jobId、任务占用 409、任务查询与 404、评估报告与题库缺失 400 |

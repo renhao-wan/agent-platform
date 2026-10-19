@@ -351,7 +351,8 @@ status=INDEXED、content hash、embedding 模型、切块参数四项一致。�
 - **启动**：扫描 `knowledge/**/*.md` → 计算 hash → 与 `knowledge_doc` 比对。**只对变更/新增文档
   切块与 embedding**，未变文档零调用。文件消失则按 `doc_path` 删除对应向量与记录。
 - **任务化**：每次索引先向 `knowledge_index_job` 插入一行 `RUNNING` 并拿到 `jobId`，完成后回写
-  `SUCCEEDED` 与各项计数，异常回写 `FAILED` 与错误信息。`POST /admin/knowledge/reindex`
+  `SUCCEEDED` 与各项计数，异常回写 `FAILED` 与错误信息。**全部文档都失败时同样标 `FAILED`**——
+  否则任务看着"成功"、检索却全空，运维会把 402/超时误判成检索质量问题。`POST /admin/knowledge/reindex`
   立即返回 `jobId`，`GET /admin/knowledge/jobs` 可查历史。超过 `job-timeout-minutes`
   （默认 120）仍为 `RUNNING` 的任务视为进程被 kill，下次触发时自动标 `FAILED`。
 - **跨实例互斥**：`knowledge_index_job` 上的部分唯一索引
@@ -520,8 +521,8 @@ status=INDEXED、content hash、embedding 模型、切块参数四项一致。�
 | 3 | embedding 客户端 + 目录扫描 + hash 增量 | 二次启动零 embedding 调用；改一份只重算一份 | 已完成（单测 10 项） |
 | 4 | `search_knowledge` + 接入 `AgentRunner` 两个位置 | 单测；模型能自主调用并引用来源 | 已完成（检索 9 + 工具 7 项） |
 | 5 | 四份语料（报销制度 / 差旅标准 / 会议室规定 / 报修流程） | 内容与 stub 数据可对撞 | 已完成（另加 1 份 ADMIN 文档） |
-| 6 | 任务表 / 审计 / 指标 / 用量 / 评估集 | 管理端可查任务、审计、成本；评估集可跑出 Recall@K 与 MRR | 已完成（管理端 7、评估 4、用量 3 项；全量 147 项） |
-| 7 | 端到端 | 问"差旅住宿上限是多少" → 检索；问"我这月报销超标了吗" → 检索 + 查单据协同 | **待验证**：需要 `EMBEDDING_API_KEY` |
+| 6 | 任务表 / 审计 / 指标 / 用量 / 评估集 | 管理端可查任务、审计、成本；评估集可跑出 Recall@K 与 MRR | 已完成（管理端 7、评估 4、用量 3 项；全量 150 项） |
+| 7 | 端到端 | 问"差旅住宿上限是多少" → 检索；问"我这月报销超标了吗" → 检索 + 查单据协同 | **部分验证（2026-10-19）**：LLM 自主调用 `search_knowledge`、失败降级、"暂不可用"转述、审计与指标写点均已实测。真实索引被 SiliconFlow 402（账户余额不足）阻塞，5 份文档如实标 FAILED，任务标 FAILED；充值后重启即自动重试，无需改代码 |
 
 **语料设计原则**：制度里的数字要与 stub 业务数据能对撞（例如制度写"差旅单次上限 3000 元"，
 而 `admin` 的报销单 601 是 4200 元），才能演示"先查制度、再查单据"的两个工具协同——

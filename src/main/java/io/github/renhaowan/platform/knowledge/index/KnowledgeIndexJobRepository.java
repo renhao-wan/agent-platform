@@ -72,15 +72,23 @@ public class KnowledgeIndexJobRepository {
         }
     }
 
+    /**
+     * 回写终态。全部文档都失败时标 FAILED——否则任务看着"成功"、检索却全空，
+     * 运维会误判成检索质量问题（实测硅基流动余额不足时正是这种表现）。
+     */
     public void finish(long id, KnowledgeIndexService.IndexResult result) {
+        boolean allFailed = result.total() > 0 && result.indexed() == 0 && result.failed() > 0;
+        String error = allFailed
+                ? "全部 " + result.failed() + " 份文档索引失败，请检查 embedding 服务与日志"
+                : null;
         jdbcTemplate.update("""
                         UPDATE knowledge_index_job
                         SET status = ?, total = ?, indexed = ?, skipped = ?, failed = ?, removed = ?,
-                            finished_at = NOW()
+                            error = ?, finished_at = NOW()
                         WHERE id = ?
                         """,
-                STATUS_SUCCEEDED, result.total(), result.indexed(), result.skipped(),
-                result.failed(), result.removed(), id);
+                allFailed ? STATUS_FAILED : STATUS_SUCCEEDED, result.total(), result.indexed(),
+                result.skipped(), result.failed(), result.removed(), error, id);
     }
 
     public void fail(long id, String error) {
