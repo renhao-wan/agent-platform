@@ -75,6 +75,7 @@ class AgentRunnerTest {
         return new AgentRunner(planner,
                 new io.github.renhaowan.platform.agent.tool.impl.ToolSelectorChain(List.of(), Integer.MAX_VALUE),
                 toolRegistry, toolGateway, new HistoryRecallTool(chatMessageMapper, checkpointMapper),
+                mock(org.springframework.beans.factory.ObjectProvider.class),
                 sessionService, new ContextTrimmerImpl(6000), confirmManager, tokenRecorder,
                 properties);
     }

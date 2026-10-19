@@ -113,6 +113,7 @@ class AgentSelfHealingTest {
         return new AgentRunner(planner, new ToolSelectorChain(List.of(), Integer.MAX_VALUE),
                 toolRegistry, toolGateway,
                 new HistoryRecallTool(chatMessageMapper, checkpointMapper),
+                org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class),
                 sessionService, new ContextTrimmerImpl(6000), confirmManager, tokenRecorder, properties);
     }
 

@@ -5,6 +5,10 @@ spring:
   application:
     name: agent-platform
   ai:
+    model:
+      # embedding 不走 spring.ai.openai（那是 DeepSeek 的聊天端点，没有 embeddings 接口）：
+      # 知识库的向量模型由 KnowledgeConfig 单独构造，指向 SiliconFlow。
+      embedding: none
     openai:
       # 默认指向 DeepSeek 的 OpenAI 兼容端点（/v1 与不带 /v1 的路径均可用）。
       # 换供应商只改这三个变量；换到路径不合 OpenAI 约定的服务时，另需设
@@ -63,3 +67,21 @@ platform:
     # 对主流程零开销；工具规模化后自动武装，无需改代码。本地想提前体验把阈值调到 4 以下即可。
     routing-handlers: wattai   # 逗号分隔按序尝试；当前支持 wattai（jev/本地语义路由为预留扩展位）；置空 = 不路由
     routing-tool-count-threshold: 20
+  # 知识库 RAG（docs/KNOWLEDGE-RAG.md）：不配置 EMBEDDING_API_KEY 时整个模块不启动，
+  # 工具不注册、不连 Postgres，平台其余功能与 mvn test 均不受影响。
+  knowledge:
+    enabled: ${KNOWLEDGE_ENABLED:true}
+    directory: ${KNOWLEDGE_DIR:knowledge}
+    vector-store-url: ${KNOWLEDGE_DB_URL:jdbc:postgresql://localhost:5433/knowledge}
+    vector-store-username: ${KNOWLEDGE_DB_USERNAME:postgres}
+    vector-store-password: ${KNOWLEDGE_DB_PASSWORD:postgres}
+    embedding-base-url: ${EMBEDDING_BASE_URL:https://api.siliconflow.cn}
+    embedding-api-key: ${EMBEDDING_API_KEY:}
+    embedding-model: ${EMBEDDING_MODEL:BAAI/bge-m3}
+    embedding-dimensions: 1024
+    top-k: 4
+    top-k-max: 8
+    score-threshold: 0.30
+    max-chars: 800
+    min-chars: 50
+    overlap-chars: 100

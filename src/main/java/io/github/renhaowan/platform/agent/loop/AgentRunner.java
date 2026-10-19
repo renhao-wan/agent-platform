@@ -12,6 +12,7 @@ import io.github.renhaowan.platform.agent.sse.AgentEventEmitter;
 import io.github.renhaowan.platform.agent.tool.DynamicToolRegistry;
 import io.github.renhaowan.platform.agent.tool.ToolSelector;
 import io.github.renhaowan.platform.agent.tool.ToolGateway;
+import io.github.renhaowan.platform.knowledge.search.KnowledgeSearchTool;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,6 +24,7 @@ import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 /**
@@ -41,6 +43,8 @@ public class AgentRunner {
     private final DynamicToolRegistry toolRegistry;
     private final ToolGateway toolGateway;
     private final HistoryRecallTool historyRecallTool;
+    /** 知识库未启用时该 bean 不存在，故用 ObjectProvider 而非直接注入。 */
+    private final ObjectProvider<KnowledgeSearchTool> knowledgeSearchTool;
     private final AgentSessionService sessionService;
     private final ContextTrimmer contextTrimmer;
     private final ConfirmManager confirmManager;
@@ -84,6 +88,10 @@ public class AgentRunner {
         List<ToolCallback> tools = new ArrayList<>(toolSelector.select(userText, allTools).orElse(allTools));
         // 平台自有内部工具不参与业务路由，始终在册（会话记忆调回，领域中立、角色无关，ADR-005）
         tools.add(historyRecallTool.callback());
+        KnowledgeSearchTool knowledgeSearch = knowledgeSearchTool.getIfAvailable();
+        if (knowledgeSearch != null) {
+            tools.add(knowledgeSearch.callback());
+        }
 
         for (int step = 0; step < properties.getMaxSteps(); step++) {
             ChatResponse response = planner.decide(history, tools);
@@ -130,6 +138,11 @@ public class AgentRunner {
                     // 平台内部工具本地执行：不进网关、无确认/角色闸门（只读当前会话自己的历史）
                     events.toolCall(call.name(), call.arguments() == null ? "{}" : call.arguments());
                     resultText = historyRecallTool.execute(sessionKey, call.arguments());
+                    events.toolResult(call.name(), summarize(resultText));
+                } else if (knowledgeSearch != null && knowledgeSearch.handles(call.name())) {
+                    // 知识检索同样是平台内部工具；角色过滤发生在检索 SQL 内（docs/KNOWLEDGE-RAG.md §8）
+                    events.toolCall(call.name(), call.arguments() == null ? "{}" : call.arguments());
+                    resultText = knowledgeSearch.execute(principal, call.arguments());
                     events.toolResult(call.name(), summarize(resultText));
                 } else {
                     events.toolCall(call.name(), call.arguments() == null ? "{}" : call.arguments());
