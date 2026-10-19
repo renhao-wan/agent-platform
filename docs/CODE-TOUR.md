@@ -84,7 +84,7 @@ ContextTrimmer → ConfirmManager
 - `resources/schema.sql`：6 张表幂等建表（IF NOT EXISTS + information_schema 守卫的 ALTER）。
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
 
-## 4. 测试（17 类，83 项）
+## 4. 测试（18 类，86 项）
 
 | 测试类 | 覆盖 |
 |---|---|
@@ -101,6 +101,7 @@ ContextTrimmer → ConfirmManager
 | DynamicToolRegistryTest (4) | 角色分桶、确认映射、空清单、刷新失败保留旧桶 |
 | ConfirmManagerTest (4) | 同意/拒绝/超时/未知 token |
 | AuthControllerTest (4) | 登录成功/密码错/用户不存在/参数校验 |
+| ToolCatalogControllerTest (3) | 工具目录端点：未登录 401、闸门 1 身份透传、服务凭证不外泄 |
 | ContextTrimmerTest (3) | 不裁剪/裁剪结构/摘要计数 |
 | ToolRegistryServiceTest (2) | upsert 插入/更新 |
 | PlatformApplicationTests (1) | 上下文启动 |
