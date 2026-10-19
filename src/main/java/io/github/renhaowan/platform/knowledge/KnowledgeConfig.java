@@ -33,7 +33,15 @@ public class KnowledgeConfig {
 
     @Bean(destroyMethod = "close")
     public KnowledgeJdbc knowledgeJdbc(KnowledgeProperties properties) {
-        return new KnowledgeJdbc(properties);
+        try {
+            return new KnowledgeJdbc(properties);
+        } catch (RuntimeException e) {
+            // 配置了 key 却连不上向量库属于部署错误：明确失败，不静默摘掉知识库
+            throw new IllegalStateException(
+                    "知识库 Postgres 不可用（" + properties.getVectorStoreUrl()
+                            + "）。请先启动 pgvector（docker compose up -d pgvector），"
+                            + "或清空 EMBEDDING_API_KEY 以禁用知识库。", e);
+        }
     }
 
     @Bean

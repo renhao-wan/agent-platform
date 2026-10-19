@@ -257,7 +257,8 @@ rerank 用交叉编码器对 top-k 结果重新打分，通常能提升 5～15% 
 
 ### 7.5 检索可观测性
 
-每次检索记录到日志：`query`、命中块的 `doc_path` / `section` / 分数、耗时。
+每次检索记录到日志（`KnowledgeSearchService` 的 INFO 日志）：`query`、当前角色、`topK`、
+命中块的 `doc_title` / `section` / 分数、耗时。
 不做完整评估平台，但保留这份日志——出现 bad case 时可以复现"当时检索到了什么"，
 这才有可能做校准。**面试里"你怎么知道检索效果好不好"的诚实答案是：目前靠人工样本 + 检索日志，
 没到需要 RAGAS 之类自动评估的规模，但我留了数据。**
@@ -297,15 +298,18 @@ rerank 用交叉编码器对 top-k 结果重新打分，通常能提升 5～15% 
 CREATE TABLE knowledge_doc (
     doc_path        VARCHAR(255) PRIMARY KEY,   -- 相对 knowledge/ 的路径
     content_hash    CHAR(64) NOT NULL,          -- SHA-256
+    chunk_config    VARCHAR(64) NOT NULL,       -- 切块参数指纹（改参数即需重建）
     chunk_count     INT NOT NULL,
     embedding_model VARCHAR(64) NOT NULL,       -- 换模型即需重建
     indexed_at      TIMESTAMP NOT NULL,
-    status          VARCHAR(16) NOT NULL        -- INDEXED / FAILED / STALE
+    status          VARCHAR(16) NOT NULL        -- INDEXED / FAILED
 );
 ```
 
 向量本体由 Spring AI 的 `vector_store` 表承载，`metadata` 中存 `doc_path`、`section`、
-`visible_role`、`chunk_index`。
+`visible_role`、`chunk_index`。**跳过重建的条件必须同时满足**：status=INDEXED、content hash、
+embedding 模型、切块参数四项一致。只看 hash 会让 FAILED 文档永不重试，也会让改了切块参数后
+继续用旧索引。
 
 ### 9.2 流程
 
@@ -314,8 +318,9 @@ CREATE TABLE knowledge_doc (
 - **异步**：索引跑在独立线程池（`knowledge-index-*`），不阻塞 Web 启动。启动日志报出
   "本次索引 N 份 / 跳过 M 份"。
 - **手动全量重建**：`POST /admin/knowledge/reindex`；换 embedding 模型时也会自动触发。
-- **一致性**：先删旧块再写新块。向量表与 `knowledge_doc` / `knowledge_chunk` 分属两套存储，
-  不做跨库事务：写向量失败时该文档标 `FAILED`，不写入记录，下次扫描或手动 reindex 会重试。
+- **一致性**：先按 `doc_path` 元数据过滤删除旧向量，再写新块。向量表与 `knowledge_doc` /
+  `knowledge_chunk` 分属两套存储，不做跨库事务：写向量失败时该文档标 `FAILED`，下次扫描会重试
+  （跳过条件包含 status）。删除不依赖 chunk 表——记录写失败也不会留下删不掉的孤儿向量去阻塞重写。
   "删了一半"的最坏结果是该文档暂时检索不到，而不是新旧内容混杂。
 
 ### 9.3 为什么启动时全量扫描但不全量向量化
@@ -377,8 +382,13 @@ CREATE TABLE knowledge_doc (
 - 不连接 Postgres、不建表；
 - 打一条 INFO：`知识库未启用（EMBEDDING_API_KEY 为空）`。
 
-**平台其余功能完全不受影响，`mvn test` 也不依赖 Postgres**（检索逻辑用 mock / `SimpleVectorStore` 测）。
+**平台其余功能完全不受影响，`mvn test` 也不依赖 Postgres**（检索逻辑用 mock 测）。
 这保持了"克隆即可跑通"的现有调性：新增能力是可选增强，不是启动前置条件。
+
+**配置了 key 但 Postgres 不可用**：启动直接失败，并给出可操作的提示（启动 pgvector，或清空
+`EMBEDDING_API_KEY`）。这里选择 fail fast 而不是静默摘掉知识库——用户已经明确配置了它，
+悄悄少一个工具会让人误以为"RAG 查不到"是检索质量问题。compose 里的 `depends_on: healthy`
+已保证容器场景的顺序。
 
 ---
 
@@ -391,10 +401,12 @@ CREATE TABLE knowledge_doc (
 | 父子块 small-to-big | 当前块大小下痛点不存在，见 §4.6 |
 | 固定 overlap | 按标题切分无重叠需求，会污染相邻块，见 §4.3 |
 | rerank | 无评估集证明收益，留作有 bad case 时的第一步，见 §7.3 |
-| BM25 混合检索 | 中文分词扩展成本高，先 `ILIKE` 兜底，见 §7.4 |
+| BM25 混合检索 | 中文分词扩展成本高；当前语料无需，真出精确术语 bad case 时先加 `ILIKE` 兜底（尚未实现），见 §7.4 |
 | 向量数据库集群（Milvus 等） | 数据量不匹配，见 §6 |
 | 接飞书/语雀等外部来源 | 本地目录先跑通；来源是适配器问题，不是检索架构问题 |
 | 文档热更新监听 | 改完调一次 reindex；文件监听在容器与编辑器下行为不一，不值 |
+| 多实例并发索引 | 当前单实例部署；`synchronized` 只保证进程内互斥，多实例需分布式锁，规模未到 |
+| 工具名冲突处理 | `search_knowledge` 是平台保留名；业务契约若注册同名工具会同时出现在清单里，暂以文档约定而非代码拦截 |
 | 自动评估（RAGAS） | 规模未到；先留检索日志，见 §7.5 |
 
 ---
@@ -423,14 +435,14 @@ CREATE TABLE knowledge_doc (
 
 ## 14. 落地顺序与验收
 
-| 步骤 | 内容 | 验收 |
-|---|---|---|
-| 1 | compose 加 pgvector；独立 DataSource + `PgVectorStore` bean | 能写入一条向量并按相似度查回 |
-| 2 | 切块器（纯函数） | 单测覆盖：标题切分 / 超长硬切与重叠 / 过小合并 / 前缀 / 表格与代码块 |
-| 3 | embedding 客户端 + 目录扫描 + hash 增量 | 二次启动零 embedding 调用；改一份只重算一份 |
-| 4 | `search_knowledge` + 接入 `AgentRunner` 两个位置 | 单测；模型能自主调用并引用来源 |
-| 5 | 四份语料（报销制度 / 差旅标准 / 会议室规定 / 报修流程） | 内容与 stub 数据可对撞 |
-| 6 | 端到端 | 问"差旅住宿上限是多少" → 检索；问"我这月报销超标了吗" → 检索 + 查单据协同 |
+| 步骤 | 内容 | 验收 | 状态 |
+|---|---|---|---|
+| 1 | compose 加 pgvector；独立 DataSource + `PgVectorStore` bean | 能写入一条向量并按相似度查回 | 已完成（容器与扩展已验证；写入待 key） |
+| 2 | 切块器（纯函数） | 单测覆盖：标题切分 / 超长硬切与重叠 / 过小合并 / 前缀 / 表格与代码块 | 已完成（9 项） |
+| 3 | embedding 客户端 + 目录扫描 + hash 增量 | 二次启动零 embedding 调用；改一份只重算一份 | 已完成（单测 7 项） |
+| 4 | `search_knowledge` + 接入 `AgentRunner` 两个位置 | 单测；模型能自主调用并引用来源 | 已完成（工具/检索单测 12 项） |
+| 5 | 四份语料（报销制度 / 差旅标准 / 会议室规定 / 报修流程） | 内容与 stub 数据可对撞 | 已完成（另加 1 份 ADMIN 文档） |
+| 6 | 端到端 | 问"差旅住宿上限是多少" → 检索；问"我这月报销超标了吗" → 检索 + 查单据协同 | **待验证**：需要 `EMBEDDING_API_KEY` |
 
 **语料设计原则**：制度里的数字要与 stub 业务数据能对撞（例如制度写"差旅单次上限 3000 元"，
 而 `admin` 的报销单 601 是 4200 元），才能演示"先查制度、再查单据"的两个工具协同——

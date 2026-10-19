@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 public record KnowledgeDoc(
         String docPath,
         String contentHash,
+        String chunkConfig,
         int chunkCount,
         String embeddingModel,
         LocalDateTime indexedAt,

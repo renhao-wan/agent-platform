@@ -31,6 +31,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.filter.Filter;
 
 @ExtendWith(MockitoExtension.class)
 class KnowledgeIndexServiceTest {
@@ -58,7 +59,6 @@ class KnowledgeIndexServiceTest {
                 new MarkdownChunker(800, 50, 100), executor);
 
         lenient().when(repository.find(anyString())).thenReturn(Optional.empty());
-        lenient().when(repository.chunkIds(anyString())).thenReturn(List.of());
         lenient().when(repository.allPaths()).thenReturn(Set.of());
     }
 
@@ -94,8 +94,11 @@ class KnowledgeIndexServiceTest {
                 .containsEntry("raw_text", "一线城市每晚不超过 600 元，二线城市不超过 400 元。");
 
         verify(repository).upsertDoc(argThat(doc -> doc.chunkCount() == 1
+                && "800-50-100".equals(doc.chunkConfig())
                 && KnowledgeDoc.STATUS_INDEXED.equals(doc.status())
                 && "BAAI/bge-m3".equals(doc.embeddingModel())));
+        // 首次索引也按 doc_path 清一遍旧向量：不依赖上次的 chunk 记录
+        verify(vectorStore).delete(any(Filter.Expression.class));
     }
 
     @Test
@@ -131,14 +134,50 @@ class KnowledgeIndexServiceTest {
     }
 
     @Test
+    void failedDocumentIsRetriedOnNextScan() throws Exception {
+        write("leave.md", "# 制度\n\n## 住宿标准\n一线城市每晚不超过 600 元，二线城市不超过 400 元。");
+        service.index(false);
+        ArgumentCaptor<KnowledgeDoc> saved = ArgumentCaptor.forClass(KnowledgeDoc.class);
+        verify(repository).upsertDoc(saved.capture());
+        KnowledgeDoc indexed = saved.getValue();
+        org.mockito.Mockito.clearInvocations(repository);
+        // 上次失败：hash / 模型 / 切块参数都没变，但状态是 FAILED
+        when(repository.find("leave.md")).thenReturn(Optional.of(new KnowledgeDoc(
+                indexed.docPath(), indexed.contentHash(), indexed.chunkConfig(), indexed.chunkCount(),
+                indexed.embeddingModel(), indexed.indexedAt(), KnowledgeDoc.STATUS_FAILED)));
+
+        KnowledgeIndexService.IndexResult result = service.index(false);
+
+        assertThat(result.indexed()).isEqualTo(1);
+        assertThat(result.skipped()).isZero();
+    }
+
+    @Test
+    void chunkConfigChangeTriggersReindex() throws Exception {
+        write("leave.md", "# 制度\n\n## 住宿标准\n一线城市每晚不超过 600 元，二线城市不超过 400 元。");
+        service.index(false);
+        ArgumentCaptor<KnowledgeDoc> saved = ArgumentCaptor.forClass(KnowledgeDoc.class);
+        verify(repository).upsertDoc(saved.capture());
+        KnowledgeDoc indexed = saved.getValue();
+        when(repository.find("leave.md")).thenReturn(Optional.of(new KnowledgeDoc(
+                indexed.docPath(), indexed.contentHash(), "1200-50-100", indexed.chunkCount(),
+                indexed.embeddingModel(), indexed.indexedAt(), KnowledgeDoc.STATUS_INDEXED)));
+
+        KnowledgeIndexService.IndexResult result = service.index(false);
+
+        assertThat(result.indexed()).isEqualTo(1);
+        assertThat(result.skipped()).isZero();
+    }
+
+    @Test
     void removesDocumentThatDisappearedFromDisk() {
         when(repository.allPaths()).thenReturn(Set.of("gone.md"));
-        when(repository.chunkIds("gone.md")).thenReturn(List.of("chunk-1"));
 
         KnowledgeIndexService.IndexResult result = service.index(false);
 
         assertThat(result.removed()).isEqualTo(1);
-        verify(vectorStore).delete(List.of("chunk-1"));
+        // 按 doc_path 过滤删除，不再依赖 knowledge_chunk 里残留的 id
+        verify(vectorStore).delete(any(Filter.Expression.class));
         verify(repository).deleteDoc("gone.md");
     }
 

@@ -22,6 +22,8 @@ import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.filter.Filter;
+import org.springframework.ai.vectorstore.filter.FilterExpressionTextParser;
 
 /**
  * 知识库索引：扫描目录 → content hash 比对 → 只重索引变更文档。
@@ -77,6 +79,7 @@ public class KnowledgeIndexService {
         }
 
         Set<String> presentPaths = new HashSet<>();
+        String chunkConfig = chunkConfig();
         int indexed = 0;
         int skipped = 0;
         int failed = 0;
@@ -84,17 +87,26 @@ public class KnowledgeIndexService {
         for (Path file : files) {
             String docPath = root.relativize(file).toString().replace('\\', '/');
             presentPaths.add(docPath);
+            if (docPath.indexOf('\'') >= 0) {
+                // 检索过滤器里的字符串字面量用单引号；含单引号的路径暂不支持（极罕见）
+                failed++;
+                log.warn("知识文档路径含单引号，跳过：{}", docPath);
+                continue;
+            }
             try {
                 String content = Files.readString(file, StandardCharsets.UTF_8);
                 String hash = sha256(content);
                 Optional<KnowledgeDoc> existing = repository.find(docPath);
+                // FAILED 必须重试；chunk_config 参与比对，切块参数改了才不会继续用旧索引
                 if (!force && existing.isPresent()
+                        && KnowledgeDoc.STATUS_INDEXED.equals(existing.get().status())
                         && hash.equals(existing.get().contentHash())
-                        && properties.getEmbeddingModel().equals(existing.get().embeddingModel())) {
+                        && properties.getEmbeddingModel().equals(existing.get().embeddingModel())
+                        && chunkConfig.equals(existing.get().chunkConfig())) {
                     skipped++;
                     continue;
                 }
-                indexOne(docPath, content, hash);
+                indexOne(docPath, content, hash, chunkConfig);
                 indexed++;
             } catch (Exception e) {
                 failed++;
@@ -117,18 +129,16 @@ public class KnowledgeIndexService {
         return new IndexResult(files.size(), indexed, skipped, failed, removed);
     }
 
-    private void indexOne(String docPath, String content, String hash) {
+    private void indexOne(String docPath, String content, String hash, String chunkConfig) {
         FrontMatter frontMatter = FrontMatter.parse(content);
         String docTitle = firstNonBlank(frontMatter.title(),
                 MarkdownChunker.firstH1(frontMatter.body()), fileNameWithoutSuffix(docPath));
         String visibleRole = frontMatter.visibleRole();
         List<KnowledgeChunk> chunks = chunker.chunk(frontMatter.body());
 
-        // 先精确删掉上一篇的块，再写新块：同一 docPath 的旧内容不会与新内容并存
-        List<String> oldIds = repository.chunkIds(docPath);
-        if (!oldIds.isEmpty()) {
-            vectorStore.delete(oldIds);
-        }
+        // 按 doc_path 删旧向量，不依赖 chunk 表：即使上次记录的写入中途失败，
+        // 也不会留下删不掉的孤儿向量（那会让新写入撞主键）。
+        vectorStore.delete(docFilter(docPath));
 
         List<Document> documents = new ArrayList<>(chunks.size());
         List<KnowledgeDocRepository.ChunkRef> refs = new ArrayList<>(chunks.size());
@@ -159,18 +169,24 @@ public class KnowledgeIndexService {
             vectorStore.add(documents);
         }
         repository.replaceChunks(docPath, refs);
-        repository.upsertDoc(new KnowledgeDoc(docPath, hash, documents.size(),
+        repository.upsertDoc(new KnowledgeDoc(docPath, hash, chunkConfig, documents.size(),
                 properties.getEmbeddingModel(), LocalDateTime.now(), KnowledgeDoc.STATUS_INDEXED));
         log.info("知识文档已索引 {}（{} 块）", docPath, documents.size());
     }
 
     private void removeOne(String docPath) {
-        List<String> ids = repository.chunkIds(docPath);
-        if (!ids.isEmpty()) {
-            vectorStore.delete(ids);
-        }
+        vectorStore.delete(docFilter(docPath));
         repository.deleteDoc(docPath);
         log.info("知识文档已移除 {}", docPath);
+    }
+
+    /** 用元数据过滤删除整篇文档的向量，不依赖 knowledge_chunk 里是否留有记录。 */
+    private static Filter.Expression docFilter(String docPath) {
+        return new FilterExpressionTextParser().parse("doc_path == '" + docPath + "'");
+    }
+
+    private String chunkConfig() {
+        return properties.getMaxChars() + "-" + properties.getMinChars() + "-" + properties.getOverlapChars();
     }
 
     private void markFailedQuietly(String docPath) {

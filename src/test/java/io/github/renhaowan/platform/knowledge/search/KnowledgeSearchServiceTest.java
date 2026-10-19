@@ -79,8 +79,8 @@ class KnowledgeSearchServiceTest {
                 .metadata(Map.of(
                         "doc_title", "差旅报销制度",
                         "section", "住宿标准",
-                        "raw_text", "一线城市每晚不超过 600 元。",
-                        "distance", 0.18))
+                        "raw_text", "一线城市每晚不超过 600 元。"))
+                .score(0.82)
                 .build();
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(document));
         KnowledgeSearchService service = new KnowledgeSearchService(vectorStore, properties);

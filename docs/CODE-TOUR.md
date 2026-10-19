@@ -1,7 +1,7 @@
 # 代码导览 — agent-platform 逐文件说明
 
 > 用途：给作者本人的复述地图（每个文件一句话 + 面试考点），也供读者按图索骥。
-> 共 61 个主文件 + 19 个测试类。标注：★ = 面试深挖高发区；【①②③④】= 对应简历亮点 1-4。
+> 共 73 个主文件 + 23 个测试类。标注：★ = 面试深挖高发区；【①②③④】= 对应简历亮点 1-4。
 
 ## 推荐通读顺序（约 40 分钟）
 
@@ -9,7 +9,8 @@
 PlatformApplication → application.yml → ChatController → AgentRunner →
 Planner/OpenAiPlanner → ToolGateway/InProcessToolGateway → DynamicToolRegistry →
 ToolAccessService → GenericHttpForwarder → OpenApiImportService →
-ContextTrimmer → ConfirmManager
+ContextTrimmer → ConfirmManager → MarkdownChunker → KnowledgeIndexService →
+KnowledgeSearchService/KnowledgeSearchTool
 ```
 
 沿一次真实请求读：你在页面说一句话 → ChatController 收到 → AgentRunner 循环 →
@@ -79,7 +80,21 @@ ContextTrimmer → ConfirmManager
 
 ---
 
-## 3. common/ web/ resources/
+## 3. knowledge/ —— 知识库 RAG（Agentic Retrieval）
+
+> 与 `agent/`、`gateway/` 平级的独立模块；整包受 `EMBEDDING_API_KEY` 开关控制，未配置时所有 bean 不装配。
+> 设计权衡见 `docs/KNOWLEDGE-RAG.md`。
+
+- **KnowledgeConfig.java**：手动装配 pgvector 与 embedding 模型（不走 starter，避免自动配置抓主 DataSource / 复用 DeepSeek 的 base-url）。Postgres 连不上时抛带指引的异常（fail fast，不静默摘掉知识库）。
+- **KnowledgeJdbc.java**：私有 Hikari 连接池（`knowledge-pg`）。**故意不注册为 DataSource bean**——第二个 DataSource 会让 MyBatis 的 `@ConditionalOnSingleCandidate` 失去唯一候选。
+- **chunk/MarkdownChunker.java** ★：纯函数。H2 主切分 → 超长节按 H3 → 段落 → 句子 → 硬切逐级降级；表格按行拆且重复表头，代码块不拆；过小块并入相邻块。
+- **chunk/FrontMatter.java**：解析 `key: value` 前置元数据；`visible_role` 缺省为 `PUBLIC`（权限默认收紧而不是放开）。
+- **index/KnowledgeIndexService.java**：扫描目录 → SHA-256 比对 → 只重索引变更文档。跳过条件同时看 **status（FAILED 必重试）、content hash、embedding model、切块参数**。索引前按 `doc_path` 元数据过滤删除旧向量，不依赖 chunk 表，避免孤儿向量阻塞重写。
+- **index/KnowledgeDocRepository.java**：`knowledge_doc`（增量判断）+ `knowledge_chunk`（块明细）两张表，建表幂等。
+- **search/KnowledgeSearchService.java** ★：`SearchRequest` 里同时带 topK、相似度阈值与角色过滤表达式；**过滤发生在 SQL 内**，无权内容不进候选集。相似度取自 `Document.getScore()`。
+- **search/KnowledgeSearchTool.java**：`search_knowledge` 的 schema 广告位 + 本地执行入口。参数错误/检索失败都返回文本，不抛异常。
+
+## 4. common/ web/ resources/
 
 - `common/ApiResponse.java`：统一响应包装 `{code, message, data}`。
 - `common/GlobalExceptionHandler.java`：参数校验 400、NoResourceFound 404（防吞）、其余 500。
@@ -87,8 +102,9 @@ ContextTrimmer → ConfirmManager
 - `resources/static/index.html`：单页控制台（fetch 流解析 SSE，8 类事件渲染，确认按钮）。
 - `resources/schema.sql`：6 张表幂等建表（IF NOT EXISTS + information_schema 守卫的 ALTER）。
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
+- `knowledge/`：5 份制度语料（4 份 PUBLIC + 1 份 ADMIN），随镜像发布；改了文件重启即按 hash 增量重建。
 
-## 4. 测试（19 类，98 项）
+## 5. 测试（23 类，126 项）
 
 | 测试类 | 覆盖 |
 |---|---|
@@ -111,8 +127,12 @@ ContextTrimmer → ConfirmManager
 | ToolRegistryServiceTest (2) | upsert 插入/更新 |
 | PlatformApplicationTests (1) | 上下文启动 |
 | AgentSelfHealingTest (1) | ★ 端到端：WireMock 业务系统首次 500、二次 200，ReAct 循环不中断、两次观察都回填落库 |
+| MarkdownChunkerTest (9) | 按 H2 切分、前缀、H3 降级、硬切重叠、小段合并、代码块/表格、front-matter |
+| KnowledgeIndexServiceTest (7) | 首次索引与元数据、hash 未变跳过、force 重建、FAILED 重试、切块参数变化重建、删除清理、失败标记 |
+| KnowledgeSearchServiceTest (5) | 角色过滤表达式、topK 上限、空 query、结果与分数映射 |
+| KnowledgeSearchToolTest (7) | 空/非法参数、空结果、来源格式化、默认 topK、失败降级、callback 广告位 |
 
-## 5. 一次请求的类名级走线
+## 6. 一次请求的类名级走线
 
 ```
 index.html → ChatController.chat
@@ -122,6 +142,8 @@ index.html → ChatController.chat
   → ToolSelectorChain.route（工具数 <20 整链休眠）
   → AgentRunner 循环：
       Planner.decide（deepseek-flash，OpenAI 兼容协议）
+      → 内部工具？recallHistory / search_knowledge 本地执行（不进网关）
+          search_knowledge → KnowledgeSearchService → pgvector（角色过滤在 SQL 内）
       → ToolGateway.callTool（进程内方法调用）
         → ToolAccessService.invoke（闸门2 鉴权）
         → GenericHttpForwarder → 业务系统 REST
