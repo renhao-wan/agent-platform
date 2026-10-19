@@ -1,7 +1,7 @@
 # 代码导览 — agent-platform 逐文件说明
 
 > 用途：给作者本人的复述地图（每个文件一句话 + 面试考点），也供读者按图索骥。
-> 共 73 个主文件 + 23 个测试类。标注：★ = 面试深挖高发区；【①②③④】= 对应简历亮点 1-4。
+> 共 73 个主文件 + 24 个测试类。标注：★ = 面试深挖高发区；【①②③④】= 对应简历亮点 1-4。
 
 ## 推荐通读顺序（约 40 分钟）
 
@@ -104,7 +104,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
 - `knowledge/`：5 份制度语料（4 份 PUBLIC + 1 份 ADMIN），随镜像发布；改了文件重启即按 hash 增量重建。
 
-## 5. 测试（23 类，126 项）
+## 5. 测试（24 类，128 项）
 
 | 测试类 | 覆盖 |
 |---|---|
@@ -131,6 +131,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 | KnowledgeIndexServiceTest (7) | 首次索引与元数据、hash 未变跳过、force 重建、FAILED 重试、切块参数变化重建、删除清理、失败标记 |
 | KnowledgeSearchServiceTest (5) | 角色过滤表达式、topK 上限、空 query、结果与分数映射 |
 | KnowledgeSearchToolTest (7) | 空/非法参数、空结果、来源格式化、默认 topK、失败降级、callback 广告位 |
+| KnowledgeAdminControllerTest (2) | 管理端重建：未启用返回 503、启用时按 force 触发索引 |
 
 ## 6. 一次请求的类名级走线
 
