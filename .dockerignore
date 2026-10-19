@@ -1,0 +1,8 @@
+target/
+.git/
+.idea/
+docs/
+*.md
+.env
+# 本地配置含真实 API Key，绝不进构建上下文
+src/main/resources/application-local.yml
