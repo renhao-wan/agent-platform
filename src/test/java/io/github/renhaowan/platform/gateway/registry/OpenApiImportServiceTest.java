@@ -48,7 +48,7 @@ class OpenApiImportServiceTest {
 
     @Test
     void parsesToolsWithOperationIdAndSchema() {
-        var tools = service.parse("gw1",OPENAPI, null, null);
+        var tools = service.parse("gw1", OPENAPI, null);
 
         assertThat(tools).hasSize(3);
 
@@ -81,7 +81,7 @@ class OpenApiImportServiceTest {
                  "paths":{"/api/v1/bookings/{id}":{"get":{"summary":"详情",
                    "parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"integer"}}]}}}}
                 """;
-        var tools = service.parse("gw1",openapi, null, null);
+        var tools = service.parse("gw1", openapi, null);
 
         assertThat(tools.get(0).getName()).isEqualTo("get_api_v1_bookings_id");
         assertThat(json(tools.get(0).getInputSchema()).get("required").toString()).contains("id");
@@ -89,49 +89,94 @@ class OpenApiImportServiceTest {
 
     @Test
     void baseUrlOverrideWinsOverServers() {
-        var tools = service.parse("gw1",OPENAPI, "http://override:9999", null);
+        var tools = service.parse("gw1", OPENAPI, "http://override:9999");
 
         assertThat(tools.get(0).getUrlTemplate()).startsWith("http://override:9999/api/v1/rooms");
     }
 
     @Test
     void invalidJsonThrowsIllegalArgument() {
-        assertThatThrownBy(() -> service.parse("gw1","{not-json", null, null))
+        assertThatThrownBy(() -> service.parse("gw1", "{not-json", null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void cancelLikeOperationsMarkedSensitiveEvenIfNotDelete() {
+    void cancellationWordingAloneNoLongerMarksSensitive() {
+        // 回归断言：平台不再读 summary/description 里的业务词判断敏感度，
+        // 「取消」二字必须由业务系统用 x-require-confirm 显式声明才生效
         String openapi = """
                 {"openapi":"3.0.0","servers":[{"url":"http://h"}],
-                 "paths":{"/api/v1/bookings/{id}/cancel":{"post":{"summary":"取消指定预订",
+                 "paths":{"/api/v1/bookings/{id}/cancel":{"post":{"operationId":"cancel_booking",
+                   "summary":"取消指定预订","description":"退订后不可恢复",
                    "parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"integer"}}]}}}}
                 """;
-        var tools = service.parse("gw1",openapi, null, null);
+        var tools = service.parse("gw1", openapi, null);
+
+        assertThat(tools.get(0).getHttpMethod()).isEqualTo("POST");
+        assertThat(tools.get(0).getRequireConfirm()).isZero();
+    }
+
+    @Test
+    void postDeclaredSensitiveByExtensionIsMarked() {
+        String openapi = """
+                {"openapi":"3.0.0","servers":[{"url":"http://h"}],
+                 "paths":{"/api/v1/bookings/{id}/cancel":{"post":{
+                   "x-require-confirm": true,
+                   "summary":"取消指定预订",
+                   "parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"integer"}}]}}}}
+                """;
+        var tools = service.parse("gw1", openapi, null);
 
         assertThat(tools.get(0).getHttpMethod()).isEqualTo("POST");
         assertThat(tools.get(0).getRequireConfirm()).isEqualTo(1);
     }
 
     @Test
-    void requiredRoleDefaultsToNullWhenOmitted() {
-        var tools = service.parse("gw1",OPENAPI, null, null);
+    void requiredRoleReadFromExtensionAsPlainString() {
+        String openapi = """
+                {"openapi":"3.0.0","servers":[{"url":"http://h"}],
+                 "paths":{"/api/v1/bookings/{id}/cancel":{
+                   "post":{"operationId":"cancel_booking","x-required-role":"ADMIN","summary":"取消指定预订",
+                     "parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"integer"}}]},
+                   "get":{"operationId":"get_booking","summary":"查询预订详情",
+                     "parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"integer"}}]}}}}
+                """;
+        var tools = service.parse("gw1", openapi, null);
 
-        assertThat(tools).allSatisfy(t -> assertThat(t.getRequiredRole()).isNull());
+        assertThat(tools).extracting(ToolDefinition::getName)
+                .containsExactlyInAnyOrder("cancel_booking", "get_booking");
+        // 角色声明绑在具体 operation 上，不是整份文档的全局属性
+        assertThat(tools).filteredOn(t -> "cancel_booking".equals(t.getName()))
+                .allSatisfy(t -> assertThat(t.getRequiredRole()).isEqualTo("ADMIN"));
+        assertThat(tools).filteredOn(t -> "get_booking".equals(t.getName()))
+                .allSatisfy(t -> assertThat(t.getRequiredRole()).isNull());
     }
 
     @Test
-    void requiredRoleAppliedToAllImportedTools() {
-        var tools = service.parse("gw1",OPENAPI, null, "ADMIN");
+    void requiredRoleReadFromSpringdocNestedExtension() {
+        // springdoc @Extension 的产物形状：{"value": "ADMIN"}
+        String openapi = """
+                {"openapi":"3.0.0","servers":[{"url":"http://h"}],
+                 "paths":{"/api/v1/bookings/{id}/cancel":{"post":{
+                   "operationId":"cancel_booking","x-required-role":{"value":"ADMIN"},"summary":"取消指定预订",
+                   "parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"integer"}}]}}}}
+                """;
+        var tools = service.parse("gw1", openapi, null);
 
-        assertThat(tools).allSatisfy(t -> assertThat(t.getRequiredRole()).isEqualTo("ADMIN"));
+        assertThat(tools.get(0).getRequiredRole()).isEqualTo("ADMIN");
     }
 
     @Test
-    void blankRequiredRoleTreatedAsNull() {
-        var tools = service.parse("gw1",OPENAPI, null, "  ");
+    void blankExtensionsTreatedAsAbsent() {
+        String openapi = """
+                {"openapi":"3.0.0","servers":[{"url":"http://h"}],
+                 "paths":{"/api/v1/rooms":{"get":{"operationId":"search_rooms","summary":"查询",
+                   "x-required-role":"   ","x-require-confirm":"false"}}}}
+                """;
+        var tools = service.parse("gw1", openapi, null);
 
-        assertThat(tools).allSatisfy(t -> assertThat(t.getRequiredRole()).isNull());
+        assertThat(tools.get(0).getRequiredRole()).isNull();
+        assertThat(tools.get(0).getRequireConfirm()).isZero();
     }
 
     private JsonNode json(String raw) {

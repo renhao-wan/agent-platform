@@ -26,8 +26,7 @@ public class OpenApiImportServiceImpl implements OpenApiImportService {
     private static final Set<String> HTTP_METHODS = Set.of("get", "post", "put", "delete", "patch");
 
     @Override
-    public List<ToolDefinition> parse(String gatewayId, String openApiJson,
-                                      String baseUrlOverride, String requiredRole) {
+    public List<ToolDefinition> parse(String gatewayId, String openApiJson, String baseUrlOverride) {
         List<ToolDefinition> tools = new ArrayList<>();
         JsonNode root;
         try {
@@ -55,14 +54,14 @@ public class OpenApiImportServiceImpl implements OpenApiImportService {
                 if (!HTTP_METHODS.contains(method)) {
                     continue;
                 }
-                tools.add(buildTool(gatewayId, baseUrl, path, method, methodEntry.getValue(), requiredRole));
+                tools.add(buildTool(gatewayId, baseUrl, path, method, methodEntry.getValue()));
             }
         }
         return tools;
     }
 
     private ToolDefinition buildTool(String gatewayId, String baseUrl,
-                                     String path, String method, JsonNode operation, String requiredRole) {
+                                     String path, String method, JsonNode operation) {
         ToolDefinition tool = new ToolDefinition();
         tool.setGatewayId(gatewayId);
         tool.setName(operation.hasNonNull("operationId")
@@ -72,19 +71,43 @@ public class OpenApiImportServiceImpl implements OpenApiImportService {
                 method.toUpperCase() + " " + path));
         tool.setHttpMethod(method.toUpperCase());
         tool.setUrlTemplate(join(baseUrl, path));
-        tool.setRequireConfirm("DELETE".equalsIgnoreCase(tool.getHttpMethod()) ? 1 : 0);
-        // 角色闸门：导入方可选声明（null=全员可用）
-        tool.setRequiredRole(requiredRole == null || requiredRole.isBlank() ? null : requiredRole);
-        // 敏感规则扩展：取消类操作（取消/退订/cancel）即使不是 DELETE 也需人工确认
-        String sensitiveText = (operation.path("summary").asText() + " " + operation.path("description").asText())
-                .toLowerCase();
-        if (sensitiveText.contains("取消") || sensitiveText.contains("退订") || sensitiveText.contains("cancel")) {
-            tool.setRequireConfirm(1);
-        }
+        // 敏感与角色要求一律由业务系统在契约里声明，平台不猜测接口语义（业务词不落平台代码）
+        tool.setRequireConfirm("DELETE".equalsIgnoreCase(tool.getHttpMethod())
+                || extensionFlag(operation, "x-require-confirm") ? 1 : 0);
+        tool.setRequiredRole(extensionText(operation, "x-required-role"));
         tool.setEnabled(1);
         tool.setInputSchema(buildInputSchema(operation).toString());
         tool.setCreatedAt(LocalDateTime.now());
         return tool;
+    }
+
+    /**
+     * 读 OpenAPI 扩展字段的文本值，兼容两种写法：{@code "x-required-role": "ADMIN"}，
+     * 以及 springdoc {@code @Extension} 生成的 {@code {"value": "ADMIN"}}。
+     */
+    private static String extensionText(JsonNode operation, String name) {
+        JsonNode node = operation.path(name);
+        if (node.isTextual()) {
+            return node.asText().isBlank() ? null : node.asText();
+        }
+        if (node.isObject() && node.hasNonNull("value")) {
+            String value = node.get("value").asText();
+            return value.isBlank() ? null : value;
+        }
+        return null;
+    }
+
+    /** 读 OpenAPI 扩展字段的布尔值，兼容 {@code true}、{@code "true"} 与 {@code {"value": "true"}}。 */
+    private static boolean extensionFlag(JsonNode operation, String name) {
+        JsonNode node = operation.path(name);
+        if (node.isBoolean()) {
+            return node.asBoolean();
+        }
+        if (node.isTextual()) {
+            return Boolean.parseBoolean(node.asText());
+        }
+        return node.isObject() && node.hasNonNull("value")
+                && Boolean.parseBoolean(node.get("value").asText());
     }
 
     private ObjectNode buildInputSchema(JsonNode operation) {

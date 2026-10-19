@@ -24,8 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ProtocolAdminController {
 
     public record ImportRequest(@NotBlank String gatewayId, @NotBlank String openapi,
-                                String baseUrl, String authHeaderName, String authHeaderValue,
-                                String requiredRole) {
+                                String baseUrl, String authHeaderName, String authHeaderValue) {
     }
 
     public record ToolView(Long id, String name, String description, String httpMethod,
@@ -48,7 +47,7 @@ public class ProtocolAdminController {
     @PostMapping("/protocols/import")
     public ApiResponse<ImportResult> importProtocols(@RequestBody @Valid ImportRequest request) {
         List<ToolDefinition> tools = importService.parse(
-                request.gatewayId(), request.openapi(), request.baseUrl(), request.requiredRole());
+                request.gatewayId(), request.openapi(), request.baseUrl());
         // 服务级凭证：该来源服务的所有工具共用（转发时自动附带，解决业务接口自身有鉴权的接入问题）
         tools.forEach(tool -> {
             tool.setAuthHeaderName(request.authHeaderName());
