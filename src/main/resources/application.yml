@@ -79,9 +79,35 @@ platform:
     embedding-api-key: ${EMBEDDING_API_KEY:}
     embedding-model: ${EMBEDDING_MODEL:BAAI/bge-m3}
     embedding-dimensions: 1024
+    # 外部 embedding 必须有超时与重试：供应商无响应会同时拖住索引线程与在线检索。
+    embedding-connect-timeout-ms: ${EMBEDDING_CONNECT_TIMEOUT_MS:3000}
+    embedding-read-timeout-ms: ${EMBEDDING_READ_TIMEOUT_MS:20000}
+    embedding-max-attempts: ${EMBEDDING_MAX_ATTEMPTS:3}
+    embedding-retry-initial-backoff-ms: 500
+    embedding-retry-multiplier: 2.0
+    embedding-retry-max-backoff-ms: 5000
     top-k: 4
     top-k-max: 8
     score-threshold: 0.30
+    # 向量检索为空时用 ILIKE 回查 chunk 表，覆盖制度编号/专有名词这类查询。
+    keyword-fallback-enabled: true
     max-chars: 800
     min-chars: 50
     overlap-chars: 100
+    # 文档间主动节流（毫秒），首灌大量文档时避免打爆供应商配额；0 表示不限。
+    index-delay-ms: ${KNOWLEDGE_INDEX_DELAY_MS:0}
+    # 超过该时长仍为 RUNNING 的任务视为进程中断，下次触发时清理。
+    job-timeout-minutes: 120
+    # 检索审计留存天数；0 表示永久保留。
+    audit-retention-days: 180
+    # 固定评估题库（jsonl），POST /admin/knowledge/eval 使用。
+    eval-file: ${KNOWLEDGE_EVAL_FILE:knowledge/eval/questions.jsonl}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      show-details: always

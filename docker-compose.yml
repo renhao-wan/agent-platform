@@ -46,6 +46,9 @@ services:
     extra_hosts:
       # 让容器能经宿主机访问兄弟仓库发布出来的业务系统端口（Linux 需显式声明，Windows 自带）
       - "host.docker.internal:host-gateway"
+    volumes:
+      # 制度文档挂载在镜像外：改文档后重启容器或调用 reindex 即生效，不必重建镜像
+      - ./knowledge:/app/knowledge:ro
     environment:
       SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/agent_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai"
       # 从本目录 .env 读（已 gitignore）；照 .env.example 复制一份

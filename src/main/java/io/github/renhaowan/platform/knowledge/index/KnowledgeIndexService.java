@@ -35,31 +35,66 @@ public class KnowledgeIndexService {
 
     private final KnowledgeProperties properties;
     private final KnowledgeDocRepository repository;
+    private final KnowledgeIndexJobRepository jobRepository;
     private final VectorStore vectorStore;
     private final MarkdownChunker chunker;
     private final ExecutorService executor;
 
     public KnowledgeIndexService(KnowledgeProperties properties, KnowledgeDocRepository repository,
-            VectorStore vectorStore, MarkdownChunker chunker, ExecutorService executor) {
+            KnowledgeIndexJobRepository jobRepository, VectorStore vectorStore,
+            MarkdownChunker chunker, ExecutorService executor) {
         this.properties = properties;
         this.repository = repository;
+        this.jobRepository = jobRepository;
         this.vectorStore = vectorStore;
         this.chunker = chunker;
         this.executor = executor;
     }
 
+    /** 启动时调用：后台跑，不阻塞 Web 启动；已有任务在跑则跳过。 */
     public void indexAsync() {
-        executor.submit(() -> {
-            try {
-                IndexResult result = index(false);
-                log.info("知识库索引完成：{}", result);
-            } catch (Exception e) {
-                log.warn("知识库索引失败：{}", e.getMessage());
-            }
-        });
+        try {
+            submitIndex("STARTUP", false);
+        } catch (Exception e) {
+            // 索引提交失败不能拖垮应用启动——知识库是增强能力，不是启动前置条件
+            log.warn("启动索引提交失败：{}", e.getMessage());
+        }
     }
 
-    /** 启动与手动重建共用。force=true 时忽略 hash，全部重新切块与向量化。 */
+    /**
+     * 提交一次索引任务，立即返回 jobId。
+     * <p>空返回值表示已有任务在运行（本实例或其他实例）——任务表的部分唯一索引是跨实例的互斥点。
+     */
+    public Optional<Long> submitIndex(String trigger, boolean force) {
+        Optional<Long> jobId = jobRepository.start(trigger, force, properties.getJobTimeoutMinutes());
+        if (jobId.isEmpty()) {
+            log.info("已有知识库索引任务在运行，跳过本次 {} 触发", trigger);
+            return Optional.empty();
+        }
+        executor.submit(() -> runJob(jobId.get(), force));
+        return jobId;
+    }
+
+    private void runJob(long jobId, boolean force) {
+        try {
+            IndexResult result = index(force);
+            jobRepository.finish(jobId, result);
+            log.info("知识库索引完成 job={}：{}", jobId, result);
+        } catch (Exception e) {
+            jobRepository.fail(jobId, e.getMessage());
+            log.warn("知识库索引失败 job={}：{}", jobId, e.getMessage());
+        }
+    }
+
+    public List<KnowledgeIndexJobRepository.Job> jobs(int limit) {
+        return jobRepository.recent(limit);
+    }
+
+    public Optional<KnowledgeIndexJobRepository.Job> job(long id) {
+        return jobRepository.find(id);
+    }
+
+    /** 实际执行体；启动、手动重建共用。force=true 时忽略 hash，全部重新切块与向量化。 */
     public synchronized IndexResult index(boolean force) {
         Path root = Path.of(properties.getDirectory()).toAbsolutePath().normalize();
         if (!Files.isDirectory(root)) {
@@ -84,7 +119,8 @@ public class KnowledgeIndexService {
         int skipped = 0;
         int failed = 0;
 
-        for (Path file : files) {
+        for (int fileIndex = 0; fileIndex < files.size(); fileIndex++) {
+            Path file = files.get(fileIndex);
             String docPath = root.relativize(file).toString().replace('\\', '/');
             presentPaths.add(docPath);
             if (docPath.indexOf('\'') >= 0) {
@@ -113,6 +149,15 @@ public class KnowledgeIndexService {
                 log.warn("知识文档索引失败 {}：{}", docPath, e.getMessage());
                 markFailedQuietly(docPath);
             }
+            if (properties.getIndexDelayMs() > 0 && fileIndex < files.size() - 1) {
+                try {
+                    Thread.sleep(properties.getIndexDelayMs());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.warn("知识库索引被中断，剩余文档下次扫描继续");
+                    break;
+                }
+            }
         }
 
         int removed = 0;
@@ -136,10 +181,6 @@ public class KnowledgeIndexService {
         String visibleRole = frontMatter.visibleRole();
         List<KnowledgeChunk> chunks = chunker.chunk(frontMatter.body());
 
-        // 按 doc_path 删旧向量，不依赖 chunk 表：即使上次记录的写入中途失败，
-        // 也不会留下删不掉的孤儿向量（那会让新写入撞主键）。
-        vectorStore.delete(docFilter(docPath));
-
         List<Document> documents = new ArrayList<>(chunks.size());
         List<KnowledgeDocRepository.ChunkRef> refs = new ArrayList<>(chunks.size());
         for (int i = 0; i < chunks.size(); i++) {
@@ -162,16 +203,29 @@ public class KnowledgeIndexService {
                     .text(chunk.prefixed(docTitle))
                     .metadata(metadata)
                     .build());
-            refs.add(new KnowledgeDocRepository.ChunkRef(id, chunk.section(), i));
+            refs.add(new KnowledgeDocRepository.ChunkRef(
+                    id, docTitle, chunk.section(), i, visibleRole, chunk.text()));
         }
 
+        // 版本化写入：先写新块，成功后再删"新版本不再包含"的旧块。
+        // 不能先按 doc_path 全删——重建期间该文档会出现检索空白窗口。
+        Set<String> oldIds = repository.chunkIds(docPath);
+        if (oldIds.isEmpty()) {
+            // chunk 表没有记录说明上次写入可能中断，先清掉无法定位的孤儿向量
+            vectorStore.delete(docFilter(docPath));
+        }
         if (!documents.isEmpty()) {
             vectorStore.add(documents);
+        }
+        Set<String> newIds = documents.stream().map(Document::getId).collect(java.util.stream.Collectors.toSet());
+        List<String> staleIds = oldIds.stream().filter(id -> !newIds.contains(id)).toList();
+        if (!staleIds.isEmpty()) {
+            vectorStore.delete(staleIds);
         }
         repository.replaceChunks(docPath, refs);
         repository.upsertDoc(new KnowledgeDoc(docPath, hash, chunkConfig, documents.size(),
                 properties.getEmbeddingModel(), LocalDateTime.now(), KnowledgeDoc.STATUS_INDEXED));
-        log.info("知识文档已索引 {}（{} 块）", docPath, documents.size());
+        log.info("知识文档已索引 {}（{} 块，清理旧块 {}）", docPath, documents.size(), staleIds.size());
     }
 
     private void removeOne(String docPath) {

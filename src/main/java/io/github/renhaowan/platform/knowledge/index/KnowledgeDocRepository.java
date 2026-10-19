@@ -39,14 +39,26 @@ public class KnowledgeDocRepository {
                 "ALTER TABLE knowledge_doc ADD COLUMN IF NOT EXISTS chunk_config VARCHAR(64) NOT NULL DEFAULT ''");
         jdbcTemplate.execute("""
                 CREATE TABLE IF NOT EXISTS knowledge_chunk (
-                    id          VARCHAR(64) PRIMARY KEY,
-                    doc_path    VARCHAR(255) NOT NULL,
-                    section     VARCHAR(255),
-                    chunk_index INT NOT NULL
+                    id           VARCHAR(64) PRIMARY KEY,
+                    doc_path     VARCHAR(255) NOT NULL,
+                    doc_title    VARCHAR(255) NOT NULL DEFAULT '',
+                    section      VARCHAR(255),
+                    chunk_index  INT NOT NULL,
+                    visible_role VARCHAR(64) NOT NULL DEFAULT 'PUBLIC',
+                    raw_text     TEXT NOT NULL DEFAULT ''
                 )
                 """);
+        // 旧库补列：关键词兜底需要正文，审计/过滤需要角色
+        jdbcTemplate.execute(
+                "ALTER TABLE knowledge_chunk ADD COLUMN IF NOT EXISTS doc_title VARCHAR(255) NOT NULL DEFAULT ''");
+        jdbcTemplate.execute(
+                "ALTER TABLE knowledge_chunk ADD COLUMN IF NOT EXISTS visible_role VARCHAR(64) NOT NULL DEFAULT 'PUBLIC'");
+        jdbcTemplate.execute(
+                "ALTER TABLE knowledge_chunk ADD COLUMN IF NOT EXISTS raw_text TEXT NOT NULL DEFAULT ''");
         jdbcTemplate.execute(
                 "CREATE INDEX IF NOT EXISTS idx_knowledge_chunk_doc ON knowledge_chunk(doc_path)");
+        jdbcTemplate.execute(
+                "CREATE INDEX IF NOT EXISTS idx_knowledge_chunk_role ON knowledge_chunk(visible_role)");
     }
 
     public Optional<KnowledgeDoc> find(String docPath) {
@@ -72,16 +84,47 @@ public class KnowledgeDocRepository {
                 .stream().collect(Collectors.toSet());
     }
 
+    /** 该文档当前已写入的块 id；版本化写入据此只删"新版本不再包含"的旧块。 */
+    public Set<String> chunkIds(String docPath) {
+        return jdbcTemplate.queryForList(
+                        "SELECT id FROM knowledge_chunk WHERE doc_path = ?", String.class, docPath)
+                .stream().collect(Collectors.toSet());
+    }
+
     public void replaceChunks(String docPath, List<ChunkRef> chunks) {
         jdbcTemplate.update("DELETE FROM knowledge_chunk WHERE doc_path = ?", docPath);
         if (chunks.isEmpty()) {
             return;
         }
-        jdbcTemplate.batchUpdate(
-                "INSERT INTO knowledge_chunk (id, doc_path, section, chunk_index) VALUES (?, ?, ?, ?)",
+        jdbcTemplate.batchUpdate("""
+                        INSERT INTO knowledge_chunk
+                            (id, doc_path, doc_title, section, chunk_index, visible_role, raw_text)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
                 chunks.stream()
-                        .map(c -> new Object[] {c.id(), docPath, c.section(), c.index()})
+                        .map(c -> new Object[] {c.id(), docPath, c.docTitle(), c.section(), c.index(),
+                                c.visibleRole(), c.text()})
                         .toList());
+    }
+
+    /**
+     * 向量检索无结果时的关键词兜底。{@code pattern} 已由调用方完成 LIKE 转义。
+     * <p>ADMIN 可看全部；其余角色只读 PUBLIC 与自己的角色。短块优先——它更像精确条目。
+     */
+    public List<ChunkRow> searchByKeyword(String pattern, String role, int limit) {
+        boolean admin = "ADMIN".equals(role);
+        String sql = "SELECT doc_title, section, raw_text FROM knowledge_chunk WHERE raw_text ILIKE ? ESCAPE '\\'"
+                + (admin ? "" : " AND (visible_role = 'PUBLIC' OR visible_role = ?)")
+                + " ORDER BY length(raw_text) ASC, chunk_index ASC LIMIT ?";
+        Object[] args = admin
+                ? new Object[] {pattern, limit}
+                : new Object[] {pattern, role == null || role.isBlank() ? "PUBLIC" : role, limit};
+        return jdbcTemplate.query(sql,
+                (rs, rowNum) -> new ChunkRow(
+                        rs.getString("doc_title"),
+                        rs.getString("section"),
+                        rs.getString("raw_text")),
+                args);
     }
 
     public void upsertDoc(KnowledgeDoc doc) {
@@ -118,6 +161,10 @@ public class KnowledgeDocRepository {
         jdbcTemplate.update("DELETE FROM knowledge_doc WHERE doc_path = ?", docPath);
     }
 
-    public record ChunkRef(String id, String section, int index) {
+    public record ChunkRef(String id, String docTitle, String section, int index,
+            String visibleRole, String text) {
+    }
+
+    public record ChunkRow(String docTitle, String section, String text) {
     }
 }

@@ -3,8 +3,10 @@ package io.github.renhaowan.platform.knowledge.index;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -19,8 +21,10 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,6 +47,9 @@ class KnowledgeIndexServiceTest {
     private KnowledgeDocRepository repository;
 
     @Mock
+    private KnowledgeIndexJobRepository jobRepository;
+
+    @Mock
     private VectorStore vectorStore;
 
     private KnowledgeProperties properties;
@@ -55,7 +62,7 @@ class KnowledgeIndexServiceTest {
         properties.setDirectory(tempDir.toString());
         properties.setEmbeddingModel("BAAI/bge-m3");
         executor = Executors.newSingleThreadExecutor();
-        service = new KnowledgeIndexService(properties, repository, vectorStore,
+        service = new KnowledgeIndexService(properties, repository, jobRepository, vectorStore,
                 new MarkdownChunker(800, 50, 100), executor);
 
         lenient().when(repository.find(anyString())).thenReturn(Optional.empty());
@@ -191,6 +198,84 @@ class KnowledgeIndexServiceTest {
         assertThat(result.failed()).isEqualTo(1);
         verify(repository).markFailed("bad.md");
         verify(repository, never()).upsertDoc(any());
+    }
+
+    @Test
+    void writesNewVersionBeforeDeletingStaleChunks() throws Exception {
+        write("leave.md", "# 制度\n\n## 住宿标准\n一线城市每晚不超过 600 元，二线城市不超过 400 元。");
+        when(repository.chunkIds("leave.md")).thenReturn(Set.of("old-1", "old-2"));
+
+        service.index(false);
+
+        // 顺序很重要：先写新块，再删旧块；反过来会出现检索空白窗口
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(vectorStore);
+        order.verify(vectorStore).add(anyList());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<String>> staleIds = ArgumentCaptor.forClass(List.class);
+        order.verify(vectorStore).delete(staleIds.capture());
+        assertThat(staleIds.getValue()).contains("old-1", "old-2");
+        // chunk 表有记录时不需要按 doc_path 全删
+        verify(vectorStore, never()).delete(any(Filter.Expression.class));
+    }
+
+    @Test
+    void submitIndexFinishesJobAfterIndexCompletes() {
+        when(jobRepository.start("MANUAL", true, properties.getJobTimeoutMinutes()))
+                .thenReturn(Optional.of(42L));
+        KnowledgeIndexService direct = new KnowledgeIndexService(properties, repository, jobRepository,
+                vectorStore, new MarkdownChunker(800, 50, 100), directExecutor());
+
+        Optional<Long> jobId = direct.submitIndex("MANUAL", true);
+
+        assertThat(jobId).contains(42L);
+        verify(jobRepository).finish(eq(42L), any(KnowledgeIndexService.IndexResult.class));
+        verify(jobRepository, never()).fail(anyLong(), anyString());
+    }
+
+    @Test
+    void submitIndexReturnsEmptyWhenAnotherJobIsRunning() {
+        when(jobRepository.start("STARTUP", false, properties.getJobTimeoutMinutes()))
+                .thenReturn(Optional.empty());
+
+        assertThat(service.submitIndex("STARTUP", false)).isEmpty();
+        verify(jobRepository, never()).finish(anyLong(), any());
+    }
+
+    private static ExecutorService directExecutor() {
+        return new AbstractExecutorService() {
+            private volatile boolean shutdown;
+
+            @Override
+            public void shutdown() {
+                shutdown = true;
+            }
+
+            @Override
+            public List<Runnable> shutdownNow() {
+                shutdown = true;
+                return List.of();
+            }
+
+            @Override
+            public boolean isShutdown() {
+                return shutdown;
+            }
+
+            @Override
+            public boolean isTerminated() {
+                return shutdown;
+            }
+
+            @Override
+            public boolean awaitTermination(long timeout, TimeUnit unit) {
+                return shutdown;
+            }
+
+            @Override
+            public void execute(Runnable command) {
+                command.run();
+            }
+        };
     }
 
     private void write(String name, String content) throws Exception {
