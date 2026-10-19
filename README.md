@@ -31,6 +31,7 @@
 3. **ReAct 显式循环**：规划-执行-反思逐步驱动，SSE 分阶段推送（plan / tool_call / tool_result / confirm_request / answer）
 4. **上下文工程**：滑动窗口 + 工具轨迹摘要混合裁剪，Token usage 全链路打点
 5. **三道权限闸门**：清单组装（闸门 1，把能力与角色要求一并下发给模型——裁掉会让模型把权限问题答成能力问题）· 执行点鉴权（闸门 2，★ 安全边界）· 敏感操作人工二次确认（闸门 3）——校验依据是代码里的用户身份，不是模型说了什么
+6. **Agentic RAG**：制度文档按 Markdown 标题切块、embedding 入 pgvector；检索封装成内部工具 `search_knowledge`，由模型在循环中自主决定何时查、用什么 query。可见性在检索 SQL 内过滤，无权内容不进候选集（[设计](docs/KNOWLEDGE-RAG.md)）
 
 ## 快速开始
 
@@ -38,8 +39,9 @@
 # 1. 填模型 API Key（.env 已 gitignore，照 .env.example 复制一份即可）
 cp .env.example .env
 #    编辑 .env，填入 LLM_API_KEY（供应商与模型名见 LLM_BASE_URL / LLM_MODEL）
+#    需要知识库检索时再填 EMBEDDING_API_KEY；留空则知识库模块不装配，其余功能不受影响
 
-# 2. 起 MySQL(3307) + 应用(8000)
+# 2. 起 MySQL(3307) + pgvector(5433) + 应用(8000)
 docker compose up -d --build
 
 # 3. 浏览器打开 http://localhost:8000/ 开始对话

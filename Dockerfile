@@ -9,4 +9,6 @@ RUN mvn -B -q -DskipTests package
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 COPY --from=build /build/target/*.jar app.jar
+# 知识库语料随镜像发布；KNOWLEDGE_DIR 默认值 knowledge 即解析到 /app/knowledge
+COPY knowledge ./knowledge
 ENTRYPOINT ["java", "-jar", "app.jar"]
