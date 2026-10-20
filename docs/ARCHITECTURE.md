@@ -134,6 +134,8 @@
 
 **JWT 只证明身份，不承载授权**：token 只带 `uid`（+ iat/exp），不含角色或权限。角色是可变的授权状态；把它写进 token，等于"降权要等 token 过期"，而常见实现又会退化成不可撤回的字符串。`JwtAuthFilter` 每次请求解析 uid 后调用 `RbacService.loadPrincipal(uid)`，回库读 `app_user.status/role` 与 `app_role_permission`，构造 `UserPrincipal(uid, role, permissions)` 写入 `UserContext`。停用账号、收回权限都在**下一个请求**生效，不需要撤销接口、黑名单或 token version。
 
+**登录与凭证**：`JWT_SECRET` 至少 32 字节且必须显式注入，缺失或过短直接拒绝启动（不提供默认密钥）；签名算法 HS256。密码用 PBKDF2-HMAC-SHA256 存储（随机盐、恒时比较），旧的 SHA-256 摘要只在登录成功时原地升级；同一用户名连续失败 5 次锁定 5 分钟，超限返回 429。Actuator 走独立管理端口 `8081`（`MANAGEMENT_PORT`），不与业务 8000 共用，`health` 默认不披露组件细节。
+
 **数据模型**：`app_user.role`（单角色）→ `app_role`（角色元数据）→ `app_role_permission`（角色-权限映射）。`app_role.seeded` 是"默认权限只种一次"的标记：`RbacSeeder` 只在未种过时写入，管理员在界面改过之后重启不会复活默认值。
 
 **权限码**：`*` 为通配（ADMIN 默认持有）。平台内置 `admin:console` / `admin:source` / `admin:tool` / `admin:knowledge` / `admin:rbac`；业务侧自定义（`booking:cancel`、`expense:approve`、`repair:assign`）；知识块使用 `public` 或任意权限码。管理端提供角色-权限矩阵（查看、覆盖式保存），不做角色 CRUD 与用户角色分配。

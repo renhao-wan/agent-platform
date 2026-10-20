@@ -113,7 +113,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 - **embedding/UsageRecordingEmbeddingModel.java**：装饰 `EmbeddingModel.call`，把 prompt tokens 与文档数记入 `knowledge_usage`，让"知识库每月花多少钱"可查。
 - **eval/KnowledgeEvalService.java**：读 `knowledge/eval/questions.jsonl`，跑 Recall@K / MRR / 空结果率，供 `POST /admin/knowledge/eval` 使用——切块与阈值调整有了可比较的数字。
 - **KnowledgeAdminController.java**：知识库运维端点（受 `/admin/knowledge` → `admin:knowledge` 权限保护）。索引重建/任务查询/评估之外，`POST /admin/knowledge/search` 接受 `{query, role, topK}` 走与 Agent 相同的检索路径并返回 `SearchOutcome`（命中块、分数、检索模式 vector/keyword、耗时）——管理台据此直观验证 `visible_permission` 权限过滤是否生效，而不必去猜"为什么 STAFF 查不到某份制度"。
-- **KnowledgeHealthIndicator.java**：`/actuator/health` 中的知识库探针（`SELECT 1`）；`/actuator/prometheus` 暴露检索指标。
+- **KnowledgeHealthIndicator.java**：管理端口 8081 的 `/actuator/health` 中的知识库探针（`SELECT 1`）；同端口 `/actuator/prometheus` 暴露检索指标。
 
 ## 4. common/ web/ resources/
 

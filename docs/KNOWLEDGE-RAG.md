@@ -274,10 +274,10 @@ bad case，且只用了两行 SQL。
    sources / elapsed_ms / created_at`。只记来源与分数、不记正文，避免知识内容二次留存；
    启动时按 `audit-retention-days`（默认 180 天）清理。合规上要能回答"敏感制度被谁查过"。
 3. **Micrometer 指标**：`knowledge.search.requests{role,mode}` 与 `knowledge.search.duration{mode}`，
-   `mode` 取 `vector / keyword / empty / error`；`/actuator/prometheus` 暴露。
+   `mode` 取 `vector / keyword / empty / error`；`:8081/actuator/prometheus` 暴露。
 
 **评估集**：`knowledge/eval/questions.jsonl` 每行一题
-（`{"question":"...","expected":["文档标题 > 章节"],"role":"ADMIN"}`），
+（`{"question":"...","expected":["文档标题 > 章节"],"permissions":["*"]}`），
 `POST /admin/knowledge/eval?topK=4` 跑一遍并返回 Recall@K、MRR、空结果率与逐题排名。
 它不替代 RAGAS，但让"改切块参数/阈值是否更好"有了可比较的数字，而不是靠感觉。
 
@@ -459,9 +459,9 @@ status=INDEXED、content hash、embedding 模型、切块算法版本与参数�
   网络类 `ResourceAccessException` 做指数退避重试（默认 3 次），4xx（鉴权/配额/参数错）
   不重试——重试不会让它成功，只会放大故障时间。超时是必须的：供应商无响应会同时拖住
   索引线程与在线检索。
-- **健康检查**：`/actuator/health` 含知识库 indicator（`SELECT 1`），Postgres 不可达即 DOWN。
+- **健康检查**：管理端口 8081 的 `/actuator/health` 含知识库 indicator（`SELECT 1`），Postgres 不可达即 DOWN。
   向量库挂了不影响平台其余功能，但检索会全部失败，必须让运维直接看到。
-- **指标**：`/actuator/prometheus` 暴露检索次数/耗时（见 §7.5）。
+- **指标**：`:8081/actuator/prometheus` 暴露检索次数/耗时（见 §7.5）。
 - **文档与镜像解耦**：compose 把 `./knowledge:/app/knowledge:ro` 挂进容器，改制度文档后
   重启容器或触发 reindex 即生效，不必重建镜像；镜像内仍 COPY 一份，保证单独 `docker run`
   也能跑。
