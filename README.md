@@ -71,6 +71,8 @@ cd ../business-systems && docker compose up -d --build
 
 项目亮点按四个主题各自成文，含高频追问问答：[docs/highlights/](docs/highlights/README.md)。
 
+不熟悉 Spring AI 的读者，建议先读 [Spring AI 入门与项目对照](docs/notes/Spring-AI-入门与项目对照.md)——从一次 `/chat/completions` 请求讲起，覆盖 ChatClient、Message、Tool Calling、Embedding、VectorStore 与 RAG，并逐节对应到项目代码。
+
 ## 部署边界
 
 当前只支持**单实例**。敏感确认的挂起状态（`ConfirmManager`）与同会话串行化（`SessionLockRegistry`）都在进程内存里：多实例部署时确认请求可能落到 A、用户的批准落到 B，A 上的循环只能等到超时（视为拒绝）；同一会话的并发请求也可能被不同实例同时放行。需要多实例时，把两者换成共享存储 + 幂等键（确认 token 落库、按会话做分布式锁），并同步调整 `docs/decisions/08-契约快照对账.md` 已写明的定时对账互斥假设。

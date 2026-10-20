@@ -60,7 +60,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 
 ### loop/ 决策循环
 - **AgentRunner.java** ★★【③】：全项目心脏。流程：载入历史（裁剪后）→ 循环 `Planner.decide`（语义决策由模型对工具清单自主完成，平台保持领域中立） → 有 toolCalls 则逐个执行（敏感工具先挂起等确认）→ `ToolResponseMessage` 回填 → 无 toolCalls 则 answer。系统提示词每轮动态注入 `{{CURRENT_DATE}}/{{CURRENT_WEEKDAY}}`（消除模型编造日期）。步数熔断 maxSteps=8。每次工具执行把**工具名、调用参数（截断 2KB）与结果**落 `chat_message`，参数供事后审计（"取消了哪条预订"）。**本次重构里这个类的主循环一行没改**——只把注入的 `McpGatewayClient` 换成 `ToolGateway`。
-- **Planner.java / impl/OpenAiPlanner.java** ★【③】：规划器抽象 + OpenAI 兼容实现。关键一行：`internalToolExecutionEnabled(false)`——关闭 Spring AI 隐式工具执行，每轮只取回模型的 toolCalls 决策，**执行权收归循环**（这是事件插桩/确认挂起/权限校验能存在的前提）。默认指向 DeepSeek（`application.yml` 的 `LLM_BASE_URL`/`LLM_MODEL` 可切厂商）。**厂商特有的"思考开关"按模型名前缀走 `extraBody` 透传**——qwen3 要 `enable_thinking=false`，DeepSeek 的 thinking 默认开启、必须显式关（原因见 FRAMEWORK-NOTES §2：它带 tools 时要求回传 `reasoning_content`，与本循环手动构造 `ToolResponseMessage` 冲突）。**不要**改用 yml 的 `extra-body`，那个键在此版本实测静默失效。
+- **Planner.java / impl/OpenAiPlanner.java** ★【③】：规划器抽象 + OpenAI 兼容实现。关键一行：`internalToolExecutionEnabled(false)`——关闭 Spring AI 隐式工具执行，每轮只取回模型的 toolCalls 决策，**执行权收归循环**（这是事件插桩/确认挂起/权限校验能存在的前提）。默认指向 DeepSeek（`application.yml` 的 `LLM_BASE_URL`/`LLM_MODEL` 可切厂商）。**厂商特有的"思考开关"按模型名前缀走 `extraBody` 透传**——qwen3 要 `enable_thinking=false`，DeepSeek 的 thinking 默认开启、必须显式关（原因见 `docs/notes/Spring-AI-入门与项目对照.md` §5.4：它带 tools 时要求回传 `reasoning_content`，与本循环手动构造 `ToolResponseMessage` 冲突）。**不要**改用 yml 的 `extra-body`，那个键在此版本实测静默失效。
 
 ### sse/ 用户入口
 - **ChatController.java** ★：`POST /api/v1/chat` → SseEmitter + 显式 `ThreadPoolExecutor`（核心 4/上限 8，有界队列 64，AbortPolicy 拒绝→友好报错，命名线程 `agent-loop-*`）异步跑循环——**长连接不占容器业务线程**。身份在 HTTP 线程用 `UserContext.get()` 取出后**显式传参**给线程池里的循环（ThreadLocal 不跨线程池）。
