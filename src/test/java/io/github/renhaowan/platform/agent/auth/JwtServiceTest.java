@@ -3,7 +3,6 @@ package io.github.renhaowan.platform.agent.auth;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.renhaowan.platform.agent.auth.impl.AuthServiceImpl;
 import io.jsonwebtoken.JwtException;
 import org.junit.jupiter.api.Test;
 
@@ -32,12 +31,17 @@ class JwtServiceTest {
     }
 
     @Test
-    void shortSecretIsDerivedNotRejected() {
-        // 默认 dev secret 仅 28 字节（224 位）——HS256 要求 256 位，应 SHA-256 派生而非抛 WeakKey 异常
-        JwtService shortKeyService = new JwtService("dev-jwt-secret-please-change");
-        String token = shortKeyService.issue(7L);
+    void missingSecretIsRejectedAtStartup() {
+        assertThatThrownBy(() -> new JwtService(""))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("JWT_SECRET");
+    }
 
-        assertThat(shortKeyService.parseUid(token)).isEqualTo(7L);
+    @Test
+    void shortSecretIsRejectedInsteadOfDerived() {
+        // 短密钥不再派生：HS256 的 256 位下限是硬要求，弱密钥直接拒绝启动
+        assertThatThrownBy(() -> new JwtService("dev-jwt-secret-please-change"))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
@@ -47,12 +51,5 @@ class JwtServiceTest {
 
         assertThat(jwtService.parseUid(token)).isEqualTo(9L);
         assertThat(token.split("\\.")).hasSize(3);
-    }
-
-    @Test
-    void sha256HexMatchesSeedDigest() {
-        // 与 data.sql 种子摘要一致（admin123），保证登录校验对得上种子数据
-        assertThat(AuthServiceImpl.sha256Hex("admin123"))
-                .isEqualTo("240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9");
     }
 }

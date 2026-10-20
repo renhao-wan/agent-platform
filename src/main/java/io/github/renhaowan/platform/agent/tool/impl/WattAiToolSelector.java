@@ -41,12 +41,20 @@ public class WattAiToolSelector implements ToolSelector {
     private final int topK;
 
     public WattAiToolSelector(String baseUrl, String bearerKey,
-                              int minTools, double confidenceThreshold, int topK) {
+                              int minTools, double confidenceThreshold, int topK,
+                              int connectTimeoutMs, int readTimeoutMs) {
         this.baseUrl = baseUrl;
         this.minTools = minTools;
         this.confidenceThreshold = confidenceThreshold;
         this.topK = topK;
+        java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(connectTimeoutMs))
+                .build();
+        org.springframework.http.client.JdkClientHttpRequestFactory factory =
+                new org.springframework.http.client.JdkClientHttpRequestFactory(httpClient);
+        factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
         RestClient.Builder builder = RestClient.builder()
+                .requestFactory(factory)
                 .baseUrl(baseUrl)
                 .defaultHeader("Accept", MediaType.APPLICATION_JSON_VALUE);
         if (bearerKey != null && !bearerKey.isBlank()) {

@@ -173,11 +173,11 @@ SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
 SET @ddl = IF(@col_exists = 0, 'ALTER TABLE tool_definition ADD COLUMN auth_header_name VARCHAR(64) NULL AFTER input_schema, ADD COLUMN auth_header_value VARCHAR(256) NULL AFTER auth_header_name', 'SELECT 1');
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
--- M4.1：平台用户（登录与三级权限闸门的身份源；密码存 SHA-256 十六进制小写）
+-- M4.1：平台用户（登录与三级权限闸门的身份源；密码存 PBKDF2，兼容历史 SHA-256 摘要）
 CREATE TABLE IF NOT EXISTS app_user (
     id            BIGINT AUTO_INCREMENT PRIMARY KEY,
     username      VARCHAR(32)  NOT NULL,
-    password_hash VARCHAR(100) NOT NULL COMMENT 'SHA-256 十六进制小写',
+    password_hash VARCHAR(100) NOT NULL COMMENT 'PBKDF2 摘要（pbkdf2$iter$salt$hash），兼容历史 SHA-256',
     role          VARCHAR(16)  NOT NULL COMMENT 'ADMIN | STAFF',
     status        TINYINT      NOT NULL DEFAULT 1 COMMENT '1 启用 0 停用',
     created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,

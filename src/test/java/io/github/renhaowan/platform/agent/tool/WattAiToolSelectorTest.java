@@ -67,7 +67,7 @@ class WattAiToolSelectorTest {
     }
 
     private WattAiToolSelector selector(int minTools, double threshold) {
-        return new WattAiToolSelector("http://localhost:" + port, null, minTools, threshold, 2);
+        return new WattAiToolSelector("http://localhost:" + port, null, minTools, threshold, 2, 1000, 3000);
     }
 
     @Test
@@ -96,11 +96,41 @@ class WattAiToolSelectorTest {
     void decisionApiFailureAbstainsToNextHandler() {
         // 指向不可达端口，避免污染共享 HttpServer（其他用例还要用）
         WattAiToolSelector deadSelector =
-                new WattAiToolSelector("http://localhost:1", null, 3, 0.6, 2);
+                new WattAiToolSelector("http://localhost:1", null, 3, 0.6, 2, 1000, 3000);
 
         var picked = deadSelector.select("帮我订会议室", List.of(search, create, cancel));
 
         assertThat(picked).isEmpty(); // 弃权 → 责任链下一环 / 链尾兜底全量
+    }
+
+    @Test
+    void readTimeoutAbstainsInsteadOfHanging() throws Exception {
+        HttpServer slow = HttpServer.create(new InetSocketAddress(0), 0);
+        slow.createContext("/v1/systemone", exchange -> {
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            exchange.sendResponseHeaders(200, -1);
+            exchange.close();
+        });
+        slow.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
+        slow.start();
+        try {
+            WattAiToolSelector slowSelector = new WattAiToolSelector(
+                    "http://localhost:" + slow.getAddress().getPort(), null, 3, 0.6, 2, 500, 200);
+            long startedAt = System.nanoTime();
+
+            var picked = slowSelector.select("帮我订会议室", List.of(search, create, cancel));
+
+            // 读超时后弃权交下一环，而不是无限期拖住 ReAct 循环
+            assertThat(picked).isEmpty();
+            assertThat(java.time.Duration.ofNanos(System.nanoTime() - startedAt))
+                    .isLessThan(java.time.Duration.ofSeconds(2));
+        } finally {
+            slow.stop(0);
+        }
     }
 
     @Test

@@ -5,8 +5,6 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.Date;
 import javax.crypto.SecretKey;
@@ -19,8 +17,9 @@ import org.springframework.stereotype.Service;
  *   <li>claims 只携带 uid：token 只证明"是谁"，角色与权限是服务端可变状态，由
  *       {@link RbacService} 在每次请求时加载——JWT 里不写 role；</li>
  *   <li>过期 2 小时；过期/篡改/缺 uid 统一抛 JwtException，由过滤器翻译成 401；</li>
- *   <li>密钥来自 {@code JWT_SECRET} 环境变量（默认 dev 值仅限本地）。HS256 要求
- *       密钥 ≥ 256 位，配置过短时用 SHA-256 确定性派生到 256 位（无需存盐）。</li>
+ *   <li>密钥必须由 {@code JWT_SECRET} 提供且不少于 32 字节（HS256 的 256 位下限）。
+ *       缺失或过短直接拒绝启动——仓库内不存在默认密钥，否则任何拿到源码的人都能
+ *       伪造 uid（含管理员）的 token。</li>
  * </ul>
  * 旧 token 里可能还带 role claim，解析时直接忽略——不需要强制重新登录。
  */
@@ -28,15 +27,19 @@ import org.springframework.stereotype.Service;
 public class JwtService {
 
     public static final String CLAIM_UID = "uid";
+    private static final int MIN_SECRET_BYTES = 32;
 
     private static final Duration TTL = Duration.ofHours(2);
-    private static final String DEFAULT_SECRET = "dev-jwt-secret-please-change";
 
     private final SecretKey key;
 
-    public JwtService(@Value("${JWT_SECRET:" + DEFAULT_SECRET + "}") String secret) {
-        byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
-        this.key = Keys.hmacShaKeyFor(bytes.length >= 32 ? bytes : sha256(bytes));
+    public JwtService(@Value("${JWT_SECRET:}") String secret) {
+        byte[] bytes = secret == null ? new byte[0] : secret.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length < MIN_SECRET_BYTES) {
+            throw new IllegalStateException(
+                    "JWT_SECRET 未配置或不足 " + MIN_SECRET_BYTES + " 字节；请在 .env 中生成随机密钥后再启动");
+        }
+        this.key = Keys.hmacShaKeyFor(bytes);
     }
 
     /** 签发登录令牌：只写 uid，2 小时过期。 */
@@ -61,13 +64,5 @@ public class JwtService {
             throw new JwtException("missing uid claim");
         }
         return uid.longValue();
-    }
-
-    private static byte[] sha256(byte[] input) {
-        try {
-            return MessageDigest.getInstance("SHA-256").digest(input);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 unavailable", e);
-        }
     }
 }

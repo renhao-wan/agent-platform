@@ -39,11 +39,30 @@ public class AgentConfig {
                         System.getenv("WATTAI_API_KEY"),
                         properties.getWattai().getMinTools(),
                         properties.getWattai().getConfidenceThreshold(),
-                        properties.getWattai().getTopK()));
+                        properties.getWattai().getTopK(),
+                        properties.getWattai().getConnectTimeoutMs(),
+                        properties.getWattai().getReadTimeoutMs()));
                 // 扩展位：jev（TypeSafe AI Jev 托管 API）/ 本地语义路由实现就绪后按优先级追加
                 default -> throw new IllegalStateException("未知工具路由节点: " + name + "（当前支持: wattai）");
             }
         }
         return new ToolSelectorChain(handlers, properties.getRoutingToolCountThreshold());
+    }
+
+    /**
+     * 给 Spring AI 的 OpenAI 客户端加超时。自动配置注入的是容器里的 {@code RestClient.Builder}，
+     * 这里通过 Spring Boot 的 customizer 生效——否则供应商挂起时 ReAct 循环会无限期占住线程。
+     */
+    @Bean
+    public org.springframework.boot.web.client.RestClientCustomizer llmHttpTimeouts(AgentProperties properties) {
+        return builder -> {
+            java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofMillis(properties.getLlmConnectTimeoutMs()))
+                    .build();
+            org.springframework.http.client.JdkClientHttpRequestFactory factory =
+                    new org.springframework.http.client.JdkClientHttpRequestFactory(httpClient);
+            factory.setReadTimeout(java.time.Duration.ofMillis(properties.getLlmReadTimeoutMs()));
+            builder.requestFactory(factory);
+        };
     }
 }

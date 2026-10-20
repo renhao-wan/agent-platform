@@ -38,9 +38,10 @@
 ## 快速开始
 
 ```bash
-# 1. 填模型 API Key（.env 已 gitignore，照 .env.example 复制一份即可）
+# 1. 填模型 API Key 与 JWT 密钥（.env 已 gitignore，照 .env.example 复制一份即可）
 cp .env.example .env
 #    编辑 .env，填入 LLM_API_KEY（供应商与模型名见 LLM_BASE_URL / LLM_MODEL）
+#    JWT_SECRET 必填（至少 32 字节）：openssl rand -base64 48
 #    需要知识库检索时再填 EMBEDDING_API_KEY；留空则知识库模块不装配，其余功能不受影响
 
 # 2. 起 MySQL(3307) + pgvector(5433) + 应用(8000)

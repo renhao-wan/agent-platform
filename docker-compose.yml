@@ -55,6 +55,8 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-missing-key}
       LLM_MODEL: ${LLM_MODEL:-deepseek-flash}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com}
+      # 必填：缺失时 compose 直接报错，而不是让应用带着可伪造的默认密钥跑起来
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env (openssl rand -base64 48)}
       # 知识库：EMBEDDING_API_KEY 为空时整个模块不装配（平台仍可正常运行）
       KNOWLEDGE_DB_URL: "jdbc:postgresql://pgvector:5432/knowledge"
       KNOWLEDGE_DB_USERNAME: postgres

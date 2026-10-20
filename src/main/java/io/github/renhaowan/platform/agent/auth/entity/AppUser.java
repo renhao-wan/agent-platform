@@ -8,7 +8,8 @@ import lombok.Data;
 
 /**
  * 平台用户（app_user）：三级权限闸门的身份源。
- * 密码只存 SHA-256 十六进制小写摘要；role 决定工具可见性与执行权限（ADMIN &gt; STAFF）。
+ * 密码存 PBKDF2 摘要，历史 SHA-256 摘要仅在登录时兼容校验并原地升级；
+ * role 决定执行点权限（ADMIN &gt; STAFF）。
  */
 @Data
 @TableName("app_user")
@@ -23,7 +24,7 @@ public class AppUser {
 
     private String username;
 
-    /** SHA-256 十六进制小写摘要（长度 64） */
+    /** PBKDF2 摘要（pbkdf2$iter$salt$hash）；历史数据可能是 64 位 SHA-256 十六进制 */
     private String passwordHash;
 
     private String role;

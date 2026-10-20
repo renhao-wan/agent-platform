@@ -41,6 +41,14 @@ public class GlobalExceptionHandler {
         return ApiResponse.error(401, e.getMessage());
     }
 
+    /** 登录失败次数过多：429，提示稍后再试（不透露账号是否存在）。 */
+    @ExceptionHandler(io.github.renhaowan.platform.agent.auth.TooManyLoginAttemptsException.class)
+    @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
+    public ApiResponse<Void> handleTooManyAttempts(
+            io.github.renhaowan.platform.agent.auth.TooManyLoginAttemptsException e) {
+        return ApiResponse.error(429, e.getMessage());
+    }
+
     /** 来源注册表冲突（重复创建、下线配置管理的来源）：409。 */
     @ExceptionHandler(io.github.renhaowan.platform.gateway.registry.SourceConflictException.class)
     @ResponseStatus(HttpStatus.CONFLICT)

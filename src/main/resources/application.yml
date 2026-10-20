@@ -79,6 +79,10 @@ platform:
     max-steps: 8
     context-threshold: 6000
     confirm-timeout-seconds: 300
+    # 大模型 HTTP 超时：供应商挂起时快速失败，避免 loop 线程无限期占用。
+    # 读超时覆盖一次完整生成，长回答场景不要调得过小。
+    llm-connect-timeout-ms: ${LLM_CONNECT_TIMEOUT_MS:5000}
+    llm-read-timeout-ms: ${LLM_READ_TIMEOUT_MS:120000}
     # 工具路由责任链（ADR-004）：节点按 routing-handlers 顺序逐环尝试，弃权/异常传下一环，链尾兜底全量直通。
     # 触发阈值：工具数达到 routing-tool-count-threshold 才启用路由——当前个位数工具规模下整链休眠，
     # 对主流程零开销；工具规模化后自动武装，无需改代码。本地想提前体验把阈值调到 4 以下即可。
@@ -124,7 +128,9 @@ management:
   endpoints:
     web:
       exposure:
+        # prometheus 生产环境需在网络层隔离：指标里含接口路径与调用量
         include: health,prometheus
   endpoint:
     health:
-      show-details: always
+      # 不向任意可达方披露数据库、磁盘等组件细节；排障看日志或本地开启
+      show-details: never

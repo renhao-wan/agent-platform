@@ -18,6 +18,11 @@ public class AgentProperties {
     private int contextThreshold = 6000;
     private int confirmTimeoutSeconds = 300;
 
+    /** 大模型连接超时：供应商不可达时尽快失败，而不是占住 loop 线程。 */
+    private int llmConnectTimeoutMs = 5000;
+    /** 大模型读超时：覆盖一次完整生成，过短会截断正常的长回答。 */
+    private int llmReadTimeoutMs = 120_000;
+
     /**
      * 工具路由责任链节点及顺序（逗号分隔、按序尝试）：当前支持 wattai；
      * 置空 = 不路由、全量直通。jev / 本地语义路由实现就绪后按优先级前置。
@@ -34,6 +39,9 @@ public class AgentProperties {
         private int minTools = 4;
         private double confidenceThreshold = 0.6;
         private int topK = 2;
+        /** 路由是可选优化：超时后弃权交下一环，不能拖慢主流程。 */
+        private int connectTimeoutMs = 2000;
+        private int readTimeoutMs = 3000;
 
         public String getBaseUrl() { return baseUrl; }
         public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
@@ -43,6 +51,10 @@ public class AgentProperties {
         public void setConfidenceThreshold(double confidenceThreshold) { this.confidenceThreshold = confidenceThreshold; }
         public int getTopK() { return topK; }
         public void setTopK(int topK) { this.topK = topK; }
+        public int getConnectTimeoutMs() { return connectTimeoutMs; }
+        public void setConnectTimeoutMs(int connectTimeoutMs) { this.connectTimeoutMs = connectTimeoutMs; }
+        public int getReadTimeoutMs() { return readTimeoutMs; }
+        public void setReadTimeoutMs(int readTimeoutMs) { this.readTimeoutMs = readTimeoutMs; }
     }
 
 }

@@ -2,6 +2,7 @@ package io.github.renhaowan.platform.agent.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -10,8 +11,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.renhaowan.platform.agent.auth.entity.AppUser;
+import io.github.renhaowan.platform.agent.auth.impl.PasswordHasher;
 import io.github.renhaowan.platform.agent.auth.mapper.AppUserMapper;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,11 +34,14 @@ import java.util.Set;
 @AutoConfigureMockMvc
 class AuthControllerTest {
 
-    /** admin123 / staff123 的 SHA-256 摘要（与 data.sql 种子一致）。 */
+    /** admin123 / staff123 的 PBKDF2 摘要（与 data.sql 种子一致）。 */
     private static final String ADMIN_HASH =
-            "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9";
+            "pbkdf2$210000$k4qXz92OxljgfDqd9oDvhg==$jM4Skfi2GLyTL7++zGFTy3/XsHePsouva0OYMMC2gWg=";
     private static final String STAFF_HASH =
-            "10176e7b7b24d317acfcf8d2064cfd2f24e154f7b5a96603077d5ef813d6a6b6";
+            "pbkdf2$210000$Jg+arMOCHtnspKocYYQx4A==$BopiPxTxn5CARrI5UcOKMAsNtXMH6SgCdl9mrfpGF6U=";
+    /** 升级前数据库里的旧格式：admin123 的裸 SHA-256 摘要。 */
+    private static final String LEGACY_ADMIN_HASH =
+            "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -99,6 +105,38 @@ class AuthControllerTest {
                         .content("{\"username\":\"ghost\",\"password\":\"whatever\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(401));
+    }
+
+    @Test
+    void legacySha256DigestIsUpgradedOnSuccessfulLogin() throws Exception {
+        when(appUserMapper.selectOne(any())).thenReturn(user("admin", LEGACY_ADMIN_HASH, "ADMIN"));
+        when(rbacService.permissionsOfRole("ADMIN")).thenReturn(Set.of("*"));
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"admin\",\"password\":\"admin123\"}"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<AppUser> captor = ArgumentCaptor.forClass(AppUser.class);
+        verify(appUserMapper).updateById(captor.capture());
+        assertThat(PasswordHasher.isLegacy(captor.getValue().getPasswordHash())).isFalse();
+        assertThat(PasswordHasher.matches("admin123", captor.getValue().getPasswordHash())).isTrue();
+    }
+
+    @Test
+    void repeatedFailuresAreThrottled() throws Exception {
+        when(appUserMapper.selectOne(any())).thenReturn(user("throttle-user", ADMIN_HASH, "STAFF"));
+
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(post("/api/v1/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"username\":\"throttle-user\",\"password\":\"wrong-pass\"}"))
+                    .andExpect(status().isUnauthorized());
+        }
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"throttle-user\",\"password\":\"wrong-pass\"}"))
+                .andExpect(status().isTooManyRequests());
     }
 
     private AppUser user(String username, String hash, String role) {
