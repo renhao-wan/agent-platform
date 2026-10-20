@@ -107,6 +107,17 @@ class ToolChangeAnalyzerTest {
     }
 
     @Test
+    void removedPermissionIsReported() {
+        ToolDefinition before = tool();
+        before.setRequiredPermission("booking:cancel");
+
+        List<BreakingChange> changes = ToolChangeAnalyzer.compare(before, tool());
+
+        assertThat(types(changes)).containsExactly("PERMISSION_REMOVED");
+        assertThat(changes.get(0).detail()).isEqualTo("booking:cancel -> null");
+    }
+
+    @Test
     void malformedSchemaIsTreatedAsEmptyInsteadOfFailing() {
         ToolDefinition before = tool();
         before.setInputSchema("{not json");

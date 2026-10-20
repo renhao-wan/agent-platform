@@ -1,6 +1,7 @@
 package io.github.renhaowan.platform.gateway.registry.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import io.github.renhaowan.platform.common.PlatformToolNames;
 import io.github.renhaowan.platform.gateway.registry.ToolRegistryService;
 import io.github.renhaowan.platform.gateway.registry.entity.ToolDefinition;
 import io.github.renhaowan.platform.gateway.registry.mapper.ToolDefinitionMapper;
@@ -21,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 public class ToolRegistryServiceImpl implements ToolRegistryService {
+
+    private static final Set<String> WRITE_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
 
     private final ToolDefinitionMapper mapper;
 
@@ -57,6 +60,10 @@ public class ToolRegistryServiceImpl implements ToolRegistryService {
     public SnapshotResult applySnapshot(String gatewayId, String sourceKey, List<ToolDefinition> desired) {
         Map<String, ToolDefinition> byName = new LinkedHashMap<>();
         for (ToolDefinition tool : desired) {
+            if (PlatformToolNames.RESERVED.contains(tool.getName())) {
+                throw new IllegalStateException("工具名与平台内部工具冲突：" + tool.getName()
+                        + " 为保留名；请在契约中修改 operationId");
+            }
             if (byName.putIfAbsent(tool.getName(), tool) != null) {
                 throw new IllegalStateException("契约内工具名重复：" + tool.getName());
             }
@@ -95,6 +102,11 @@ public class ToolRegistryServiceImpl implements ToolRegistryService {
 
             ToolDefinition old = existingByName.get(tool.getName());
             if (old == null) {
+                if (isWriteMethod(tool.getHttpMethod()) && isBlank(tool.getRequiredPermission())) {
+                    // 只告警：新接口可能本就打算对全员开放，但漏写注解是最常见的回归
+                    breaking.add(new BreakingChange(tool.getName(), "PERMISSION_UNDECLARED",
+                            tool.getHttpMethod() + " 接口未声明 x-required-permission，将对所有登录用户可用"));
+                }
                 if (tool.getEnabled() == null) {
                     tool.setEnabled(1);
                 }
@@ -172,5 +184,13 @@ public class ToolRegistryServiceImpl implements ToolRegistryService {
             mapper.updateById(tool);
         }
         return tools.size();
+    }
+
+    private static boolean isWriteMethod(String method) {
+        return method != null && WRITE_METHODS.contains(method.toUpperCase());
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }

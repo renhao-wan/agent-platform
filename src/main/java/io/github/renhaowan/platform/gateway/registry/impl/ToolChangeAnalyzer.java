@@ -14,8 +14,8 @@ import java.util.Set;
 /**
  * 新旧工具定义的破坏性变更识别。
  * <p>
- * 不求覆盖 OpenAPI 全量规则（那是 oasdiff 的职责），只回答与本平台相关的四类：
- * 调用路径变了、新增必填参数、参数类型变了、权限被收紧。识别结果只用于告警与审计，
+ * 不求覆盖 OpenAPI 全量规则（那是 oasdiff 的职责），只回答与本平台相关的几类：
+ * 调用路径变了、新增必填参数、参数类型变了、权限被收紧或撤销。识别结果只用于告警与审计，
  * 不阻断同步——阻断会让上游一次发布把整个来源的工具卡在旧版本。
  */
 final class ToolChangeAnalyzer {
@@ -63,6 +63,10 @@ final class ToolChangeAnalyzer {
                 && !oldPermission.equals(newPermission)) {
             changes.add(new ToolRegistryService.BreakingChange(now.getName(), "PERMISSION_CHANGED",
                     oldPermission + " -> " + newPermission));
+        } else if (!isBlank(oldPermission) && isBlank(newPermission)) {
+            // 声明被撤销通常意味着注解在重构中丢失，接口会静默放开给全员
+            changes.add(new ToolRegistryService.BreakingChange(now.getName(), "PERMISSION_REMOVED",
+                    oldPermission + " -> null"));
         }
         return changes;
     }

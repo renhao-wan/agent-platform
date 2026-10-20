@@ -7,6 +7,7 @@ import io.github.renhaowan.platform.agent.memory.entity.Checkpoint;
 import io.github.renhaowan.platform.agent.memory.entity.ChatMessage;
 import io.github.renhaowan.platform.agent.memory.mapper.CheckpointMapper;
 import io.github.renhaowan.platform.agent.memory.mapper.ChatMessageMapper;
+import io.github.renhaowan.platform.common.PlatformToolNames;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -35,7 +36,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class HistoryRecallTool {
 
-    public static final String TOOL_NAME = "recallHistory";
+    public static final String TOOL_NAME = PlatformToolNames.RECALL_HISTORY;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("MM-dd HH:mm");

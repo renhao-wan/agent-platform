@@ -180,6 +180,45 @@ class ToolRegistryServiceTest {
     }
 
     @Test
+    void reservedPlatformToolNameAbortsWholeSnapshot() {
+        when(mapper.selectList(any(QueryWrapper.class))).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.applySnapshot("gw1", "booking",
+                List.of(tool("search_knowledge"))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("search_knowledge")
+                .hasMessageContaining("保留名");
+
+        verify(mapper, never()).insert(any(ToolDefinition.class));
+    }
+
+    @Test
+    void newWriteToolWithoutPermissionIsReportedButStillRegistered() {
+        when(mapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(), List.of());
+        ToolDefinition desired = tool("create_booking");
+        desired.setHttpMethod("POST");
+
+        ToolRegistryService.SnapshotResult result =
+                service.applySnapshot("gw1", "booking", List.of(desired));
+
+        assertThat(result.added()).isEqualTo(1);
+        assertThat(result.breakingChanges())
+                .extracting(ToolRegistryService.BreakingChange::type)
+                .containsExactly("PERMISSION_UNDECLARED");
+        verify(mapper).insert(any(ToolDefinition.class));
+    }
+
+    @Test
+    void newReadToolWithoutPermissionIsNotReported() {
+        when(mapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(), List.of());
+
+        ToolRegistryService.SnapshotResult result =
+                service.applySnapshot("gw1", "booking", List.of(tool("search_rooms")));
+
+        assertThat(result.breakingChanges()).isEmpty();
+    }
+
+    @Test
     void setEnabledTogglesOnlyEnabledFlag() {
         ToolDefinition old = tool("search_rooms");
         old.setId(42L);

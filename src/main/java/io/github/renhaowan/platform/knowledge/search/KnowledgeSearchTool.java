@@ -3,6 +3,7 @@ package io.github.renhaowan.platform.knowledge.search;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.renhaowan.platform.agent.auth.UserPrincipal;
+import io.github.renhaowan.platform.common.PlatformToolNames;
 import io.github.renhaowan.platform.knowledge.KnowledgeProperties;
 import io.github.renhaowan.platform.knowledge.search.KnowledgeSearchService.SearchHit;
 import java.util.List;
@@ -22,7 +23,7 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 @RequiredArgsConstructor
 public class KnowledgeSearchTool {
 
-    public static final String TOOL_NAME = "search_knowledge";
+    public static final String TOOL_NAME = PlatformToolNames.SEARCH_KNOWLEDGE;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final int MAX_OUTPUT_CHARS = 8000;
