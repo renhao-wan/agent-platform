@@ -1,4 +1,4 @@
-# ADR-010：JWT 只承载身份，角色与权限每次请求回库加载
+# 决策 10：JWT 只承载身份，角色与权限每次请求回库加载
 
 日期：2026-10-20　状态：已采纳
 
@@ -38,6 +38,6 @@
 
 ## 相关
 
-- [ADR-007](ADR-007-contract-driven-authorization.md)：权限要求由业务契约声明，平台不编码业务语义。
-- [ADR-008](ADR-008-contract-reconciliation.md)：契约对账；`required_permission` 参与契约指纹。
+- [决策 07](07-契约驱动授权.md)：权限要求由业务契约声明，平台不编码业务语义。
+- [决策 08](08-契约快照对账.md)：契约对账；`required_permission` 参与契约指纹。
 - [KNOWLEDGE-RAG.md §8](../architecture/KNOWLEDGE-RAG.md)：知识库权限过滤为何必须发生在检索 SQL 内。

@@ -86,9 +86,9 @@ public class AgentRunner {
         }
 
         List<ToolCallback> allTools = toolRegistry.callbacks();
-        // 路由责任链（ADR-004）：节点弃权/失败都回落全量，orElse 只是契约兜底
+        // 路由责任链（决策 04）：节点弃权/失败都回落全量，orElse 只是契约兜底
         List<ToolCallback> tools = new ArrayList<>(toolSelector.select(userText, allTools).orElse(allTools));
-        // 平台自有内部工具不参与业务路由，始终在册（会话记忆调回，领域中立、角色无关，ADR-005）
+        // 平台自有内部工具不参与业务路由，始终在册（会话记忆调回，领域中立、角色无关，决策 05）
         tools.add(historyRecallTool.callback());
         KnowledgeSearchTool knowledgeSearch = knowledgeSearchTool.getIfAvailable();
         if (knowledgeSearch != null) {

@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS tool_source (
     last_error      VARCHAR(512) NULL
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '契约来源与最近一次对账状态';
 
--- 来源注册表（ADR-009 演进第一步）：配置只做首次种子，管理端可在运行时增删改。
+-- 来源注册表（决策 09 演进第一步）：配置只做首次种子，管理端可在运行时增删改。
 -- origin 决定所有权：CONFIG 由启动种子刷新，管理员编辑后提升为 ADMIN，配置不再覆盖。
 SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_source' AND COLUMN_NAME='origin');

@@ -69,4 +69,4 @@
 - 定时任务版：`ScheduledThreadPoolExecutor(1, factory)` 替代 `newSingleThreadScheduledExecutor`——后者同样藏无界队列且不可配策略。
 
 ---
-*对应代码全部有同主题中文注释；深入细节见 docs/architecture/CODE-TOUR.md 与 docs/adr/。*
+*对应代码全部有同主题中文注释；深入细节见 docs/architecture/CODE-TOUR.md 与 docs/decisions/。*

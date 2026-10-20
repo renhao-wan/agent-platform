@@ -23,7 +23,7 @@ public class AgentConfig {
 
     /**
      * 工具路由责任链：按 routing-handlers 声明顺序装配节点，逐环尝试、弃权传递、链尾兜底全量。
-     * 工具数未达 routing-tool-count-threshold 时整链休眠（个位数工具下路由收益为负，ADR-004）。
+     * 工具数未达 routing-tool-count-threshold 时整链休眠（个位数工具下路由收益为负，决策 04）。
      */
     @Bean
     public ToolSelector toolSelector(AgentProperties properties) {

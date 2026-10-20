@@ -20,9 +20,9 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.stereotype.Service;
 
 /**
- * 平台自有内部工具：会话记忆调回（recallHistory）——热/温/冷三层记忆的"冷层"取回通道（ADR-005）。
+ * 平台自有内部工具：会话记忆调回（recallHistory）——热/温/冷三层记忆的"冷层"取回通道（决策 05）。
  * <p>
- * 上下文裁剪（ADR-003）把早期对话压成确定性摘要，具体结论不可还原；业务事实可经业务工具重查，
+ * 上下文裁剪（决策 03）把早期对话压成确定性摘要，具体结论不可还原；业务事实可经业务工具重查，
  * 但"只存在于对话中"的信息（口头偏好、临时约束）会随裁剪丢失。本工具让模型自主判断何时
  * 按关键词取回早期原文（chat_message 全量落库 + checkpoint 里程碑），替代引入向量库做 RAG——
  * 检索成本从"每条消息一次嵌入"降为"缺了才查一次"。

@@ -5,7 +5,7 @@ import java.util.Optional;
 import org.springframework.ai.tool.ToolCallback;
 
 /**
- * 工具前置路由责任链节点（System One 决策模型扩展点，见 docs/adr/ADR-004）：
+ * 工具前置路由责任链节点（System One 决策模型扩展点，见 docs/decisions/04-工具前置路由.md）：
  * 工具集增长后，在进入主模型前先粗筛，避免全量 Schema 倾倒（prompt 膨胀/选择幻觉）。
  * <p>
  * 责任链语义：节点按装配顺序依次尝试（AgentConfig 按 routing-handlers 装配），

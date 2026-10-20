@@ -7,7 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.ToolCallback;
 
 /**
- * 工具路由责任链（按装配顺序逐环尝试，见 docs/adr/ADR-004）：
+ * 工具路由责任链（按装配顺序逐环尝试，见 docs/decisions/04-工具前置路由.md）：
  * <ol>
  *   <li>规模闸门：工具数未达 toolCountThreshold 时整条链休眠、全量直通——个位数工具下
  *       路由收益为负（多一跳网络 + 决策模型质量不足），工具规模化后自动武装，无需改代码；</li>

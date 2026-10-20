@@ -38,7 +38,7 @@ platform:
       # 转发到业务系统的超时（毫秒）；测试用极短值验证超时路径
       connect-timeout-ms: 2000
       read-timeout-ms: 10000
-    # 契约对账（ADR-008）：启动时全量对账一次；之后按间隔重新拉取契约，
+    # 契约对账（决策 08）：启动时全量对账一次；之后按间隔重新拉取契约，
     # 接口新增/修改/删除都会收敛，不必重启平台。sync-enabled 置 false 可只保留启动对账；
     # sync-on-startup 置 false 则只靠定时任务与手工触发（启动早于业务系统时用）。
     sync-enabled: ${GATEWAY_SYNC_ENABLED:true}
@@ -83,7 +83,7 @@ platform:
     # 读超时覆盖一次完整生成，长回答场景不要调得过小。
     llm-connect-timeout-ms: ${LLM_CONNECT_TIMEOUT_MS:5000}
     llm-read-timeout-ms: ${LLM_READ_TIMEOUT_MS:120000}
-    # 工具路由责任链（ADR-004）：节点按 routing-handlers 顺序逐环尝试，弃权/异常传下一环，链尾兜底全量直通。
+    # 工具路由责任链（决策 04）：节点按 routing-handlers 顺序逐环尝试，弃权/异常传下一环，链尾兜底全量直通。
     # 触发阈值：工具数达到 routing-tool-count-threshold 才启用路由——当前个位数工具规模下整链休眠，
     # 对主流程零开销；工具规模化后自动武装，无需改代码。本地想提前体验把阈值调到 4 以下即可。
     routing-handlers: wattai   # 逗号分隔按序尝试；当前支持 wattai（jev/本地语义路由为预留扩展位）；置空 = 不路由

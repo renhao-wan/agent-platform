@@ -28,7 +28,7 @@ public class AgentProperties {
      * 置空 = 不路由、全量直通。jev / 本地语义路由实现就绪后按优先级前置。
      */
     private String routingHandlers = "wattai";
-    /** 责任链触发阈值：工具数达到该值才启用路由；未达则整链休眠、全量直通（ADR-004） */
+    /** 责任链触发阈值：工具数达到该值才启用路由；未达则整链休眠、全量直通（决策 04） */
     private int routingToolCountThreshold = 20;
 
     private Wattai wattai = new Wattai();

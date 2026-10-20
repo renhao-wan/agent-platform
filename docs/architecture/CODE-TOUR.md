@@ -25,15 +25,15 @@ KnowledgeSearchService/KnowledgeSearchTool
 
 ### registry/ 工具注册与访问控制
 - **OpenApiSourceRegistrar.java**【②】：启动对账的触发器——从来源注册表取激活来源，逐个做完整快照对账（实际逻辑在 `ContractSyncService`）。**"契约可访问"就等于"工具可用"**，且这个等式持续成立：接口新增/修改/删除会在下一次对账收敛，不必重启平台。单个来源失败只告警跳过、保留它上一版工具，不阻断启动。`platform.gateway.sync-on-startup=false` 可关掉启动这一轮（例如平台先于业务系统启动时）。
-- **ContractSyncService.java + impl/ContractSyncServiceImpl.java** ★【② ADR-008】：契约对账主流程：抓取 → 解析 → `applySnapshot` → 记录来源状态。失败时只更新 `tool_source.status/last_error`，**保留 `contract_hash` / `tool_count` / `last_success_at`**（last-known-good），不下线任何工具；同名冲突标 `CONFLICT` 并整份放弃。有实际变化时发布 `ToolCatalogChangedEvent`。定时、启动、管理端新建/编辑后的立即对账与手工触发共用一把进程内 `ReentrantLock`：抢不到直接返回 `BUSY`，不排队、不并发写同一份工具集合。每次对账打 Micrometer 指标（`platform.contract.sync` / `platform.contract.sync.duration` / `platform.contract.breaking`）。
-- **SourceRegistryService.java + impl/SourceRegistryServiceImpl.java**【ADR-009】：来源注册表。`seedFromConfig()` 启动时把 yml 里的 `sources` 种进库；`listAll` / `listActive` / `find`；`create` / `update` / `retire` 供管理端使用。**所有权规则**：`origin=CONFIG` 的来源每次启动按配置刷新；管理员编辑后提升为 `origin=ADMIN`，配置不再覆盖；配置里移除的来源软下线（`enabled=0`、`status=RETIRED`，名下工具 `present=0`）。编辑时关闭"启用"与 `DELETE` 同义——只置 `enabled=0` 只能阻止后续对账，已下发的工具必须一并软下线；重新启用会回到 `PENDING`，由随后的对账按契约恢复工具。配置错误（缺 id、id 重复、非 http(s)）按启动前置条件失败处理，请求参数错误返回 400。
+- **ContractSyncService.java + impl/ContractSyncServiceImpl.java** ★【② 决策 08】：契约对账主流程：抓取 → 解析 → `applySnapshot` → 记录来源状态。失败时只更新 `tool_source.status/last_error`，**保留 `contract_hash` / `tool_count` / `last_success_at`**（last-known-good），不下线任何工具；同名冲突标 `CONFLICT` 并整份放弃。有实际变化时发布 `ToolCatalogChangedEvent`。定时、启动、管理端新建/编辑后的立即对账与手工触发共用一把进程内 `ReentrantLock`：抢不到直接返回 `BUSY`，不排队、不并发写同一份工具集合。每次对账打 Micrometer 指标（`platform.contract.sync` / `platform.contract.sync.duration` / `platform.contract.breaking`）。
+- **SourceRegistryService.java + impl/SourceRegistryServiceImpl.java**【决策 09】：来源注册表。`seedFromConfig()` 启动时把 yml 里的 `sources` 种进库；`listAll` / `listActive` / `find`；`create` / `update` / `retire` 供管理端使用。**所有权规则**：`origin=CONFIG` 的来源每次启动按配置刷新；管理员编辑后提升为 `origin=ADMIN`，配置不再覆盖；配置里移除的来源软下线（`enabled=0`、`status=RETIRED`，名下工具 `present=0`）。编辑时关闭"启用"与 `DELETE` 同义——只置 `enabled=0` 只能阻止后续对账，已下发的工具必须一并软下线；重新启用会回到 `PENDING`，由随后的对账按契约恢复工具。配置错误（缺 id、id 重复、非 http(s)）按启动前置条件失败处理，请求参数错误返回 400。
 - **SourceConfigSeeder.java**：`@Order(0)` 的 `ApplicationRunner`，只做种子、不访问业务系统，因此 `sync-on-startup=false` 时仍执行；`seed-on-startup=false` 可关闭（测试用）。
 - **SourceConflictException.java**：重复创建来源、或试图删除配置管理的来源 → 全局异常映射 409（后者提示改配置）。
 - **ContractSyncScheduler.java**：`sync-interval-ms`（默认 5 分钟）周期对账；`sync-enabled=false` 关闭。与启动对账共用同一路径，首次执行延迟一个周期避免重复拉取。
 - **ToolSource.java / ToolSourceMapper.java**：`tool_source` 表——每个来源的 `origin`（CONFIG/ADMIN）、`enabled`、`status`（PENDING/OK/FAILED/CONFLICT/RETIRED）、契约地址与可选 `base_url`、服务凭证、`contract_hash`、`tool_count`、上次新增/更新/下线/破坏性变更计数、`last_attempt_at` / `last_success_at` / `last_error`。是"这个来源现在到底怎么了"的观测面。可被管理端清空的字段标 `updateStrategy = ALWAYS`。
 - **OpenApiImportService.java** ★【②】：OpenAPI JSON → 工具定义。规则：`operationId`→工具名（缺失则 slug 兜底）、`summary`→描述（模型选工具的依据）、path 参数填 `url_template` 占位、query/requestBody 合并生成 `inputSchema`、**敏感与权限要求一律读业务系统的扩展字段**（`x-require-confirm` / `x-required-permission`，DELETE 天然算敏感）——平台不猜测接口语义，所以"取消"二字本身不触发任何标记。
   `$ref` 必须**就地展开**：工具 schema 是脱离原契约、单独发给模型的片段，`#/components/schemas/...` 在模型侧查不到，OpenAI 兼容接口会以 "Pointer ... does not exist" 拒绝整轮请求。自引用按层截断成宽松 object 骨架，不会无限展开。
-- **ToolRegistryService.java + impl/ToolRegistryServiceImpl.java** ★【② ADR-008】：按 gatewayId 作用域查询/更新。`applySnapshot` 是快照对账本体：新增 / 指纹变化则更新（保留 `id`、`createdAt`、人工 `enabled`）/ 未变不动 / 契约里消失则 `present=0` 软下线（不删行，重新出现时复活）。写入前整体判冲突：同名工具仍被其他来源以 `present=1` 声明、或占用了平台保留名（`search_knowledge` / `recallHistory`）时整份放弃，不留半新半旧状态。**工具名在同一网关内是全局命名空间**。新增的写操作缺 `x-required-permission` 只记 `PERMISSION_UNDECLARED` 告警，仍正常注册——是否对全员开放由业务方决定。
+- **ToolRegistryService.java + impl/ToolRegistryServiceImpl.java** ★【② 决策 08】：按 gatewayId 作用域查询/更新。`applySnapshot` 是快照对账本体：新增 / 指纹变化则更新（保留 `id`、`createdAt`、人工 `enabled`）/ 未变不动 / 契约里消失则 `present=0` 软下线（不删行，重新出现时复活）。写入前整体判冲突：同名工具仍被其他来源以 `present=1` 声明、或占用了平台保留名（`search_knowledge` / `recallHistory`）时整份放弃，不留半新半旧状态。**工具名在同一网关内是全局命名空间**。新增的写操作缺 `x-required-permission` 只记 `PERMISSION_UNDECLARED` 告警，仍正常注册——是否对全员开放由业务方决定。
 - **ContractHashes.java**：契约指纹。只覆盖契约决定的字段（name/method/url_template/description/inputSchema/require_confirm/required_permission），服务凭证单独比对；整份契约的指纹按逐工具指纹排序后再哈希，工具顺序变化不算变更。
 - **ToolChangeAnalyzer.java**：变更告警，只告警不阻断。端点变化、新增必填参数、必填参数类型变化、权限收紧/变更/撤销；新增的写操作缺 `x-required-permission` 由 `ToolRegistryServiceImpl` 记 `PERMISSION_UNDECLARED`。完整语义 diff 交给 oasdiff 这类专用工具，平台不重复造轮子。
 - **ToolDefinition.java / ToolDefinitionMapper.java**：`tool_definition` 表实体。`present`（契约里是否仍存在，对账写）与 `enabled`（管理员启停，人工写）分离，有效工具 = 两者都为 1。`description`/`required_permission`/`auth_header_*`/`source_key`/`contract_hash` 标了 `updateStrategy = ALWAYS`——MyBatis-Plus 默认跳过 null 字段，会让"业务系统已撤销的声明"永远留在库里。
@@ -52,7 +52,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 
 ### web/ 管理端
 - **ProtocolAdminController.java** ★：`GET /admin/tools`（含已下线/已禁用工具，便于观察对账结果）、`PUT /admin/tools/{id}/enabled`（人工启停，对账不会覆盖）。**没有手工导入入口**——工具定义只能由来源对账写入，否则会留下没有来源归属、不参与对账的幽灵工具；接入新接口请登记来源（`/admin/sources`）。整个 `/admin/**` 由 `JwtAuthFilter` 按 URI 映射权限码（`/admin/tools` → `admin:tool`，其余见 `JwtAuthFilter`）——**没有第二套凭证体系**。
-- **ToolSourceAdminController.java**【ADR-008/009】：`GET /admin/sources`（各来源最后对账状态与计数）、`POST /admin/sources`（新建并立即对账）、`PUT /admin/sources/{sourceKey}`（编辑并立即对账）、`DELETE /admin/sources/{sourceKey}`（软下线并立即下线其工具）、`POST /admin/sources/sync`（全部立即对账）、`POST /admin/sources/{sourceKey}/sync`（单来源，未配置/已下线 404）。**只能管理来源，不能编辑工具**：契约地址、调用基地址、服务凭证、启停；工具定义永远由契约推导。凭证只入不出——查询只返回 `serviceKeyConfigured`。`SourceView` 另带 `staleTools` / `breakingChanges` 明细（由 `tool_source.last_stale_tools` / `last_breaking_changes` 的 JSON 还原），管理台据此展开"上次对账到底下线了哪几个工具、哪条接口发生破坏性变更"。
+- **ToolSourceAdminController.java**【决策 08/009】：`GET /admin/sources`（各来源最后对账状态与计数）、`POST /admin/sources`（新建并立即对账）、`PUT /admin/sources/{sourceKey}`（编辑并立即对账）、`DELETE /admin/sources/{sourceKey}`（软下线并立即下线其工具）、`POST /admin/sources/sync`（全部立即对账）、`POST /admin/sources/{sourceKey}/sync`（单来源，未配置/已下线 404）。**只能管理来源，不能编辑工具**：契约地址、调用基地址、服务凭证、启停；工具定义永远由契约推导。凭证只入不出——查询只返回 `serviceKeyConfigured`。`SourceView` 另带 `staleTools` / `breakingChanges` 明细（由 `tool_source.last_stale_tools` / `last_breaking_changes` 的 JSON 还原），管理台据此展开"上次对账到底下线了哪几个工具、哪条接口发生破坏性变更"。
 
 ---
 
@@ -72,7 +72,7 @@ KnowledgeSearchService/KnowledgeSearchTool
   进程内实现直接把调用转给 `ToolAccessService`，gatewayId 从 `AgentProperties` 取；失败文本加 `tool error: ` 前缀供模型识别。
   面试点：为什么留接口？——将来工具层若真拆成独立部署，换个实现即可，Agent 循环不用动。目前**没有第二实现**，"进程内"就是唯一形态。
 - **DynamicToolRegistry.java** ★：工具层返回的工具定义 → 手写 `GatewayToolCallback`（实现 Spring AI ToolCallback，**仅作 schema 广告位**——`call()` 留给 Spring AI 的隐式路径，本项目不走；真正执行在 `AgentRunner` 手动通道）；`require_confirm` 列映射为敏感标记；缓存 5 分钟（清单全量下发、与权限无关，无需按用户分桶）；刷新是"先构建后整体切换"，失败保留旧桶——注册失败不影响在跑对话。
-- **ToolSelector.java / impl/ToolSelectorChain.java / impl/WattAiToolSelector.java**【ADR-004】：工具前置路由责任链。`AgentRunner` 进主模型前先过链：工具数未达 `routing-tool-count-threshold`（默认 20）整链休眠、全量直通；达到后按 `routing-handlers` 顺序逐环尝试，节点以 `Optional.empty` 弃权（前置不满足/异常）传下一环，任一环节点接管即短路，全部弃权回落全量——路由层任何故障不影响主流程。wattai 节点：调决策模型（state=用户话术，choices=工具名），高置信单选、低置信 top-k 降级、argmax 落空/异常弃权。当前规模下链休眠（收益为负），扩展位预留 jev/本地语义路由。
+- **ToolSelector.java / impl/ToolSelectorChain.java / impl/WattAiToolSelector.java**【决策 04】：工具前置路由责任链。`AgentRunner` 进主模型前先过链：工具数未达 `routing-tool-count-threshold`（默认 20）整链休眠、全量直通；达到后按 `routing-handlers` 顺序逐环尝试，节点以 `Optional.empty` 弃权（前置不满足/异常）传下一环，任一环节点接管即短路，全部弃权回落全量——路由层任何故障不影响主流程。wattai 节点：调决策模型（state=用户话术，choices=工具名），高置信单选、低置信 top-k 降级、argmax 落空/异常弃权。当前规模下链休眠（收益为负），扩展位预留 jev/本地语义路由。
 
 ### auth/ 用户身份与 RBAC
 - **JwtService.java + AuthController/AuthService/AuthServiceImpl**：`POST /api/v1/auth/login` 校验密码后签发 JWT——**claims 只有 `uid`（+ iat/exp）**，角色与权限不写进 token。登录响应另带角色与权限列表，仅用于前端渲染入口。解析失败抛 `JwtException`。`InvalidCredentialsException` 由全局异常处理转 401。
@@ -85,12 +85,12 @@ KnowledgeSearchService/KnowledgeSearchTool
 - **WebConfig.java**：只注册一个 `JwtAuthFilter`（order=1）。
 
 ### context/ confirm/ memory/
-- **ContextTrimmer.java** ★【④】：chars/2 粗估超阈值（默认 6000）→ 保留 system + 最近 6 条，更早内容压成摘要 SystemMessage（落 checkpoint 表）。确定性规则，单测友好。
+- **ContextTrimmer.java** ★【④】：chars/2 粗估超阈值（默认 6000）→ 保留 system + 最近 6 条，更早内容替换为计数标记 SystemMessage（落 checkpoint 表，不含事实）。确定性规则，单测友好。
 - **TokenRecorder（接口）+ impl/TokenRecorderImpl**【④】：usage 打点 best-effort（31.8% 实验的数据源）。
 - **ConfirmManager（接口）+ impl/ConfirmManagerImpl / ConfirmController**★【①】：token → CompletableFuture 挂起；`POST /api/v1/confirm` 恢复；超时 = 拒绝。单实例内存实现（重启丢确认项视为拒绝，语义安全）。
 - **AgentSessionService（接口）+ impl/AgentSessionServiceImpl** + 四实体四 Mapper：chat_session / chat_message / checkpoint / llm_usage（消息即写即落库，重启不丢对话）。
 - **SessionController.java**：历史会话入口。`GET /api/v1/sessions` 列当前用户最近 50 条（标题取各自首条 USER 消息，无则"新对话"）；`GET /api/v1/sessions/{key}/messages` 只回 USER/ASSISTANT 供回放，工具调用轨迹不进入历史；`GET /api/v1/sessions/{key}/usage` 汇总该会话 `llm_usage`（prompt/completion/total tokens 与调用次数）；`DELETE /api/v1/sessions/{key}` 删除本人会话并级联清消息与 checkpoint。归属校验与续聊共用 `ownsSession`——`user_id` 为 NULL 的存量会话放行，他人的返回 403，不存在返回 404。
-- **HistoryRecallTool**【④ ADR-005】：平台自有内部工具 `recallHistory`——会话记忆"冷层"取回通道。模型自主判断何时按关键词检索当前会话的早期消息与里程碑（chat_message/checkpoint，MySQL LIKE，跨表按时间合并）；AgentRunner 本地执行，不进工具层、不参与路由/确认，角色无关。三层记忆 = 最近 6 条（热）+ checkpoint 摘要（温）+ 全量历史调回（冷），替代向量库 RAG。
+- **HistoryRecallTool**【④ 决策 05】：平台自有内部工具 `recallHistory`——会话记忆"冷层"取回通道。模型自主判断何时按关键词检索当前会话的早期消息与里程碑（chat_message/checkpoint，MySQL LIKE，跨表按时间合并）；AgentRunner 本地执行，不进工具层、不参与路由/确认，角色无关。三层记忆 = 最近 6 条（热）+ checkpoint 压缩标记（温）+ 全量历史调回（冷），替代向量库 RAG。
 - **AgentProperties.java / AgentConfig.java**：`platform.agent.*` 配置与需要原始值参数的 Bean 装配。
 
 ---
