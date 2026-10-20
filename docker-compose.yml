@@ -64,6 +64,8 @@ services:
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-m3}
       EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-https://api.siliconflow.cn}
+      # 工具路由（可选）：空值时不带 Authorization，路由失败弃权回落全量
+      WATTAI_API_KEY: ${WATTAI_API_KEY:-}
       # 业务系统跑在隔壁 business-systems 栈里，与本栈不在一个 docker 网络，故经宿主机发布端口访问
       GATEWAY_BACKEND_HOST: host.docker.internal
     depends_on:
