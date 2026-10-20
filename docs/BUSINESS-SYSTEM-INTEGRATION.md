@@ -51,6 +51,7 @@
 - **必须**：每个 operation 有稳定、唯一、可读的 `operationId`。
 - 缺失时平台会用 `方法_路径` 生成 slug 兜底，工具仍能注册，但名字不可读、改路径就改名，模型选择准确率明显下降。
 - **工具名在整个平台内是全局命名空间**：两个来源出现同名工具时，后对账的那份契约**整份放弃**（状态 `CONFLICT`），不会部分写入。
+- **不得占用平台保留名**：`search_knowledge`、`recallHistory` 是平台内部工具名，业务契约若使用会让整份契约被拒绝（`CONFLICT`）。这类工具由 Agent 运行时本地执行，不经过业务系统。
 - `operationId` 一经上线不要随意改：改名等于删旧建新，模型的历史经验与人工启停状态都会断掉。
 
 ### 3.3 描述
@@ -162,7 +163,7 @@ x-require-confirm: true
 | 列表接口分页、响应精简 | 8KB 截断，且 token 成本随响应线性增长 |
 | 写操作幂等 | 模型重试是常态 |
 | 接口名与业务动作一一对应，不要一个接口塞多种操作 | 模型按工具粒度决策，复合接口会迫使它"多走一步" |
-| 在业务系统仓库加契约测试（如 meeting-booking 的 `OpenApiContractTest`） | 防止重构时注解丢失，权限声明静默变空 |
+| 在业务系统仓库加契约测试（如 meeting-booking 的 `OpenApiContractTest`） | 防止重构时注解丢失、权限声明变空。平台对账会记 `PERMISSION_REMOVED` / `PERMISSION_CHANGED` 告警，但业务仓库自己的 CI 能更早发现 |
 | 变更权限码时同步通知平台管理员 | 平台会告警 `PERMISSION_CHANGED`，但授权矩阵要人来改 |
 
 ---
@@ -177,7 +178,8 @@ x-require-confirm: true
 | 某次对账后接口从契约消失 | 工具 `present=0` 软下线，不删行；重新出现时复活，人工启停状态保留 |
 | 两个来源声明同名工具 | 整份契约放弃，状态 `CONFLICT`，保留上一版；不会写出半新半旧状态 |
 | 契约内工具名重复 | 同上，整份放弃 |
-| 权限被收紧 / 端点变化 / 新增必填参数 / 参数类型变化 | 记 `PERMISSION_RESTRICTED` / `ENDPOINT_CHANGED` / `REQUIRED_PARAM_ADDED` / `PARAM_TYPE_CHANGED`，写管理端与 `platform.contract.breaking` 指标；**只告警，不阻断** |
+| 权限被收紧 / 撤销 / 变更、端点变化、新增必填参数、参数类型变化 | 记 `PERMISSION_RESTRICTED` / `PERMISSION_REMOVED` / `PERMISSION_CHANGED` / `ENDPOINT_CHANGED` / `REQUIRED_PARAM_ADDED` / `PARAM_TYPE_CHANGED`，写管理端与 `platform.contract.breaking` 指标；**只告警，不阻断** |
+| 新增的写操作未声明 `x-required-permission` | 正常注册，同时记 `PERMISSION_UNDECLARED` 告警。写操作指 POST / PUT / PATCH / DELETE |
 | 后端超时 / 非 2xx / 返回非 JSON | 统一包装为 `isError=true` 的文本观察，循环不中断 |
 | 响应过大 | 截断到 8KB |
 | 业务系统短暂不可用 | 下一次对账自动重试；已注册工具保持可用（调用时会失败并回喂模型） |
@@ -187,7 +189,7 @@ x-require-confirm: true
 
 | 缺口 | 现状 | 为什么平台不做 |
 |---|---|---|
-| **未声明权限 = 全员可用** | 能注册、能调用，管理端工具列表里权限标签为空；**没有自动告警** | 平台若自动给写操作加权限，就必须判断"哪个操作危险"——正是被移除的业务语义硬编码 |
+| **未声明权限 = 全员可用** | 能注册、能调用，权限标签为空；对账会记 `PERMISSION_UNDECLARED`（新增写操作）或 `PERMISSION_REMOVED`（声明被撤销）告警，但**不阻断、不阻止调用** | 平台只检查"声明是否存在"，不判断"这个操作该要什么权限"——后者是业务方的知识 |
 | **HTTP 200 装业务失败** | 平台当成功回喂模型，模型会向用户报告成功 | 识别响应体里的业务码需要理解每个系统的响应格式，且与"平台不编码业务语义"冲突 |
 | **业务系统不校验服务凭证** | 平台照常附加凭证，但对端忽略；接口可被绕过平台直接调用 | 这是业务系统自身的鉴权缺口，平台无法从外部强制 |
 | **不采信 `X-On-Behalf-Of-User`** | 所有操作落在系统账号名下 | 平台只能声明"代表谁"，是否采信是业务侧的安全决策 |
@@ -209,6 +211,7 @@ x-require-confirm: true
 
 - [ ] `/v3/api-docs` 可匿名访问，返回 OpenAPI 3.x JSON
 - [ ] 每个 operation 有稳定唯一的 `operationId`
+- [ ] 没有占用平台保留名（`search_knowledge` / `recallHistory`）
 - [ ] 每个 operation 的 `summary` 是动作句
 - [ ] path 参数声明了 `required: true`
 - [ ] 请求体是 `application/json`（无文件上传/表单）

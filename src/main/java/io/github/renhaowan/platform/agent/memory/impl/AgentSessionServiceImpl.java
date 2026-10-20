@@ -40,12 +40,14 @@ public class AgentSessionServiceImpl implements AgentSessionService {
     }
 
     @Override
-    public void appendMessage(String sessionKey, String role, String content, String toolName) {
+    public void appendMessage(String sessionKey, String role, String content, String toolName,
+                              String toolArguments) {
         ChatMessage message = new ChatMessage();
         message.setSessionKey(sessionKey);
         message.setRole(role);
         message.setContent(content);
         message.setToolName(toolName);
+        message.setToolArguments(toolArguments);
         messageMapper.insert(message);
     }
 

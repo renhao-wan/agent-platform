@@ -25,7 +25,8 @@ public interface AgentSessionService {
     /** 当前用户的会话，按创建时间倒序（最多 50 条）。 */
     List<SessionSummary> listSessions(Long userId);
 
-    void appendMessage(String sessionKey, String role, String content, String toolName);
+    void appendMessage(String sessionKey, String role, String content, String toolName,
+                       String toolArguments);
 
     List<ChatMessage> loadHistory(String sessionKey);
 

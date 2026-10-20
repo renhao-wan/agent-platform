@@ -112,9 +112,9 @@ class AgentRunnerTest {
         verify(events).toolResult(eq("search_rooms"), contains("rooms"));
         verify(events).answer("已为你找到 3 间可用会议室");
         verify(events).done(anyInt(), anyLong(), anyInt(), anyInt());
-        verify(sessionService).appendMessage(eq("s1"), eq(ChatMessage.ROLE_USER), anyString(), eq((String) null));
-        verify(sessionService).appendMessage(eq("s1"), eq(ChatMessage.ROLE_TOOL), contains("rooms"), eq("search_rooms"));
-        verify(sessionService).appendMessage(eq("s1"), eq(ChatMessage.ROLE_ASSISTANT), anyString(), eq((String) null));
+        verify(sessionService).appendMessage(eq("s1"), eq(ChatMessage.ROLE_USER), anyString(), eq((String) null), eq((String) null));
+        verify(sessionService).appendMessage(eq("s1"), eq(ChatMessage.ROLE_TOOL), contains("rooms"), eq("search_rooms"), any());
+        verify(sessionService).appendMessage(eq("s1"), eq(ChatMessage.ROLE_ASSISTANT), anyString(), eq((String) null), eq((String) null));
         verify(tokenRecorder, times(2)).record(eq("s1"), eq("decide"), anyString(), any(), any());
     }
 
@@ -140,7 +140,7 @@ class AgentRunnerTest {
                 .anyMatch(t -> HistoryRecallTool.TOOL_NAME.equals(t.getToolDefinition().name()))));
         verify(events).toolCall(eq("recallHistory"), contains("B305"));
         verify(sessionService).appendMessage(eq("s1"), eq(ChatMessage.ROLE_TOOL),
-                contains("B305"), eq("recallHistory"));
+                contains("B305"), eq("recallHistory"), any());
         verify(events).answer("你之前查过 B305，当时还有空位");
     }
 
@@ -201,7 +201,7 @@ class AgentRunnerTest {
 
         verify(toolGateway, never()).callTool(anyString(), anyString(), any());
         verify(sessionService).appendMessage(eq("s1"), eq(ChatMessage.ROLE_TOOL),
-                contains("拒绝"), eq("cancel_booking"));
+                contains("拒绝"), eq("cancel_booking"), any());
         verify(events).answer("好的，未取消");
     }
 
@@ -223,7 +223,7 @@ class AgentRunnerTest {
         verify(toolGateway, never()).callTool(anyString(), anyString(), any());
         verify(events).toolResult(eq("cancel_booking"), contains("权限不足"));
         verify(sessionService).appendMessage(eq("s1"), eq(ChatMessage.ROLE_TOOL),
-                contains("权限不足"), eq("cancel_booking"));
+                contains("权限不足"), eq("cancel_booking"), any());
         verify(events).answer("这个操作需要管理员权限");
     }
 

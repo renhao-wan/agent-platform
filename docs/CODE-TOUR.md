@@ -33,9 +33,9 @@ KnowledgeSearchService/KnowledgeSearchTool
 - **ToolSource.java / ToolSourceMapper.java**：`tool_source` 表——每个来源的 `origin`（CONFIG/ADMIN）、`enabled`、`status`（PENDING/OK/FAILED/CONFLICT/RETIRED）、契约地址与可选 `base_url`、服务凭证、`contract_hash`、`tool_count`、上次新增/更新/下线/破坏性变更计数、`last_attempt_at` / `last_success_at` / `last_error`。是"这个来源现在到底怎么了"的观测面。可被管理端清空的字段标 `updateStrategy = ALWAYS`。
 - **OpenApiImportService.java** ★【②】：OpenAPI JSON → 工具定义。规则：`operationId`→工具名（缺失则 slug 兜底）、`summary`→描述（模型选工具的依据）、path 参数填 `url_template` 占位、query/requestBody 合并生成 `inputSchema`、**敏感与权限要求一律读业务系统的扩展字段**（`x-require-confirm` / `x-required-permission`，DELETE 天然算敏感）——平台不猜测接口语义，所以"取消"二字本身不触发任何标记。
   `$ref` 必须**就地展开**：工具 schema 是脱离原契约、单独发给模型的片段，`#/components/schemas/...` 在模型侧查不到，OpenAI 兼容接口会以 "Pointer ... does not exist" 拒绝整轮请求。自引用按层截断成宽松 object 骨架，不会无限展开。
-- **ToolRegistryService.java + impl/ToolRegistryServiceImpl.java** ★【② ADR-008】：按 gatewayId 作用域查询/更新。`applySnapshot` 是快照对账本体：新增 / 指纹变化则更新（保留 `id`、`createdAt`、人工 `enabled`）/ 未变不动 / 契约里消失则 `present=0` 软下线（不删行，重新出现时复活）。写入前整体判冲突：同名工具仍被其他来源以 `present=1` 声明时整份放弃，不留半新半旧状态。**工具名在同一网关内是全局命名空间**。
+- **ToolRegistryService.java + impl/ToolRegistryServiceImpl.java** ★【② ADR-008】：按 gatewayId 作用域查询/更新。`applySnapshot` 是快照对账本体：新增 / 指纹变化则更新（保留 `id`、`createdAt`、人工 `enabled`）/ 未变不动 / 契约里消失则 `present=0` 软下线（不删行，重新出现时复活）。写入前整体判冲突：同名工具仍被其他来源以 `present=1` 声明、或占用了平台保留名（`search_knowledge` / `recallHistory`）时整份放弃，不留半新半旧状态。**工具名在同一网关内是全局命名空间**。新增的写操作缺 `x-required-permission` 只记 `PERMISSION_UNDECLARED` 告警，仍正常注册——是否对全员开放由业务方决定。
 - **ContractHashes.java**：契约指纹。只覆盖契约决定的字段（name/method/url_template/description/inputSchema/require_confirm/required_permission），服务凭证单独比对；整份契约的指纹按逐工具指纹排序后再哈希，工具顺序变化不算变更。
-- **ToolChangeAnalyzer.java**：破坏性变更识别，只告警不阻断。四类：端点变化、新增必填参数、必填参数类型变化、权限收紧/变更。完整语义 diff 交给 oasdiff 这类专用工具，平台不重复造轮子。
+- **ToolChangeAnalyzer.java**：变更告警，只告警不阻断。端点变化、新增必填参数、必填参数类型变化、权限收紧/变更/撤销；新增的写操作缺 `x-required-permission` 由 `ToolRegistryServiceImpl` 记 `PERMISSION_UNDECLARED`。完整语义 diff 交给 oasdiff 这类专用工具，平台不重复造轮子。
 - **ToolDefinition.java / ToolDefinitionMapper.java**：`tool_definition` 表实体。`present`（契约里是否仍存在，对账写）与 `enabled`（管理员启停，人工写）分离，有效工具 = 两者都为 1。`description`/`required_permission`/`auth_header_*`/`source_key`/`contract_hash` 标了 `updateStrategy = ALWAYS`——MyBatis-Plus 默认跳过 null 字段，会让"业务系统已撤销的声明"永远留在库里。
 - **GatewayProperties.java**：`platform.gateway.sources` 配置项（稳定 `id` + 契约地址 + 服务凭证 + 可选 baseUrl）、`sync-enabled` / `sync-on-startup` / `seed-on-startup` / `sync-interval-ms`。配置只做启动种子，运行时来源清单以 `tool_source` 为准。
 - **ToolAccessService.java** ★★【① 安全边界】：系统里**唯一的工具访问入口**，两道闸门都在这一个类里。
@@ -59,7 +59,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 ## 2. agent/ —— ReAct 运行时（简历亮点③④）
 
 ### loop/ 决策循环
-- **AgentRunner.java** ★★【③】：全项目心脏。流程：载入历史（裁剪后）→ 循环 `Planner.decide`（语义决策由模型对工具清单自主完成，平台保持领域中立） → 有 toolCalls 则逐个执行（敏感工具先挂起等确认）→ `ToolResponseMessage` 回填 → 无 toolCalls 则 answer。系统提示词每轮动态注入 `{{CURRENT_DATE}}/{{CURRENT_WEEKDAY}}`（消除模型编造日期）。步数熔断 maxSteps=8。**本次重构里这个类的主循环一行没改**——只把注入的 `McpGatewayClient` 换成 `ToolGateway`。
+- **AgentRunner.java** ★★【③】：全项目心脏。流程：载入历史（裁剪后）→ 循环 `Planner.decide`（语义决策由模型对工具清单自主完成，平台保持领域中立） → 有 toolCalls 则逐个执行（敏感工具先挂起等确认）→ `ToolResponseMessage` 回填 → 无 toolCalls 则 answer。系统提示词每轮动态注入 `{{CURRENT_DATE}}/{{CURRENT_WEEKDAY}}`（消除模型编造日期）。步数熔断 maxSteps=8。每次工具执行把**工具名、调用参数（截断 2KB）与结果**落 `chat_message`，参数供事后审计（"取消了哪条预订"）。**本次重构里这个类的主循环一行没改**——只把注入的 `McpGatewayClient` 换成 `ToolGateway`。
 - **Planner.java / impl/OpenAiPlanner.java** ★【③】：规划器抽象 + OpenAI 兼容实现。关键一行：`internalToolExecutionEnabled(false)`——关闭 Spring AI 隐式工具执行，每轮只取回模型的 toolCalls 决策，**执行权收归循环**（这是事件插桩/确认挂起/权限校验能存在的前提）。默认指向 DeepSeek（`application.yml` 的 `LLM_BASE_URL`/`LLM_MODEL` 可切厂商）。**厂商特有的"思考开关"按模型名前缀走 `extraBody` 透传**——qwen3 要 `enable_thinking=false`，DeepSeek 的 thinking 默认开启、必须显式关（原因见 FRAMEWORK-NOTES §2：它带 tools 时要求回传 `reasoning_content`，与本循环手动构造 `ToolResponseMessage` 冲突）。**不要**改用 yml 的 `extra-body`，那个键在此版本实测静默失效。
 
 ### sse/ 用户入口
@@ -121,16 +121,16 @@ KnowledgeSearchService/KnowledgeSearchTool
 - `common/GlobalExceptionHandler.java`：参数校验 400、NoResourceFound 404（防吞）、其余 500。
 - `web/PingController.java`：健康探针。
 - `resources/static/index.html`：单页控制台（fetch 流解析 SSE，8 类事件渲染，确认按钮，工具调用耗时与回合/会话 token 统计）。拥有 `admin:console` 权限的账号登录后多出「管理台」入口（直连无权端点仍 403），抽屉内分四个 tab：**契约来源**（状态、对账明细、增删改与立即对账）、**工具目录**（按来源分组、搜索/过滤、人工启停）、**知识检索**（以指定角色跑真实检索，观察权限过滤与命中分数）、**角色权限**（角色列表与权限矩阵，覆盖式保存）。
-- `resources/schema.sql`：9 张表幂等建表（IF NOT EXISTS + information_schema 守卫的 ALTER）。
+- `resources/schema.sql`：9 张表幂等建表（IF NOT EXISTS + information_schema 守卫的 ALTER）。`chat_message.tool_arguments` 保存 TOOL 消息的调用参数（审计用），存量库由守卫 ALTER 补列。
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
 - `knowledge/`：5 份制度语料（4 份 `public` + 1 份 `admin:policy`）+ 评估题库；镜像内带一份，compose 另把宿主目录只读挂到 `/app/knowledge`，改文档后重启或 reindex 即生效，不必重建镜像。
 
-## 5. 测试（38 类，247 项）
+## 5. 测试（38 类，252 项）
 
 | 测试类 | 覆盖 |
 |---|---|
 | OpenApiImportServiceTest (13) | 三类参数解析、slug 兜底、baseUrl 覆盖、非法 JSON、扩展字段声明敏感/角色（裸值与 springdoc 嵌套两种形状）、`$ref` 内联与自引用截断 |
-| ToolAccessServiceTest (14) | 闸门 1 全量下发、权限要求随描述、闸门 2 拒绝/放行/`*` 通配、legacy `role:` 归一、未知工具、非法 JSON、转发失败回喂、确认前权限预判（拒绝/放行/未知工具） |
+| ToolAccessServiceTest (14) | 闸门 1 全量下发、权限要求随描述、闸门 2 拒绝/放行/`*` 通配、未知工具、非法 JSON、转发失败回喂、确认前权限预判（拒绝/放行/未知工具） |
 | GenericHttpForwarderTest (10) | query/body/path 填充、UTF-8、8KB 截断、后端 500、不可达 |
 | ToolSelectorChainTest (7) | 阈值休眠、逐环弃权传递、短路、全弃权回落、异常降级、argmax 越界 |
 | HistoryRecallToolTest (7) | 关键词检索、跨表合并、条数/长度上限、未命中如实回喂 |
@@ -141,7 +141,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 | RbacSeederTest (3) | 缺失角色补种、已种过不覆盖人工配置、未种过补默认 |
 | RbacAdminControllerTest (4) | 角色/权限查询、覆盖保存、未知角色 404 |
 | ChatAuthFilterTest (5) | 401 三态、放行、admin 范围（403） |
-| AgentSessionServiceImplTest (12) | 会话创建与复用、历史加载、消息落库、checkpoint 读取、用量汇总、删除本人会话级联清理、拒绝他人/不存在的会话 |
+| AgentSessionServiceImplTest (13) | 会话创建与复用、历史加载、消息落库（含工具名与调用参数）、checkpoint 读取、用量汇总、删除本人会话级联清理、拒绝他人/不存在的会话 |
 | SessionControllerTest (11) | 会话列表/历史/用量/删除端点：鉴权、归属校验、404、删除本人返回 204 |
 | AgentRunnerTest (6) | 循环三态：执行/同意/拒绝/超步数、recall 本地执行、权限不足时跳过确认且不执行 |
 | OpenApiSourceRegistrarTest (1) | 启动入口触发全量对账 |
@@ -149,14 +149,14 @@ KnowledgeSearchService/KnowledgeSearchTool
 | ToolSourceAdminControllerTest (9) | HTTP 契约：400 参数校验、404 不存在、409 重复创建/下线配置来源、创建后立即对账、凭证只披露 `serviceKeyConfigured` |
 | SourceRegistryServiceTest (10) | 配置种子插入/刷新/不覆盖 ADMIN、配置移除软下线工具、id 缺失与重复 fail fast、重复创建 409、编辑提升 ADMIN 且凭证 null 保持、编辑停用即下线其工具、重新启用回到 PENDING、retire 拒绝 CONFIG / 软下线 ADMIN、查询不回显凭证 |
 | SourceConfigSeederTest (1) | 启动种子器调用注册表 |
-| ToolChangeAnalyzerTest (8) | 新增必填参数、可选转必填、必填类型变化、端点变化、权限收紧/变更、无变化、非法 schema |
+| ToolChangeAnalyzerTest (9) | 新增必填参数、可选转必填、必填类型变化、端点变化、权限收紧/变更/撤销、无变化、非法 schema |
 | GenericHttpForwarderTimeoutTest (4) | WireMock：读超时、连接中断、非 JSON 响应体、截断边界 |
 | DynamicToolRegistryTest (4) | 确认映射、空清单、刷新失败保留旧桶 |
 | ConfirmManagerTest (4) | 同意/拒绝/超时/未知 token |
 | AuthControllerTest (4) | 登录成功/密码错/用户不存在/参数校验 |
 | ToolCatalogControllerTest (3) | 工具目录端点：未登录 401、身份透传、服务凭证不外泄 |
 | ContextTrimmerTest (3) | 不裁剪/裁剪结构/摘要计数 |
-| ToolRegistryServiceTest (10) | 快照新增/未变不重写/更新保留人工禁用/软下线/已下线不重复处理/跨来源冲突整份放弃/已下线可被接管/契约内重名、启停 |
+| ToolRegistryServiceTest (13) | 快照新增/未变不重写/更新保留人工禁用/软下线/已下线不重复处理/跨来源冲突整份放弃/已下线可被接管/契约内重名、保留名拒绝、新增写操作缺声明告警、启停 |
 | PlatformApplicationTests (1) | 上下文启动 |
 | AgentSelfHealingTest (1) | ★ 端到端：WireMock 业务系统首次 500、二次 200，ReAct 循环不中断、两次观察都回填落库 |
 | MarkdownChunkerTest (10) | 按 H2 切分、前缀、H3 降级、硬切重叠、小段合并、导语并入首节时保留小节名、代码块/表格、front-matter |

@@ -136,9 +136,16 @@ CREATE TABLE IF NOT EXISTS chat_message (
     role       VARCHAR(16) NOT NULL COMMENT 'USER/ASSISTANT/TOOL/SYSTEM',
     content    TEXT        NOT NULL,
     tool_name  VARCHAR(128) NULL,
+    tool_arguments TEXT     NULL COMMENT 'TOOL 消息的调用参数（审计用，超长截断）',
     created_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_msg_session (session_key, id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'Agent 对话消息';
+
+-- 存量库补列：TOOL 消息的调用参数（审计用）
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='chat_message' AND COLUMN_NAME='tool_arguments');
+SET @ddl = IF(@col_exists = 0, 'ALTER TABLE chat_message ADD COLUMN tool_arguments TEXT NULL AFTER tool_name', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- M2.5：上下文裁剪保留的关键里程碑
 CREATE TABLE IF NOT EXISTS checkpoint (

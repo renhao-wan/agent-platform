@@ -175,7 +175,7 @@ class AgentSelfHealingTest {
 
         // 两次观察都落库（下一轮模型据此决策）
         verify(sessionService, times(2)).appendMessage(eq("s1"), eq(ChatMessage.ROLE_TOOL),
-                anyString(), eq("create_booking"));
+                anyString(), eq("create_booking"), any());
         // 后端侧同样确认收到两次请求，第二次请求体与第一次一致（模型重试原参数）
         backend.verify(2, postRequestedFor(urlEqualTo("/api/v1/bookings"))
                 .withRequestBody(equalToJson("{\"roomId\":2}")));

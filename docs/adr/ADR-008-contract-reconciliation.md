@@ -34,7 +34,7 @@ ADR-007 让工具来源在启动时自动拉取，但"注册"这件事本身仍�
 5. **写入前整体判冲突**。同名工具仍由其他来源以 `present=1` 声明时，本次快照整份放弃并标记 `CONFLICT`——不做"部分写入"，否则一个来源的异常会让清单处于半新半旧的状态。同一份契约内部工具名重复同理。
 6. **失败保留 last-known-good**。抓取/解析/DB 失败只更新 `tool_source.status` 与 `last_error`，不清空 `contract_hash` / `tool_count` / `last_success_at`，也不下线任何工具。一个后端暂时没起来，不应把它的工具从模型视野里拿掉。
 7. **三个触发点共享同一条对账路径**：启动时一次（`OpenApiSourceRegistrar`）、定时（`sync-interval-ms`，默认 5 分钟）、管理端手工（`POST /admin/sources/sync`）。对账产生实际变化时发布 `ToolCatalogChangedEvent`，`DynamicToolRegistry` 立即失效 5 分钟工具缓存，不必等缓存自然过期。
-8. **破坏性变更只告警不阻断**。与工具调用直接相关的四类（端点变化、新增必填参数、必填参数类型变化、角色收紧/变更）由 `ToolChangeAnalyzer` 识别，写入 `SyncReport.breakingChanges` 并记日志。完整语义 diff 交给 oasdiff 这类专用工具，平台不重复造轮子；不阻断是因为让一次上游发布把整份契约卡在旧版本，代价高于"先同步、同时告警"。
+8. **破坏性变更只告警不阻断**。与工具调用直接相关的几类（端点变化、新增必填参数、必填参数类型变化、权限收紧/变更/撤销）由 `ToolChangeAnalyzer` 识别，新增写操作缺 `x-required-permission` 由 `ToolRegistryServiceImpl` 记 `PERMISSION_UNDECLARED`，均写入 `SyncReport.breakingChanges` 并记日志。完整语义 diff 交给 oasdiff 这类专用工具，平台不重复造轮子；不阻断是因为让一次上游发布把整份契约卡在旧版本，代价高于"先同步、同时告警"。
 9. **单实例假设显式化**。定时对账与 `ConfirmManager` 一样没有分布式锁；多实例部署时每个实例都会各自对账，写操作是幂等的（快照收敛），但 `ToolCatalogChangedEvent` 只是进程内刷新，其他实例要等下一次定时对账。需要多实例时再把来源级互斥（如 `tool_source` 上的租约列）补上。
 
 ## 后果
@@ -51,7 +51,7 @@ ADR-007 让工具来源在启动时自动拉取，但"注册"这件事本身仍�
 - `tool_definition` 与 `tool_source` 多了一组状态列，`schema.sql` 需要沿用幂等守卫加列；
 - "软下线"意味着表会积累历史行，需要时再清理（当前规模不值得做归档）；
 - 对账是**最终一致**而非实时：默认窗口 5 分钟，需要立刻生效就手工触发；
-- 破坏性变更识别是启发式的，只覆盖与本平台相关的四类，不能替代完整的契约兼容性检查。
+- 破坏性变更识别是启发式的，只覆盖与本平台相关的那几类（端点、必填参数、类型、权限），不能替代完整的契约兼容性检查。
 
 ## 相关
 

@@ -23,5 +23,7 @@ public class ChatMessage {
     private String role;
     private String content;
     private String toolName;
+    /** TOOL 消息的调用参数，用于审计；超长时截断（见 AgentRunner.MAX_TOOL_ARGUMENTS_CHARS）。 */
+    private String toolArguments;
     private LocalDateTime createdAt;
 }

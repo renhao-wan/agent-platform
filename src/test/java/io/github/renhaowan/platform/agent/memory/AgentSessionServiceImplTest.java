@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -156,6 +157,17 @@ class AgentSessionServiceImplTest {
 
         assertThat(service.usageOf("sk-empty"))
                 .isEqualTo(new AgentSessionService.UsageSummary(0, 0, 0, 0));
+    }
+
+    @Test
+    void appendMessagePersistsToolNameAndArguments() {
+        service.appendMessage("sk-mine", ChatMessage.ROLE_TOOL, "{\"code\":0}",
+                "cancel_booking", "{\"bookingId\":3}");
+
+        ArgumentCaptor<ChatMessage> captor = ArgumentCaptor.forClass(ChatMessage.class);
+        verify(messageMapper).insert(captor.capture());
+        assertThat(captor.getValue().getToolName()).isEqualTo("cancel_booking");
+        assertThat(captor.getValue().getToolArguments()).isEqualTo("{\"bookingId\":3}");
     }
 
     private LlmUsage usage(int prompt, int completion) {

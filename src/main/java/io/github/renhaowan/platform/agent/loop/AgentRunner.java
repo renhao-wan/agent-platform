@@ -37,6 +37,8 @@ import org.springframework.stereotype.Service;
 public class AgentRunner {
 
     private static final String SYSTEM_PROMPT = loadPrompt();
+    /** 工具参数按审计用途落库，超长截断，避免大请求体撑爆消息表。 */
+    private static final int MAX_TOOL_ARGUMENTS_CHARS = 2000;
 
     private final Planner planner;
     private final ToolSelector toolSelector;
@@ -75,7 +77,7 @@ public class AgentRunner {
             history.add(toSpringMessage(message));
         }
         history.add(new UserMessage(userText));
-        sessionService.appendMessage(sessionKey, ChatMessage.ROLE_USER, userText, null);
+        sessionService.appendMessage(sessionKey, ChatMessage.ROLE_USER, userText, null, null);
 
         ContextTrimmer.TrimResult trim = contextTrimmer.trim(history);
         history = new ArrayList<>(trim.messages());
@@ -122,7 +124,7 @@ public class AgentRunner {
             if (!output.hasToolCalls()) {
                 String answer = output.getText() == null ? "" : output.getText();
                 events.answer(answer);
-                sessionService.appendMessage(sessionKey, ChatMessage.ROLE_ASSISTANT, answer, null);
+                sessionService.appendMessage(sessionKey, ChatMessage.ROLE_ASSISTANT, answer, null, null);
                 events.done(steps, elapsedMs(startedAt), promptTokens, completionTokens);
                 return;
             }
@@ -172,7 +174,8 @@ public class AgentRunner {
                     events.toolResult(call.name(), summarize(resultText));
                 }
                 responses.add(new ToolResponseMessage.ToolResponse(call.id(), call.name(), resultText));
-                sessionService.appendMessage(sessionKey, ChatMessage.ROLE_TOOL, resultText, call.name());
+                sessionService.appendMessage(sessionKey, ChatMessage.ROLE_TOOL, resultText, call.name(),
+                        truncateArguments(call.arguments()));
             }
             history.add(ToolResponseMessage.builder().responses(responses).build());
         }
@@ -183,6 +186,13 @@ public class AgentRunner {
 
     private static long elapsedMs(long startedAt) {
         return (System.nanoTime() - startedAt) / 1_000_000;
+    }
+
+    private static String truncateArguments(String arguments) {
+        if (arguments == null || arguments.length() <= MAX_TOOL_ARGUMENTS_CHARS) {
+            return arguments;
+        }
+        return arguments.substring(0, MAX_TOOL_ARGUMENTS_CHARS) + "…[truncated]";
     }
 
     private String resolveSystemPrompt() {
