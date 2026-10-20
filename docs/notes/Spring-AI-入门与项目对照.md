@@ -18,6 +18,7 @@
 | 多轮对话怎么表示、工具结果怎么回填 | §4 | `AgentRunner` |
 | 温度、模型名、思考开关怎么传 | §5 | `OpenAiPlanner`、`application.yml` |
 | 工具调用怎么工作、隐式与显式的区别 | §6 | `DynamicToolRegistryImpl`、`AgentRunner` |
+| 工具多时怎么缩小候选集 | §6.8 | `ToolSelectorChain`、`WattAiToolSelector` |
 | token 用量、超时、异常怎么处理 | §7 | `TokenRecorder`、`AgentProperties` |
 | 文本怎么变成向量 | §8 | `KnowledgeConfig`、`UsageRecordingEmbeddingModel` |
 | 向量库怎么增删查、怎么做权限过滤 | §9 | `KnowledgeIndexService`、`KnowledgeSearchService` |
@@ -538,6 +539,25 @@ AgentRunner                          OpenAiPlanner            Spring AI/HTTP    
 3. **执行点鉴权**：权限校验必须发生在"即将执行"的位置，且需要当前用户身份。
 
 一句话：**执行权必须在自己的代码里**。框架的价值是协议封装，不是替你决定业务流程。
+
+### 6.8 工具变多之后：候选集路由
+
+每轮把**全部**工具发给模型，在十几个工具时没问题；工具数上百后，token 成本线性增长，模型选错工具的概率也会上升。本项目的应对是一条**前置路由责任链**（`ToolSelector`）：
+
+```yaml
+platform:
+  agent:
+    routing-handlers: wattai              # 逗号分隔，按序尝试；置空 = 不路由
+    routing-tool-count-threshold: 20      # 工具数达到 20 才启用，未达则整链休眠
+```
+
+行为分三层：
+
+1. **规模闸门**：`ToolSelectorChain` 发现工具数 < 20，直接返回全量——当前 16 个工具，所以这条链**实际处于休眠状态**，主流程零开销。
+2. **逐环尝试**：达到阈值后交给 `WattAiToolSelector`（一个小型决策模型）从工具名 + 描述中选一个。置信度低于 0.6 时不硬选，而是按概率取 top-2 作为候选集；argmax 不在候选里则弃权。
+3. **链尾兜底**：任何节点弃权或抛异常，最终都回落全量工具。**路由是体验优化，不是安全边界**——它只缩小发给模型的候选集，权限校验仍然发生在闸门 2。
+
+需要真实启用时，在 `.env` 里配置 `WATTAI_API_KEY`（可选；为空时不带鉴权头，请求失败会弃权并回落全量）。项目注释里的实测结论是：托管端点中文工具路由置信度持续偏低，因此它被保留为一种可替换的实现，而不是默认依赖。
 
 ---
 
