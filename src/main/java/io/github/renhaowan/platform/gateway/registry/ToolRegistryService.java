@@ -21,9 +21,6 @@ public interface ToolRegistryService {
     /** 管理端视图：包含已下线与已禁用的工具。 */
     List<ToolDefinition> listAll(String gatewayId);
 
-    /** 手工导入（无来源快照语义）：同名更新，不处理删除。 */
-    void upsertAll(List<ToolDefinition> tools);
-
     /**
      * 以一份完整契约为期望状态做对账：新增、更新、把本来源缺失的工具标记为下线。
      * 只有在成功解析整份契约后调用；任何冲突都在写入前抛出，调用方据此保留上一版数据。

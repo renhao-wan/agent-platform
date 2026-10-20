@@ -191,6 +191,35 @@ class ContractSyncServiceTest {
     }
 
     @Test
+    void nameConflictRecordsToolAndOwningSourceForOperators() {
+        ToolSource previous = new ToolSource();
+        previous.setSourceKey("demo");
+        previous.setStatus(ToolSource.STATUS_OK);
+        when(sourceMapper.selectOne(any())).thenReturn(previous);
+        when(sourceMapper.selectById(any())).thenReturn(previous);
+        java.util.List<ToolSource> updates = new java.util.ArrayList<>();
+        when(sourceMapper.updateById(any(ToolSource.class))).thenAnswer(invocation -> {
+            updates.add(invocation.getArgument(0));
+            return 1;
+        });
+        when(registryService.applySnapshot(any(), any(), any()))
+                .thenThrow(new IllegalStateException(
+                        "工具名冲突：cancel_thing 已由来源 booking 声明；请先从旧契约移除或改名"));
+
+        ContractSyncService.SyncReport report = service().sync(
+                new ContractSyncService.SourceSpec("demo", "http://source.local/openapi.json", null, null, null));
+
+        assertThat(report.status()).isEqualTo(ToolSource.STATUS_CONFLICT);
+        assertThat(updates).hasSize(1);
+        assertThat(updates.get(0).getStatus()).isEqualTo(ToolSource.STATUS_CONFLICT);
+        // 管理端靠 last_error 定位冲突双方，而不仅仅看到整个来源 CONFLICT
+        assertThat(updates.get(0).getLastError())
+                .contains("cancel_thing")
+                .contains("booking")
+                .doesNotContain("java.lang.IllegalStateException");
+    }
+
+    @Test
     void listenerFailureDoesNotTurnSuccessfulReconciliationIntoFailure() {
         firstSyncWritesNewSource();
         doThrow(new IllegalStateException("refresh boom"))

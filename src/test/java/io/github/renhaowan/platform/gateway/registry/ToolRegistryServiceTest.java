@@ -53,28 +53,6 @@ class ToolRegistryServiceTest {
     }
 
     @Test
-    void upsertInsertsWhenNew() {
-        when(mapper.selectOne(any(QueryWrapper.class))).thenReturn(null);
-
-        service.upsertAll(List.of(tool("search_rooms")));
-
-        verify(mapper).insert(any(ToolDefinition.class));
-        verify(mapper, never()).updateById(any(ToolDefinition.class));
-    }
-
-    @Test
-    void upsertUpdatesWhenNameExists() {
-        ToolDefinition existing = tool("search_rooms");
-        existing.setId(42L);
-        when(mapper.selectOne(any(QueryWrapper.class))).thenReturn(existing);
-
-        service.upsertAll(List.of(tool("search_rooms")));
-
-        verify(mapper, never()).insert(any(ToolDefinition.class));
-        verify(mapper).updateById(any(ToolDefinition.class));
-    }
-
-    @Test
     void snapshotInsertsNewToolsWithSourceAndFingerprint() {
         when(mapper.selectList(any(QueryWrapper.class))).thenReturn(List.of(), List.of());
 

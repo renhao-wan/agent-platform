@@ -1,12 +1,9 @@
 package io.github.renhaowan.platform.gateway.web;
 
 import io.github.renhaowan.platform.common.ApiResponse;
-import io.github.renhaowan.platform.gateway.registry.OpenApiImportService;
 import io.github.renhaowan.platform.gateway.registry.ToolCatalogChangedEvent;
 import io.github.renhaowan.platform.gateway.registry.ToolRegistryService;
 import io.github.renhaowan.platform.gateway.registry.entity.ToolDefinition;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -14,25 +11,21 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 协议导入与工具查询（管理端）。
+ * 工具查询与人工启停（管理端）。
+ * <p>
+ * 工具定义只能由契约对账写入：没有手工导入入口，否则会留下没有来源归属、
+ * 不参与对账的幽灵工具。接入新接口请登记来源（{@code /admin/sources}）。
  */
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/admin")
 public class ProtocolAdminController {
-
-    public record ImportRequest(@NotBlank String gatewayId, @NotBlank String openapi,
-                                String baseUrl, String authHeaderName, String authHeaderValue,
-                                String sourceKey) {
-    }
 
     public record ToolView(Long id, String name, String description, String httpMethod,
                            String urlTemplate, boolean requireConfirm, String requiredRole,
@@ -50,33 +43,8 @@ public class ProtocolAdminController {
         }
     }
 
-    public record ImportResult(int imported, List<ToolView> tools) {
-    }
-
-    private final OpenApiImportService importService;
     private final ToolRegistryService registryService;
     private final ApplicationEventPublisher events;
-
-    @PostMapping("/protocols/import")
-    public ApiResponse<ImportResult> importProtocols(@RequestBody @Valid ImportRequest request) {
-        List<ToolDefinition> tools = importService.parse(
-                request.gatewayId(), request.openapi(), request.baseUrl());
-        // 服务级凭证：该来源服务的所有工具共用（转发时自动附带，解决业务接口自身有鉴权的接入问题）
-        tools.forEach(tool -> {
-            tool.setAuthHeaderName(request.authHeaderName());
-            tool.setAuthHeaderValue(request.authHeaderValue());
-        });
-        if (request.sourceKey() == null || request.sourceKey().isBlank()) {
-            registryService.upsertAll(tools);
-        } else {
-            // 带 sourceKey 表示"这是一份完整契约快照"：契约里没有的工具会被下线。
-            // 与自动来源分开命名空间，避免手工导入误伤同名业务来源。
-            registryService.applySnapshot(request.gatewayId(),
-                    "manual:" + request.gatewayId() + ":" + request.sourceKey(), tools);
-        }
-        events.publishEvent(new ToolCatalogChangedEvent("manual-import"));
-        return ApiResponse.ok(new ImportResult(tools.size(), tools.stream().map(ToolView::of).toList()));
-    }
 
     /** 管理端视图包含已下线/已禁用的工具，便于观察对账结果。 */
     @GetMapping("/tools")

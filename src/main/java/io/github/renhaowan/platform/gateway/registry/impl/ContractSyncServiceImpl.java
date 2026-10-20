@@ -245,7 +245,8 @@ public class ContractSyncServiceImpl implements ContractSyncService {
         // 保留 hash / toolCount / lastSuccessAt：失败时这些仍表示最后一次成功的数据
         source.setStatus(status);
         source.setLastAttemptAt(LocalDateTime.now());
-        source.setLastError(truncate(error.toString()));
+        // 管理端直接读这一列排障：优先给人看 message，而不是异常类名
+        source.setLastError(truncate(error.getMessage() != null ? error.getMessage() : error.toString()));
         persist(source, spec);
     }
 

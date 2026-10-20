@@ -26,7 +26,7 @@ public class ToolDefinition {
 
     private String name;
 
-    /** 契约来源标识；首次同步时绑定，手工导入的工具可为空 */
+    /** 契约来源标识；工具只能由来源对账写入，因此非空 */
     private String sourceKey;
 
     /** 契约字段的指纹：同值表示这次同步无需重写该行 */
