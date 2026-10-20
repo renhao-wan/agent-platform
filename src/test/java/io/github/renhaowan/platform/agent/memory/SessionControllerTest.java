@@ -3,6 +3,7 @@ package io.github.renhaowan.platform.agent.memory;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -84,6 +85,43 @@ class SessionControllerTest {
                 .andExpect(jsonPath("$[1].role").value(ChatMessage.ROLE_ASSISTANT))
                 .andExpect(jsonPath("$[1].content").value("你有一笔待提交的报销单。"))
                 .andExpect(jsonPath("$[1].createdAt").exists());
+    }
+
+    @Test
+    void deleteWithoutTokenRejectedWith401() throws Exception {
+        mockMvc.perform(delete("/api/v1/sessions/sk-mine"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void deleteForeignSessionRejectedWith403() throws Exception {
+        when(sessionService.ownsSession("sk-other", 7L)).thenReturn(false);
+
+        mockMvc.perform(delete("/api/v1/sessions/sk-other")
+                        .header("Authorization", "Bearer " + jwtService.issue(new UserPrincipal(7L, "STAFF"))))
+                .andExpect(status().isForbidden());
+
+        verify(sessionService, never()).deleteSession("sk-other", 7L);
+    }
+
+    @Test
+    void deleteMissingSessionReturns404() throws Exception {
+        when(sessionService.ownsSession("sk-gone", 7L)).thenReturn(true);
+        when(sessionService.deleteSession("sk-gone", 7L)).thenReturn(false);
+
+        mockMvc.perform(delete("/api/v1/sessions/sk-gone")
+                        .header("Authorization", "Bearer " + jwtService.issue(new UserPrincipal(7L, "STAFF"))))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void deleteOwnSessionReturns204() throws Exception {
+        when(sessionService.ownsSession("sk-mine", 7L)).thenReturn(true);
+        when(sessionService.deleteSession("sk-mine", 7L)).thenReturn(true);
+
+        mockMvc.perform(delete("/api/v1/sessions/sk-mine")
+                        .header("Authorization", "Bearer " + jwtService.issue(new UserPrincipal(7L, "STAFF"))))
+                .andExpect(status().isNoContent());
     }
 
     private ChatMessage message(String role, String content) {

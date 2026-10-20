@@ -8,6 +8,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
@@ -44,5 +45,16 @@ public class SessionController {
                 .map(message -> new SessionMessage(message.getRole(), message.getContent(), message.getCreatedAt()))
                 .toList();
         return ResponseEntity.ok(messages);
+    }
+
+    @DeleteMapping("/api/v1/sessions/{sessionKey}")
+    public ResponseEntity<Void> delete(@PathVariable String sessionKey) {
+        UserPrincipal principal = UserContext.get();
+        if (!sessionService.ownsSession(sessionKey, principal.uid())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        return sessionService.deleteSession(sessionKey, principal.uid())
+                ? ResponseEntity.noContent().build()
+                : ResponseEntity.notFound().build();
     }
 }

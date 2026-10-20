@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /** AgentSessionService 接口实现。 */
 @RequiredArgsConstructor
@@ -106,6 +107,24 @@ public class AgentSessionServiceImpl implements AgentSessionService {
         return findBySessionKey(sessionKey)
                 .map(session -> session.getUserId() == null || session.getUserId().equals(userId))
                 .orElse(true);
+    }
+
+    @Override
+    @Transactional
+    public boolean deleteSession(String sessionKey, Long userId) {
+        ChatSession session = sessionMapper.selectOne(
+                new QueryWrapper<ChatSession>().eq("session_key", sessionKey));
+        if (session == null) {
+            return false;
+        }
+        if (session.getUserId() != null && !session.getUserId().equals(userId)) {
+            return false;
+        }
+        checkpointMapper.delete(new QueryWrapper<Checkpoint>().eq("session_key", sessionKey));
+        messageMapper.delete(new QueryWrapper<ChatMessage>().eq("session_key", sessionKey));
+        // 用业务键删除而不是 id：调用方拿到的就是 sessionKey，少一次主键转换
+        sessionMapper.delete(new QueryWrapper<ChatSession>().eq("session_key", sessionKey));
+        return true;
     }
 
     @Override

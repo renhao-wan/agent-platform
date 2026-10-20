@@ -2,6 +2,7 @@ package io.github.renhaowan.platform.agent.memory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -103,6 +104,33 @@ class AgentSessionServiceImplTest {
         when(sessionMapper.selectOne(any())).thenReturn(null);
 
         assertThat(service.ownsSession("sk-missing", 7L)).isTrue();
+    }
+
+    @Test
+    void deleteSessionRemovesMessagesCheckpointAndSession() {
+        when(sessionMapper.selectOne(any())).thenReturn(session("sk-mine", 7L, null));
+
+        assertThat(service.deleteSession("sk-mine", 7L)).isTrue();
+
+        verify(messageMapper).delete(any(com.baomidou.mybatisplus.core.conditions.query.QueryWrapper.class));
+        verify(checkpointMapper).delete(any(com.baomidou.mybatisplus.core.conditions.query.QueryWrapper.class));
+        verify(sessionMapper).delete(any(com.baomidou.mybatisplus.core.conditions.query.QueryWrapper.class));
+    }
+
+    @Test
+    void deleteSessionRefusesForeignSession() {
+        when(sessionMapper.selectOne(any())).thenReturn(session("sk-other", 8L, null));
+
+        assertThat(service.deleteSession("sk-other", 7L)).isFalse();
+        verifyNoInteractions(messageMapper, checkpointMapper);
+    }
+
+    @Test
+    void deleteSessionReturnsFalseWhenMissing() {
+        when(sessionMapper.selectOne(any())).thenReturn(null);
+
+        assertThat(service.deleteSession("sk-missing", 7L)).isFalse();
+        verifyNoInteractions(messageMapper, checkpointMapper);
     }
 
     private ChatSession session(String key, Long userId, LocalDateTime createdAt) {

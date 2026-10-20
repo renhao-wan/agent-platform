@@ -36,5 +36,11 @@ public interface AgentSessionService {
      */
     boolean ownsSession(String sessionKey, Long userId);
 
+    /**
+     * 删除会话及其消息、checkpoint。仅归属者可删（无主遗留会话同样按归属校验放行）；
+     * 会话不存在或不属于该用户时返回 false，不产生任何写入。
+     */
+    boolean deleteSession(String sessionKey, Long userId);
+
     void shutdown();
 }
