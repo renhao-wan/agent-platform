@@ -27,6 +27,7 @@ M5 之后平台的接入面已经收敛为"一份 OpenAPI 文档"，但权限这
    - 兼容两种形状：手写 JSON 里的裸值（stub 用），与 springdoc `@Extension(name="x-required-role", properties=@ExtensionProperty(name="value", value="ADMIN"))` 生成的嵌套对象（booking 用）。
    - **业务系统只声明、不校验**。校验始终是平台闸门 2 的职责——业务系统对 AI 零感知这条不变量不变。
    - `DELETE` 天然算敏感这条保留（HTTP 方法层面的常识，不是业务知识）；其余一律以 `x-require-confirm` 为准，平台不再按方法猜。
+   - **更新（ADR-010）**：字段已升级为 `x-required-permission`（权限码，如 `booking:cancel`），旧 `x-required-role` 导入时归一为 `role:<ROLE>`；"由业务契约声明"这一原则不变。
 2. **闸门 1 语义从"按角色过滤"改为"全量下发 + 描述披露"**：`ToolAccessService.listVisible(gatewayId, userRole)` 被 `listForModel(gatewayId)` 取代，下发该网关全部启用工具，把角色要求写进工具描述随清单一起来。
    - 理由：按角色裁掉的话，模型看到的世界里"这个工具不存在"，于是它对用户的回答是"我没有这个功能"——**把权限问题说成了能力问题**，用户得不到"你需要找管理员开权限"这个正确结论。
    - 全量下发后模型能做三段式抉择：**提前判断**（描述里已披露角色要求）→ **尝试**（照常发起调用）→ **被拒后转述**（闸门 2 返回的 `权限不足：需要 X 角色`）。

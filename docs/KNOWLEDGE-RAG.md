@@ -17,7 +17,7 @@
 
 | 归属 | 内容 |
 |---|---|
-| 平台负责 | 目录扫描、切块、向量化、建索引、相似度检索、角色过滤、结果注入、增量更新 |
+| 平台负责 | 目录扫描、切块、向量化、建索引、相似度检索、权限过滤、结果注入、增量更新 |
 | 平台不负责 | 制度写什么、谁维护文档、文档里的业务语义（例如"差旅上限为什么是 3000"） |
 
 这条边界和"平台不编码业务语义"是同一条原则的延伸：删掉任何一份知识文档，平台代码不需要改。
@@ -77,8 +77,8 @@ content hash 比对 ──未变──▶ 跳过（零 embedding 调用）
    ▼
 模型决定调用 search_knowledge(query, topK)
    ▼
-⑤ 向量化 query → SQL 相似度检索（WHERE 角色过滤 + ORDER BY 距离 LIMIT k）
-   └─ 无结果 → raw_text ILIKE 关键词兜底（同一角色过滤）
+⑤ 向量化 query → SQL 相似度检索（WHERE 权限过滤 + ORDER BY 距离 LIMIT k）
+   └─ 无结果 → raw_text ILIKE 关键词兜底（同一权限过滤）
    ▼
 ⑥ 拼装条文（来源标题 + 注入边界）→ 审计 / 指标 → ToolResponseMessage → 下一轮生成
 ```
@@ -156,7 +156,7 @@ query embedding + 一次 SQL 查询（兜底时再加一次 ILIKE 查询）。
 
 - **表格整表不切**。表格的语义在行列关系里，拆开即失效。超长表格按行切，但**每片重复表头**。
 - **代码块 / 引用块不切**，视为不可分割单元，随所属小节走。
-- **front-matter 不参与向量化**（`---` 头部），只读取 `visible_role` 元数据（见 §8）。
+- **front-matter 不参与向量化**（`---` 头部），只读取 `visible_permission` 元数据（见 §8）；旧 `visible_role` 归一为 `role:<ROLE>` / `public`。
 
 ### 4.6 为什么不做父子块（small-to-big）
 
@@ -199,7 +199,7 @@ prompt tokens 记到 `knowledge_usage`，用于回答"知识库每月花多少�
 
 | 候选 | 优点 | 不选的理由 |
 |---|---|---|
-| MySQL JSON 列 + 内存余弦 | 不新增组件 | 全量加载后计算，角色过滤只能在算完之后做；无索引；规模上百块即开始难堪。本质是自己写半个向量库 |
+| MySQL JSON 列 + 内存余弦 | 不新增组件 | 全量加载后计算，权限过滤只能在算完之后做；无索引；规模上百块即开始难堪。本质是自己写半个向量库 |
 | Qdrant / Milvus | 专业、性能强 | 多一个需要运维的组件；本项目数据量远未到需要它的程度；且元数据过滤要另学一套语法 |
 | **PostgreSQL + pgvector** | 一个容器；相似度与元数据过滤在同一条 SQL；HNSW 成熟 | 需要额外一个 DataSource |
 
@@ -208,7 +208,7 @@ prompt tokens 记到 `knowledge_usage`，用于回答"知识库每月花多少�
 ```sql
 SELECT content, metadata
 FROM vector_store
-WHERE metadata->>'visible_role' IN ('PUBLIC', 'ADMIN')   -- 权限过滤
+WHERE metadata->>'visible_permission' IN ('public', 'admin:policy')   -- 权限过滤
 ORDER BY embedding <=> :queryVector                       -- 相似度排序
 LIMIT 4;                                                  -- top-k
 ```
@@ -261,7 +261,7 @@ Postgres 里需要额外分词扩展（`zhparser` / `pg_jieba`），运维成本
 查询以自然语言描述为主。
 
 替代方案已落地：向量结果为空时，用 `raw_text ILIKE ? ESCAPE '\'` 回查 `knowledge_chunk`
-（先整串、未命中再取最长词元），同样在 SQL 内做角色过滤。命中项没有相似度可言，`score`
+（先整串、未命中再取最长词元），同样在 SQL 内做权限过滤。命中项没有相似度可言，`score`
 返回 `NaN`，渲染时省略"相关度"，不伪造分数。这覆盖"报销制度里提到的 ZX-2024-07 附件"这类
 bad case，且只用了两行 SQL。
 
@@ -302,14 +302,14 @@ MRR 0.792；修复后两题均回到第 1 位。
 
 实现：
 
-1. 文档 front-matter 声明 `visible_role: ADMIN`，缺省为 `PUBLIC`；切块时写入每个向量的 metadata
-   与 `knowledge_chunk.visible_role`。
-2. 向量检索的过滤表达式与关键词兜底的 `WHERE` 都按当前用户角色过滤（`ADMIN` 不过滤，
-   其余角色只读 `PUBLIC` 与自身角色），**无权块不参与相似度计算，也不进入关键词候选集**。
-3. 为什么缺省是 `PUBLIC` 而不是"缺省拒绝"：知识库的默认场景是全员可见的制度文档；
+1. 文档 front-matter 声明 `visible_permission: admin:policy`，缺省为 `public`；切块时写入每个向量的 metadata
+   与 `knowledge_chunk.visible_permission`。旧 `visible_role` 在解析时归一为 `role:<ROLE>` / `public`。
+2. 向量检索的过滤表达式与关键词兜底的 `WHERE` 都按当前用户的**权限集合**过滤（`*` 不过滤，
+   否则只读 `public` 与命中用户权限集合的块），**无权块不参与相似度计算，也不进入关键词候选集**。
+3. 为什么缺省是 `public` 而不是"缺省拒绝"：知识库的默认场景是全员可见的制度文档；
    缺省拒绝会让每份文档都必须显式声明，违反"加一份文档只写内容"的简洁目标。
    **这是有意的选择，不是疏漏**——敏感文档必须显式标注，这一点写进文档模板说明。
-4. 索引管理与重建接口 `POST /admin/knowledge/reindex` 走现有 `/admin/**` 的 ADMIN 校验；
+4. 索引管理与重建接口 `POST /admin/knowledge/reindex` 走 `/admin/knowledge` → `admin:knowledge` 权限校验；
    它只提交任务并返回 `jobId`，进度查 `GET /admin/knowledge/jobs/{id}`。
 
 注意与闸门 1 的区别：工具**全量下发**是为了让模型能把权限问题讲成权限问题；知识文档**不披露**
@@ -339,7 +339,7 @@ CREATE TABLE knowledge_chunk (
     doc_title    VARCHAR(255) NOT NULL DEFAULT '',
     section      VARCHAR(255),
     chunk_index  INT NOT NULL,
-    visible_role VARCHAR(64) NOT NULL DEFAULT 'PUBLIC',
+    visible_permission VARCHAR(64) NOT NULL DEFAULT 'public',
     raw_text     TEXT NOT NULL DEFAULT ''       -- 关键词兜底用；向量文本另存（带前缀）
 );
 
@@ -347,7 +347,7 @@ CREATE TABLE knowledge_index_job ( ... );       -- 索引任务与进度，见 �
 ```
 
 向量本体由 Spring AI 的 `vector_store` 表承载，`metadata` 中存 `doc_path`、`doc_title`、
-`section`、`visible_role`、`chunk_index`、`raw_text`。**跳过重建的条件必须同时满足**：
+`section`、`visible_permission`、`chunk_index`、`raw_text`。**跳过重建的条件必须同时满足**：
 status=INDEXED、content hash、embedding 模型、切块算法版本与参数四项一致。只看 hash 会让 FAILED 文档
 永不重试，也会让改了切块参数后继续用旧索引；`chunk_config` 带上 `MarkdownChunker.VERSION`，
 因此升级切分/合并规则（文档内容未变）也会自动重建。
@@ -484,7 +484,7 @@ status=INDEXED、content hash、embedding 模型、切块算法版本与参数�
 | 接飞书/语雀等外部来源 | 本地目录先跑通；来源是适配器问题，不是检索架构问题 |
 | 文档热更新监听 | 改完调一次 reindex；文件监听在容器与编辑器下行为不一，不值 |
 | PDF / Word / HTML 解析 | 当前语料是手写 Markdown，结构切块依赖标题；引入解析器会带来编码、版式、表格抽取的一串问题，等真有非 Markdown 来源再做适配器 |
-| 多知识库 / 多租户隔离 | 当前单租户单语料目录；`visible_role` 已覆盖"同一公司内按角色可见"，租户维度要改表主键与全部查询，规模未到 |
+| 多知识库 / 多租户隔离 | 当前单租户单语料目录；`visible_permission` 已覆盖"同一公司内按权限可见"，租户维度要改表主键与全部查询，规模未到 |
 | 自建 embedding 服务 | 用 SaaS（SiliconFlow bge-m3）在成本与运维上更划算；真要私有化，换掉 `EmbeddingModel` bean 即可，检索层无感知 |
 | 工具名冲突处理 | `search_knowledge` 是平台保留名；业务契约若注册同名工具会同时出现在清单里，暂以文档约定而非代码拦截 |
 | RAGAS 类自动评估 | 已落地固定题库的 Recall@K / MRR / 空结果率（§7.5）；LLM 判分需要额外调用与人工校准，规模未到 |
@@ -503,7 +503,7 @@ status=INDEXED、content hash、embedding 模型、切块算法版本与参数�
 | 怎么知道检索效果？ | 固定题库跑 Recall@K / MRR / 空结果率（`POST /admin/knowledge/eval`）；再配合审计表与 `knowledge.search.*` 指标定位 bad case |
 | 为什么不用 rerank？ | 需要额外模型调用，且当前 topK=4 下收益不确定；现在有评估集了，真出现 bad case 可以先量化再决定 |
 | 为什么不做混合检索？ | 中文 BM25 要装分词扩展；已用 `ILIKE` 关键词兜底覆盖精确术语，两行 SQL 不引入新组件 |
-| 为什么用 pgvector 不用 Chroma/Qdrant？ | 角色过滤与相似度能合并成一条 SQL，无权内容不进候选集；少一个要运维的组件；亿级再谈 Milvus |
+| 为什么用 pgvector 不用 Chroma/Qdrant？ | 权限过滤与相似度能合并成一条 SQL，无权内容不进候选集；少一个要运维的组件；亿级再谈 Milvus |
 | 文档更新怎么办？ | 启动时算 hash 比对，只重索引变更文档；删文件即删向量；`POST /admin/knowledge/reindex` 提交任务并返回 jobId |
 | 重建时检索会中断吗？ | 不会。版本化写入先 add 新块（确定性 id upsert）再删 stale 块，不先按 doc_path 全删 |
 | 多副本同时触发重建？ | 任务表上的部分唯一索引（`WHERE status='RUNNING'`）做跨实例互斥；超时 RUNNING 自动标 FAILED |
@@ -527,7 +527,7 @@ status=INDEXED、content hash、embedding 模型、切块算法版本与参数�
 | 3 | embedding 客户端 + 目录扫描 + hash 增量 | 二次启动零 embedding 调用；改一份只重算一份 | 已完成（单测 10 项） |
 | 4 | `search_knowledge` + 接入 `AgentRunner` 两个位置 | 单测；模型能自主调用并引用来源 | 已完成（检索 9 + 工具 7 项） |
 | 5 | 四份语料（报销制度 / 差旅标准 / 会议室规定 / 报修流程） | 内容与 stub 数据可对撞 | 已完成（另加 1 份 ADMIN 文档） |
-| 6 | 任务表 / 审计 / 指标 / 用量 / 评估集 | 管理端可查任务、审计、成本；评估集可跑出 Recall@K 与 MRR | 已完成（管理端 7、评估 4、用量 3 项；全量 151 项） |
+| 6 | 任务表 / 审计 / 指标 / 用量 / 评估集 | 管理端可查任务、审计、成本；评估集可跑出 Recall@K 与 MRR | 已完成（管理端 10、评估 4、用量 3 项；全量 251 项） |
 | 7 | 端到端 | 问"差旅住宿上限是多少" → 检索；问"我这月报销超标了吗" → 检索 + 查单据协同 | **已完成（2026-10-19 实测）**：5 份文档 26 块；Recall@4 1.00 / MRR 0.917 / 空结果率 0；"差旅住宿上限"命中住宿标准（0.82）并注明来源；"报销超标"先查单据（601 号 4200 元）再查制度（单次上限 3000 元）给出对照；STAFF 检索不到 ADMIN 文档 |
 
 **语料设计原则**：制度里的数字要与 stub 业务数据能对撞（例如制度写"差旅单次上限 3000 元"，

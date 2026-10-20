@@ -30,7 +30,7 @@ ADR-007 让工具来源在启动时自动拉取，但"注册"这件事本身仍�
    - 契约指纹未变 → 不动；
    - 库里有、契约里没有 → `present = 0` **软下线**（不删行，保留审计与稳定 id；重新出现时复活）。
 3. **契约状态与人工状态分离**。`present` 由对账写，`enabled` 只由管理员写；对账永不修改 `enabled`。有效工具 = `present=1 AND enabled=1`。
-4. **契约指纹只覆盖契约决定的字段**：name / method / url_template / description / inputSchema / require_confirm / required_role。服务凭证（`auth_header_*`）是部署配置，单独比对；两者都没变才跳过写入。
+4. **契约指纹只覆盖契约决定的字段**：name / method / url_template / description / inputSchema / require_confirm / required_permission。服务凭证（`auth_header_*`）是部署配置，单独比对；两者都没变才跳过写入。
 5. **写入前整体判冲突**。同名工具仍由其他来源以 `present=1` 声明时，本次快照整份放弃并标记 `CONFLICT`——不做"部分写入"，否则一个来源的异常会让清单处于半新半旧的状态。同一份契约内部工具名重复同理。
 6. **失败保留 last-known-good**。抓取/解析/DB 失败只更新 `tool_source.status` 与 `last_error`，不清空 `contract_hash` / `tool_count` / `last_success_at`，也不下线任何工具。一个后端暂时没起来，不应把它的工具从模型视野里拿掉。
 7. **三个触发点共享同一条对账路径**：启动时一次（`OpenApiSourceRegistrar`）、定时（`sync-interval-ms`，默认 5 分钟）、管理端手工（`POST /admin/sources/sync`）。对账产生实际变化时发布 `ToolCatalogChangedEvent`，`DynamicToolRegistry` 立即失效 5 分钟工具缓存，不必等缓存自然过期。

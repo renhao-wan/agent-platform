@@ -53,7 +53,7 @@
 │                    agent-platform（:8000）                       │
 │                                                                │
 │  ① 用户接入层【已实现】                                            │
-│     员工登录(JWT) → 角色随会话带到工具层，在调用点强制校验                │
+│     员工登录(JWT=身份) → 每次请求回库加载角色/权限，在调用点强制校验          │
 │                    │                                           │
 │  ② Agent 运行时【已实现】                                         │
 │     ReAct 显式循环：规划 → 工具调用 → 观察 → 反思 → 回答             │
@@ -69,7 +69,7 @@
    │ 会议室预订系统 │    │  报销系统     │    │  报修系统     │
    │ （已接入·真实）│    │（已接入·模拟） │    │（已接入·模拟） │
    └─────────────┘    └─────────────┘    └─────────────┘
-   ↑ 业务系统零改造：不碰模型、不写 AI 代码，只需提供接口文档（并可用扩展字段声明角色要求）
+   ↑ 业务系统零改造：不碰模型、不写 AI 代码，只需提供接口文档（并可用扩展字段声明权限要求）
 
    模型：平台统一供给（OpenAI 兼容协议，yml 配置可换供应商）→ 只有 ② 用它
    Embedding：SiliconFlow bge-m3（与 chat 模型分离，因为聊天供应商没有 embeddings 接口）
@@ -82,7 +82,7 @@
 
 | 层 | 职责 | 关键点 |
 |---|---|---|
-| ① 用户接入层 | 认识"你是谁"，把角色带到执行点 | JWT + 角色；`/admin/**` 额外要求 ADMIN；**不在这一层裁剪工具** |
+| ① 用户接入层 | 认识"你是谁"，把角色与权限带到执行点 | JWT 只带 uid；每请求回库加载 RBAC；`/admin/**` 按 URI 映射权限码；**不在这一层裁剪工具** |
 | ② Agent 运行时 | 决定"怎么做"：选工具、造参数、看结果、定下一步 | 显式 ReAct 循环，每步可插桩（事件/确认/上限） |
 | ③ 工具层 | 决定"怎么安全地做"：清单组装、执行点鉴权、转发 | 与 ② 同进程，`ToolGateway` 一次方法调用即达 |
 | 业务系统 | 只提供接口（OpenAPI 文档） | 对 AI 零感知 |
@@ -99,7 +99,7 @@
  │──"帮我订下周三…"──────▶│                     │                     │
  │                        │ 0. LLM 读工具清单      │                     │
  │◀─ plan(模型决策) ──────│                     │                     │
- │                        │ 1. listTools ──────▶│ 下发全部工具+角色声明   │
+ │                        │ 1. listTools ──────▶│ 下发全部工具+权限声明   │
  │                        │◀── 工具清单 ─────────│                     │
  │                        │                     │                     │
  │                        │ 2. LLM 决策：先查房间（参数自填：              │
@@ -120,7 +120,7 @@
 
 **敏感操作分支（取消类工具 `require_confirm=true`）**：第 6 步前循环挂起 → 推 `confirm_request` 事件 → 用户点"同意/拒绝" → 恢复执行或把"用户拒绝"作为观察喂回模型。
 
-**知识检索分支（平台内部工具）**：问题涉及制度、流程、标准时，模型调用 `search_knowledge`。它与 `recallHistory` 同构——不进工具层、不过闸门 2，由 `AgentRunner` 本地执行：query 向量化 → pgvector 相似度检索（角色过滤写进 SQL，无权内容不进候选集）→ 命中块作为观察回填。检索失败同样只返回文本观察，不打断循环（[KNOWLEDGE-RAG.md](KNOWLEDGE-RAG.md)）。
+**知识检索分支（平台内部工具）**：问题涉及制度、流程、标准时，模型调用 `search_knowledge`。它与 `recallHistory` 同构——不进工具层、不过闸门 2，由 `AgentRunner` 本地执行：query 向量化 → pgvector 相似度检索（权限过滤写进 SQL，无权内容不进候选集）→ 命中块作为观察回填。检索失败同样只返回文本观察，不打断循环（[KNOWLEDGE-RAG.md](KNOWLEDGE-RAG.md)）。
 
 **错误自愈（实测）**：模型首次 `create` 时间格式错（`14:00:00`）→ 业务系统返回 400 → 模型自动改为 `14:00` 重试成功——工具失败包装为 `isError=true` 的文本观察交模型决策，不打断循环。
 
@@ -130,17 +130,17 @@
 
 ## 4. 用户权限：核心原则与三道闸门
 
-### 4.0 权限模型：一个全局角色 + 逐操作声明，不是完整 RBAC
+### 4.0 权限模型：轻量 RBAC（单角色 + 角色-权限映射）
 
-**角色只有一个来源**：`app_user.role`（当前 `ADMIN` / `STAFF`），登录时写进 JWT，全平台、所有来源共用。平台没有"用户-角色"表，也没有"角色-权限"表。
+**JWT 只证明身份，不承载授权**：token 只带 `uid`（+ iat/exp），不含角色或权限。角色是可变的授权状态；把它写进 token，等于"降权要等 token 过期"，而常见实现又会退化成不可撤回的字符串。`JwtAuthFilter` 每次请求解析 uid 后调用 `RbacService.loadPrincipal(uid)`，回库读 `app_user.status/role` 与 `app_role_permission`，构造 `UserPrincipal(uid, role, permissions)` 写入 `UserContext`。停用账号、收回权限都在**下一个请求**生效，不需要撤销接口、黑名单或 token version。
 
-**权限粒度在操作上，不在来源上**：业务系统在自己的 OpenAPI operation 上声明 `x-required-role`，对账写入 `tool_definition.required_role`；执行点做**单值相等**比较。未声明 = 所有已登录用户可调。知识块同理，`visible_role` 决定谁能检索到（ADMIN 全见，其他角色只看 `PUBLIC` 或等于自身角色的块）。
+**数据模型**：`app_user.role`（单角色）→ `app_role`（角色元数据）→ `app_role_permission`（角色-权限映射）。`app_role.seeded` 是"默认权限只种一次"的标记：`RbacSeeder` 只在未种过时写入，管理员在界面改过之后重启不会复活默认值。
 
-**必须澄清的一点：不存在"某人在 A 系统是管理员、在 B 系统不是"。** 同一个全局角色对所有来源生效。所谓"同一用户在不同系统能做的事不同"，指的是**各系统对自己的操作声明了不同的角色要求**——例如 STAFF 能创建预订（未声明），但不能取消（booking 声明了 `ADMIN`）；报销能提交（未声明），但不能审批（expense 声明了 `ADMIN`）。用户角色没变，变的是每个操作的门槛。
+**权限码**：`*` 为通配（ADMIN 默认持有）。平台内置 `admin:console` / `admin:source` / `admin:tool` / `admin:knowledge` / `admin:rbac`；业务侧自定义（`booking:cancel`、`expense:approve`、`repair:assign`）；知识块使用 `public` 或任意权限码。管理端提供角色-权限矩阵（查看、覆盖式保存），不做角色 CRUD 与用户角色分配。
 
-**为什么不做完整 RBAC**：完整 RBAC 至少需要"用户-角色"与"角色-权限"两套映射，若要按系统区分还得引入来源作用域 `(user, source) -> role`。当前是单租户、两角色、演示规模，引入后只增加表和配置，不产生新的可演示能力，属于负收益。
+**权限粒度仍在操作上**：业务系统在 OpenAPI operation 上声明 `x-required-permission`，对账写入 `tool_definition.required_permission`，执行点检查用户权限集合是否命中。旧字段 `x-required-role` 兼容：导入时归一为合成权限码 `role:<ROLE>`，执行点只看权限码。**平台依然不编码业务语义**——"取消要什么权限"由业务契约定义，"哪个角色拥有该权限"由管理员配置，删掉一个业务系统后平台逻辑无需改动。
 
-**若产品上确实需要按系统分配角色**，那需要 `(user_id, source_key) -> role` 映射表 + 角色-权限表，把契约里的 `x-required-role` 换成 `x-required-permission`，平台在闸门 2 用"用户在某来源下的角色 → 权限集合"判定。这属于另一个产品形态，本项目明确不做（见 §8）。
+**仍然不做**：多角色、角色继承、按来源分角色、强制下线。当前是单角色 + 全局权限集合；"同一用户在不同系统能做的事不同"仍由各系统对自己的操作声明不同权限码来表达——用户角色没变，变的是每个操作的门槛。按来源分配角色需要 `(user_id, source_key) -> role` 映射表，属于另一个产品形态，本项目明确不做（见 §8）。
 
 ### 4.1 核心原则
 
@@ -152,27 +152,28 @@ AI 的工具选择是一个"建议"，真正的安全边界在工具层执行点
 ```
 AI（提议者）："我想调 admin_delete_user"
       ↓
-【闸门1·清单组装】listForModel 下发该网关全部启用工具，不按角色裁剪
-   → 角色要求写进工具描述，模型知道"这个能力存在、但当前身份可能不够"
+【闸门1·清单组装】listForModel 下发该网关全部启用工具，不按权限裁剪
+   → 权限要求写进工具描述，模型知道"这个能力存在、但当前身份可能不够"
    → 为什么不裁掉：裁掉的话模型只会答"我没有这个功能"，把权限问题说成能力问题
       ↓
 【闸门2·执行点强制鉴权】★ 安全边界 ★
-   invoke 到达工具层 → 校验 会话用户角色 × tool.required_role
-   → 不匹配：包装为 isError=true 的结果拒绝（模型读后转述用户，循环不中断）
+   invoke 到达工具层 → 校验 会话用户权限集合 × tool.required_permission
+   → 不命中：包装为 isError=true 的结果拒绝（模型读后转述用户，循环不中断）
       ↓
 【闸门3·敏感操作人工确认】
-   弹窗前先用同一角色规则做只读预判：无权则直接回闸门2同款拒绝文本，不弹注定失败的确认
+   弹窗前先用同一权限规则做只读预判：无权则直接回闸门2同款拒绝文本，不弹注定失败的确认
    有权调用的破坏性/不可逆操作 → confirm_request 挂起 → 用户点同意才执行
 ```
 
-模型对"能不能调"的抉择因此分三段：**提前判断**（描述里已披露角色要求）→ **尝试**（照常发起调用）→ **被拒后转述**（闸门 2 返回 `权限不足：需要 X 角色`，模型据此向用户说明，而不是把失败说成自己不会）。
+模型对"能不能调"的抉择因此分三段：**提前判断**（描述里已披露权限要求）→ **尝试**（照常发起调用）→ **被拒后转述**（闸门 2 返回 `权限不足：需要 X 权限`，模型据此向用户说明，而不是把失败说成自己不会）。
 
 ### 4.3 现状：三道闸门均已实现
 
-- **接入鉴权**：用户 JWT 一套打天下——`/api/v1/chat`、`/api/v1/confirm`、`/api/v1/tools`、`/api/v1/sessions/**` 校验 Bearer token，`/admin/**` 额外要求 `ADMIN` 角色（403 输出"需要 ADMIN 角色"）。没有第二套凭证体系。
+- **接入鉴权**：用户 JWT 一套打天下——`/api/v1/chat`、`/api/v1/confirm`、`/api/v1/tools`、`/api/v1/sessions/**` 校验 Bearer token；`/admin/**` 再按 URI 映射权限码：`/admin/rbac` → `admin:rbac`、`/admin/knowledge` → `admin:knowledge`、`/admin/sources` → `admin:source`、`/admin/tools` → `admin:tool`，其余 → `admin:console`（403 输出"需要 X 权限"）。没有第二套凭证体系。
 - **闸门 1 / 闸门 2**：都在 `gateway/registry/ToolAccessService`，被 `InProcessToolGateway` 调用，即 `AgentRunner` 调工具时的必经之路。
 - **闸门 3**：`ConfirmManager` 挂起 + `POST /api/v1/confirm` 恢复（同意/拒绝/超时三态均已实测）。
-- **角色要求从哪来**：业务系统在自己的 OpenAPI 里用扩展字段声明（`x-required-role` / `x-require-confirm`），平台导入时读取。平台不猜测接口语义——"哪个接口要管理员"是业务系统的契约，不是平台的业务知识。
+- **权限要求从哪来**：业务系统在自己的 OpenAPI 里用扩展字段声明（`x-required-permission` / `x-require-confirm`），平台导入时读取。平台不猜测接口语义——"哪个接口要什么权限"是业务系统的契约，不是平台的业务知识。
+- **角色权限从哪来**：`app_role_permission`，管理端 `GET/PUT /admin/rbac/**` 维护；登录响应与每次鉴权都按当前映射解析。
 - **业务调用身份**：转发时按来源附服务级凭证 `X-Service-Key`，并带上 `X-On-Behalf-Of-User: {uid}` 声明"代表哪个最终用户"，业务系统据此把数据记在本人名下（仅在服务凭证校验通过时才采信该头）。
 - **"零改造"的准确边界**：指业务系统**不写任何 AI 代码、对模型零感知**，只需要暴露 OpenAPI。但如果业务系统自身有鉴权，平台请求不会自动被放行——平台持有的是自己的 JWT，签名密钥与业务系统不同，直接转发会被对方 401。因此需要一个**一次性的身份通道适配**，二选一：① 业务系统认可平台的服务级凭证（本项目 meeting-booking 的做法：在 `JwtFilter` 里加一个服务凭证分支，约 20 行，并从 `X-On-Behalf-Of-User` 解析最终用户）；② 走企业 SSO / 令牌交换，让平台持有对方可信的身份。完全无鉴权的服务（如两个 WireMock stub）则确实只需一份契约。**这不是"零改造"，而是"零 AI 改造"**——安全通道的对接成本必须如实计算。
 
@@ -182,23 +183,25 @@ AI（提议者）："我想调 admin_delete_user"
 
 ```java
 // ToolAccessService.invoke：定位工具后、转发之前
-String requiredRole = tool.get().getRequiredRole();
-if (requiredRole != null && !requiredRole.equals(userRole)) {
-    return new ToolCallResult(true, "权限不足：需要 " + requiredRole + " 角色");
+String required = tool.get().getRequiredPermission();
+if (required != null && !required.isBlank() && !user.hasPermission(required)) {
+    return new ToolCallResult(true, "权限不足：需要 " + required + " 权限");
 }
 ```
+
+`UserPrincipal.hasPermission` 命中规则只有一条：`permissions.contains("*") || permissions.contains(required)`。旧 `required_role` 行由导入阶段归一为 `role:<ROLE>`，执行点不再有第二套比较逻辑。
 
 两道闸门的共同约定：**失败永不抛异常**，一律返回文本观察（`ToolCallResult.isError`）——这是 ReAct 循环能"看到失败并自己决定下一步"的前提。
 
 ### 4.5 一次越权尝试的完整流转
 
 ```
-普通员工："帮我把 3 号预订取消"（cancel 要求 ADMIN）
- ① 模型在清单里看得到 cancel，描述里标着"需要 ADMIN 角色"
+普通员工："帮我把 3 号预订取消"（cancel 要求 booking:cancel）
+ ① 模型在清单里看得到 cancel，描述里标着"需要 booking:cancel 权限"
  ② 模型仍发起调用（或幻觉/被注入硬调）
- ③ ToolAccessService.invoke：role=STAFF ≠ ADMIN → isError=true 拒绝
- ④ 模型读到"权限不足" → 转述用户"这个操作需要管理员权限"
- ⑤ （若为管理员：走已有的 confirm_request 人工确认闸门）
+ ③ ToolAccessService.invoke：STAFF 的权限集合不含 booking:cancel → isError=true 拒绝
+ ④ 模型读到"权限不足" → 转述用户"这个操作需要相应权限"
+ ⑤ （若权限已授予：走已有的 confirm_request 人工确认闸门）
 ```
 
 ### 4.6 AI 出错的分类对策（均已实现）
@@ -230,7 +233,8 @@ if (requiredRole != null && !requiredRole.equals(userRole)) {
 | 工具前置路由接口先行、默认休眠（ADR-004） | 工具数未达阈值时整链休眠、全量直通——规模化前零开销，规模化后自动武装 |
 | 会话记忆用内部工具调回而非 RAG（ADR-005） | 对话消息短碎、上下文依赖强，嵌入质量天然差；把 RAG 推迟到规模证明它必要的时刻 |
 | 进程内工具调用，删除 MCP 协议层与自环（ADR-006） | 自环理由只有"预留拆分部署"且从未兑现，代价是每次调用多一跳网络、异常跨协议层 |
-| 权限要求与工具来源从业务契约读取（ADR-007） | 角色/敏感度由业务方声明、契约启动时自动拉取——平台不编码业务语义，接入方零改平台 |
+| 权限要求与工具来源从业务契约读取（ADR-007） | 权限码/敏感度由业务方声明、契约启动时自动拉取——平台不编码业务语义，接入方零改平台 |
+| JWT 只证明身份，授权每次回库（ADR-010） | 角色/权限是可变的服务端状态；写进 token 意味着降权要等过期，且无法撤回 |
 | 契约按来源做快照对账（ADR-008） | 每轮拿契约推导的期望状态与库内状态收敛：新增/更新/软下线；`present` 与人工 `enabled` 分离，失败保留 last-known-good |
 | 来源静态配置 + 主动轮询（ADR-009） | 变更源不在业务进程内，推模型要求业务改造；拉模型天然自愈。发现层与对账层解耦，演进路径见 ADR-009 |
 | 知识库 RAG 与会话记忆分治（KNOWLEDGE-RAG.md） | 对话历史短碎、上下文依赖强，语义检索收益低；制度文档长且有结构，适合按标题切块 + 向量检索 |
@@ -241,7 +245,7 @@ if (requiredRole != null && !requiredRole.equals(userRole)) {
 |---|---|
 | SSE 并发 | 40 并发 200/200，P50 1.03s / P99 1.35s |
 | Token 裁剪 | 30 轮长会话总量降 31.8%；单次调用 prompt 降 78.6% |
-| 自动化测试 | 223 项（转发拼装与超时故障/裁剪策略/循环三态/越权拦截/契约导入·来源注册表·快照对账/路由责任链/端到端自愈/切块与知识检索/索引任务与评估） |
+| 自动化测试 | 251 项（转发拼装与超时故障/裁剪策略/循环三态/越权拦截/RBAC 身份加载与权限映射/契约导入·来源注册表·快照对账/路由责任链/端到端自愈/切块与知识检索/索引任务与评估） |
 
 ## 8. 非目标：为什么不做成生产级通用网关
 

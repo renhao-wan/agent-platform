@@ -60,7 +60,7 @@ ReAct 的典型链路是"查可用性 → 创建 → 回答"两三步；8 步给
 `ConfirmManager.request` 生成 token 并创建 `CompletableFuture`，循环 `await` 等待；`POST /api/v1/confirm` 用 token 恢复。超时视为拒绝。单实例内存实现，重启丢挂起项即拒绝——语义安全。
 
 **Q：`recallHistory` / `search_knowledge` 为什么不过工具层？**
-它们是平台内部能力，不是业务系统提供的工具。由 `AgentRunner` 本地执行，不参与权限闸门与敏感确认；`search_knowledge` 的角色过滤在检索 SQL 内完成（内容一旦进上下文就收不回）。
+它们是平台内部能力，不是业务系统提供的工具。由 `AgentRunner` 本地执行，不参与权限闸门与敏感确认；`search_knowledge` 的权限过滤在检索 SQL 内完成（内容一旦进上下文就收不回）。
 
 **Q：工具数量多了，模型选不准怎么办？**
 预留 `ToolSelector` 责任链（ADR-004）：工具数未达阈值（默认 20）整链休眠、全量直通；达到阈值后逐环尝试，节点异常或低置信弃权传给下一环，全部弃权回落全量。当前规模处于休眠状态，收益为负时不付出开销。

@@ -16,7 +16,7 @@
 
 四个关键点：
 
-1. **契约即工具**：`operationId` 是工具名，`summary` 是工具描述，参数合成 `inputSchema`，`x-required-role` / `x-require-confirm` 是权限声明。
+1. **契约即工具**：`operationId` 是工具名，`summary` 是工具描述，参数合成 `inputSchema`，`x-required-permission` / `x-require-confirm` 是权限声明。
 2. **持续对账**：不是"导入一次"，而是每轮拿契约推导的期望状态与库内工具收敛（ADR-008）。
 3. **失败语义**：后端非 2xx / 超时 / 权限不足 / 用户拒绝，一律包装成 `isError` 文本观察回喂模型，循环不中断。
 4. **来源可运营**：`GET /admin/sources` 看每个来源最后一次成功、差异计数与**下线条目/破坏性变更明细**（不只给数字）；`POST/PUT/DELETE /admin/sources` 运行时增删改来源；`POST /admin/sources/sync` 立即触发。来源移除即软下线其工具（保留行，复活可恢复）。
@@ -28,7 +28,7 @@
 | `operationId` | `name` | 缺失时按 method + path 生成 slug 兜底 |
 | `summary` | `description` | **直接决定模型选工具的准确率**，必须是动作句（"查询指定时间段可用的会议室"） |
 | path / query / requestBody | `input_schema` | 合并成一个 JSON Schema；`$ref` **就地展开** |
-| `x-required-role` | `required_role` | 兼容裸值与 springdoc `@Extension` 的嵌套形状 |
+| `x-required-permission` | `required_permission` | 权限码（如 `booking:cancel`）；兼容裸值与 springdoc `@Extension` 的嵌套形状。旧 `x-required-role` 归一为 `role:<ROLE>` |
 | `x-require-confirm` | `require_confirm` | 敏感操作人工确认 |
 | `servers[0].url` 或配置 `baseUrl` | `url_template` 前缀 | 平台优先用抓取契约的 origin 或显式 baseUrl，契约自称的 host 不可信 |
 

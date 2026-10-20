@@ -29,10 +29,10 @@
 ## 核心特性
 
 1. **进程内工具调用**：Agent 与工具层同进程，越权校验、泛化转发、结果回喂都在一次方法调用内完成——没有协议层、没有网络跳转
-2. **零代码工具接入**：存量 OpenAPI 接口自动解析注册为标准化 Tool（path/query/body 参数 → inputSchema，文档内 `$ref` 就地对模型展开）；角色要求与敏感度由业务系统在契约里用扩展字段声明（`x-required-role` / `x-require-confirm`），平台不猜测接口语义
+2. **零代码工具接入**：存量 OpenAPI 接口自动解析注册为标准化 Tool（path/query/body 参数 → inputSchema，文档内 `$ref` 就地对模型展开）；权限要求与敏感度由业务系统在契约里用扩展字段声明（`x-required-permission` / `x-require-confirm`），平台不猜测接口语义
 3. **ReAct 显式循环**：规划-执行-反思逐步驱动，SSE 分阶段推送（plan / tool_call / tool_result / confirm_request / answer）
 4. **上下文工程**：滑动窗口 + 工具轨迹摘要混合裁剪，Token usage 全链路打点
-5. **三道权限闸门**：清单组装（闸门 1，把能力与角色要求一并下发给模型——裁掉会让模型把权限问题答成能力问题）· 执行点鉴权（闸门 2，★ 安全边界）· 敏感操作人工二次确认（闸门 3）——校验依据是代码里的用户身份，不是模型说了什么
+5. **轻量 RBAC + 三道权限闸门**：JWT 只带身份（uid），角色与权限每次请求回库加载——停用/降权下一个请求即生效；管理端提供角色-权限矩阵。三道闸门分别为清单组装（把能力与权限要求一并下发给模型——裁掉会让模型把权限问题答成能力问题）· 执行点鉴权（★ 安全边界）· 敏感操作人工二次确认。校验依据是代码里的用户权限集合，不是模型说了什么
 6. **Agentic RAG**：制度文档按 Markdown 标题切块、embedding 入 pgvector；检索封装成内部工具 `search_knowledge`，由模型在循环中自主决定何时查、用什么 query。可见性在检索 SQL 内过滤，无权内容不进候选集（[设计](docs/KNOWLEDGE-RAG.md)）
 
 ## 快速开始
@@ -70,9 +70,10 @@ cd ../business-systems && docker compose up -d --build
 | [ADR-004](docs/adr/ADR-004-tool-routing-deferred.md) | 工具前置路由：接口先行，默认休眠 | 工具数未达阈值时整链休眠、全量直通——规模化前不为主流程添一分开销 |
 | [ADR-005](docs/adr/ADR-005-session-memory-recall.md) | 会话记忆用内部工具调回，不用 RAG | 对话消息短碎、上下文依赖强，嵌入质量天然差；把 RAG 推迟到数据规模证明它必要的时刻 |
 | [ADR-006](docs/adr/ADR-006-in-process-tool-invocation.md) | 进程内工具调用，删除 MCP 协议层与 HTTP 自环 | 自环的理由只有"预留拆分部署"一句且从未兑现，代价是每次调用多一跳网络、异常跨协议层 |
-| [ADR-007](docs/adr/ADR-007-contract-driven-authorization.md) | 权限要求与工具来源一律从业务契约读取 | 角色与敏感度由业务方在契约里声明、工具来源启动时自动拉取——平台不编码业务语义，"零改造接入"才成立 |
+| [ADR-007](docs/adr/ADR-007-contract-driven-authorization.md) | 权限要求与工具来源一律从业务契约读取 | 权限码与敏感度由业务方在契约里声明、工具来源启动时自动拉取——平台不编码业务语义，"零改造接入"才成立 |
 | [ADR-008](docs/adr/ADR-008-contract-reconciliation.md) | 工具契约按来源做快照对账 | 每轮用契约推导的期望状态与库内工具收敛：新增/更新/软下线；人工启停不被覆盖，抓取失败保留上一版 |
 | [ADR-009](docs/adr/ADR-009-source-discovery-and-polling.md) | 来源静态配置 + 主动轮询，不引入注册中心 | 变更源不在业务进程内，推模型要求业务改造；轮询天然自愈。演进路径（DB 注册表 → webhook → 服务发现）已写明但不提前实现 |
+| [ADR-010](docs/adr/ADR-010-identity-only-jwt-and-rbac.md) | JWT 只承载身份，角色与权限每请求回库 | 授权是可变的服务端状态；写进 token 意味着降权要等过期，补撤销机制又回到服务端状态 |
 
 项目亮点按四个主题各自成文，含高频追问问答：[docs/highlights/](docs/highlights/README.md)。
 
@@ -93,5 +94,5 @@ Java 17 · Spring Boot 3.4 · Spring AI 1.1（OpenAI 兼容协议）· MyBatis-P
 ## 测试
 
 ```bash
-mvn test    # 198 项：转发拼装与超时故障 / OpenAPI 解析与 $ref 展开 / 契约自动注册、来源注册表与快照对账 / 裁剪策略 / 循环三态（执行·同意·拒绝·超步数）/ 越权拦截 / 工具路由责任链 / 端到端自愈
+mvn test    # 251 项：转发拼装与超时故障 / OpenAPI 解析与 $ref 展开 / 契约自动注册、来源注册表与快照对账 / RBAC（身份加载·权限映射·/admin URI 判定）/ 裁剪策略 / 循环三态（执行·同意·拒绝·超步数）/ 越权拦截 / 工具路由责任链 / 端到端自愈
 ```
