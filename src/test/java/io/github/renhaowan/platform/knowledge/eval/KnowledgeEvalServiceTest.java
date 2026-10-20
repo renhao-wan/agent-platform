@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,7 +49,7 @@ class KnowledgeEvalServiceTest {
                 {"question":"住宿上限","expected":["差旅费用标准 > 住宿标准"]}
                 {"question":"报销时限","expected":["差旅费用标准 > 报销时限"]}
                 """);
-        when(searchService.search(anyLong(), anyString(), anyInt(), any())).thenAnswer(call -> {
+        when(searchService.search(anyLong(), anyString(), anyInt(), any(), anyString())).thenAnswer(call -> {
             String question = call.getArgument(1);
             if ("住宿上限".equals(question)) {
                 return List.of(hit("差旅费用标准", "住宿标准"));
@@ -71,7 +72,7 @@ class KnowledgeEvalServiceTest {
     @Test
     void emptyResultCountsAsMissAndEmptyRate() throws Exception {
         write("{\"question\":\"不存在的问题\",\"expected\":[\"某文档 > 某章节\"]}\n");
-        when(searchService.search(anyLong(), anyString(), anyInt(), any())).thenReturn(List.of());
+        when(searchService.search(anyLong(), anyString(), anyInt(), any(), anyString())).thenReturn(List.of());
 
         KnowledgeEvalService.EvalReport report = service.evaluate(4);
 
@@ -81,9 +82,9 @@ class KnowledgeEvalServiceTest {
     }
 
     @Test
-    void passesRoleFromQuestionFile() throws Exception {
-        write("{\"question\":\"冲突裁决\",\"expected\":[\"会议室管理员操作规范 > 冲突裁决\"],\"role\":\"ADMIN\"}\n");
-        when(searchService.search(0L, "冲突裁决", 4, "ADMIN"))
+    void passesPermissionsFromQuestionFile() throws Exception {
+        write("{\"question\":\"冲突裁决\",\"expected\":[\"会议室管理员操作规范 > 冲突裁决\"],\"permissions\":[\"*\"]}\n");
+        when(searchService.search(0L, "冲突裁决", 4, Set.of("*"), "eval"))
                 .thenReturn(List.of(hit("会议室管理员操作规范", "冲突裁决")));
 
         assertThat(service.evaluate(4).matched()).isEqualTo(1);

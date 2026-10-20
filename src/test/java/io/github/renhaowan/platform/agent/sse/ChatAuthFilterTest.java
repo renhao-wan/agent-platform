@@ -17,6 +17,7 @@ import io.github.renhaowan.platform.agent.auth.UserPrincipal;
 import io.github.renhaowan.platform.agent.loop.AgentRunner;
 import io.github.renhaowan.platform.agent.memory.AgentSessionService;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,7 +56,7 @@ class ChatAuthFilterTest {
 
     @BeforeEach
     void authorizeStaff() {
-        when(rbacService.loadPrincipal(1L)).thenReturn(Optional.of(new UserPrincipal(1L, "STAFF")));
+        when(rbacService.loadPrincipal(1L)).thenReturn(Optional.of(new UserPrincipal(1L, "STAFF", Set.of())));
     }
 
     @Test
@@ -123,7 +124,7 @@ class ChatAuthFilterTest {
 
         assertThat(result.getResponse().getContentAsString()).contains("event:session");
         verify(agentRunner).run(org.mockito.ArgumentMatchers.eq("sk-mine"), org.mockito.ArgumentMatchers.eq("继续"),
-                any(), org.mockito.ArgumentMatchers.eq(new UserPrincipal(1L, "STAFF")));
+                any(), org.mockito.ArgumentMatchers.eq(new UserPrincipal(1L, "STAFF", Set.of())));
     }
 
     private MvcResult settleAsync(MvcResult result) throws Exception {

@@ -21,7 +21,6 @@ public final class ContractHashes {
         append(canonical, tool.getDescription());
         append(canonical, tool.getInputSchema());
         append(canonical, String.valueOf(tool.getRequireConfirm()));
-        append(canonical, tool.getRequiredRole());
         append(canonical, tool.getRequiredPermission());
         return sha256(canonical.toString());
     }

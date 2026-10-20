@@ -52,16 +52,15 @@ class KnowledgeSearchServiceTest {
     }
 
     @Test
-    void staffOnlySearchesPublicAndOwnSyntheticPermission() {
+    void emptyPermissionSetOnlySeesPublicDocuments() {
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
 
-        service.search(1L, "住宿标准", 4, "STAFF");
+        service.search(1L, "住宿标准", 4, Set.of(), "STAFF");
 
         // SearchRequest 把字符串解析为 Expression，断言其语义而非源码文本
         assertThat(capturedRequest().getFilterExpression().toString())
                 .contains("visible_permission")
                 .contains("public")
-                .contains("role:STAFF")
                 .doesNotContain("admin:policy");
     }
 
@@ -75,16 +74,16 @@ class KnowledgeSearchServiceTest {
         assertThat(capturedRequest().getFilterExpression().toString())
                 .contains("visible_permission")
                 .contains("booking:cancel")
-                .doesNotContain("role:STAFF");
+                .doesNotContain("admin:policy");
     }
 
     @Test
-    void adminSearchesWithoutRoleFilter() {
+    void wildcardPermissionRemovesTheVisibilityFilter() {
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
 
-        service.search(1L, "审批权限", 4, "ADMIN");
+        service.search(1L, "审批权限", 4, Set.of("*"), "ADMIN");
 
-        // ADMIN 可读全部：不下发过滤条件，比枚举所有角色更不容易漏
+        // * 可读全部：不下发过滤条件，比枚举所有权限码更不容易漏
         assertThat(capturedRequest().getFilterExpression()).isNull();
     }
 
@@ -92,14 +91,14 @@ class KnowledgeSearchServiceTest {
     void topKIsClampedToConfiguredMaximum() {
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
 
-        service.search(1L, "制度", 999, "STAFF");
+        service.search(1L, "制度", 999, Set.of(), "STAFF");
 
         assertThat(capturedRequest().getTopK()).isEqualTo(properties.getTopKMax());
     }
 
     @Test
     void blankQueryDoesNotTouchVectorStore() {
-        assertThat(service.search(1L, "   ", 4, "STAFF")).isEmpty();
+        assertThat(service.search(1L, "   ", 4, Set.of(), "STAFF")).isEmpty();
         verifyNoInteractions(vectorStore);
     }
 
@@ -116,7 +115,7 @@ class KnowledgeSearchServiceTest {
                 .build();
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(document));
 
-        List<KnowledgeSearchService.SearchHit> hits = service.search(1L, "住宿", 4, "STAFF");
+        List<KnowledgeSearchService.SearchHit> hits = service.search(1L, "住宿", 4, Set.of(), "STAFF");
 
         assertThat(hits).hasSize(1);
         assertThat(hits.get(0).title()).isEqualTo("差旅报销制度");
@@ -126,18 +125,18 @@ class KnowledgeSearchServiceTest {
     }
 
     @Test
-    void emptyVectorResultFallsBackToKeywordSearchWithRoleFilter() {
+    void emptyVectorResultFallsBackToKeywordSearchWithPermissionFilter() {
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
-        when(docRepository.searchByKeyword(anyString(), eq(Set.of("role:STAFF")), eq(4)))
+        when(docRepository.searchByKeyword(anyString(), eq(Set.of("admin:policy")), eq(4)))
                 .thenReturn(List.of(new ChunkRow("报销制度", "第九条", "制度编号 BX-2024-01 适用于全公司。")));
 
-        List<KnowledgeSearchService.SearchHit> hits = service.search(1L, "BX-2024-01", 4, "STAFF");
+        List<KnowledgeSearchService.SearchHit> hits = service.search(1L, "BX-2024-01", 4, Set.of("admin:policy"), "STAFF");
 
         assertThat(hits).hasSize(1);
         assertThat(hits.get(0).title()).isEqualTo("报销制度");
         // 关键词命中没有相似度可言，不能伪造分数
         assertThat(hits.get(0).score()).isNaN();
-        verify(docRepository).searchByKeyword("%BX-2024-01%", Set.of("role:STAFF"), 4);
+        verify(docRepository).searchByKeyword("%BX-2024-01%", Set.of("admin:policy"), 4);
     }
 
     @Test
@@ -145,9 +144,9 @@ class KnowledgeSearchServiceTest {
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
         when(docRepository.searchByKeyword(anyString(), any(), anyInt())).thenReturn(List.of());
 
-        service.search(1L, "100%_完成", 4, "STAFF");
+        service.search(1L, "100%_完成", 4, Set.of("admin:policy"), "STAFF");
 
-        verify(docRepository).searchByKeyword("%100\\%\\_完成%", Set.of("role:STAFF"), 4);
+        verify(docRepository).searchByKeyword("%100\\%\\_完成%", Set.of("admin:policy"), 4);
     }
 
     @Test
@@ -161,7 +160,7 @@ class KnowledgeSearchServiceTest {
                 .build();
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(document));
 
-        service.search(7L, "住宿标准", 4, "STAFF");
+        service.search(7L, "住宿标准", 4, Set.of(), "STAFF");
 
         verify(auditRepository).record(eq(7L), eq("STAFF"), eq("住宿标准"), eq(4), eq(1),
                 eq(List.of("差旅报销制度 > 住宿标准/0.820")), anyLong());
@@ -180,7 +179,7 @@ class KnowledgeSearchServiceTest {
         doThrow(new IllegalStateException("audit table down")).when(auditRepository)
                 .record(anyLong(), any(), anyString(), anyInt(), anyInt(), anyList(), anyLong());
 
-        List<KnowledgeSearchService.SearchHit> hits = service.search(1L, "制度", 4, "STAFF");
+        List<KnowledgeSearchService.SearchHit> hits = service.search(1L, "制度", 4, Set.of(), "STAFF");
 
         assertThat(hits).hasSize(1);
     }

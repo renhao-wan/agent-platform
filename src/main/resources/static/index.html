@@ -2211,7 +2211,7 @@ function renderTools() {
     if (filter === "disabled" && t.enabled) return false;
     if (filter === "stale" && t.present) return false;
     if (!q) return true;
-    return [t.name, t.description, t.sourceKey, t.requiredPermission, t.requiredRole]
+    return [t.name, t.description, t.sourceKey, t.requiredPermission]
       .filter(Boolean).some(v => String(v).toLowerCase().includes(q));
   });
 
@@ -2267,7 +2267,7 @@ function toolRow(t) {
   const nm = document.createElement("span");
   nm.textContent = t.name || "（未命名）";
   nameLine.appendChild(nm);
-  const required = t.requiredPermission || (t.requiredRole ? "role:" + t.requiredRole : null);
+  const required = t.requiredPermission;
   if (required) {
     const tag = document.createElement("span");
     tag.className = "tag admin";

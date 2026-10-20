@@ -131,7 +131,7 @@ class KnowledgeAdminControllerTest {
         SearchOutcome outcome = new SearchOutcome(
                 List.of(new SearchHit("员工手册", "年假", "入职满一年享受 5 天年假", 0.82)),
                 "vector", 12);
-        when(service.searchDetailed(0L, "年假", 6, Set.of("role:STAFF"), "STAFF")).thenReturn(outcome);
+        when(service.searchDetailed(0L, "年假", 6, Set.of("admin:policy"), "STAFF")).thenReturn(outcome);
 
         ApiResponse<?> response = controller(null, null, service, rbacService())
                 .search(new KnowledgeAdminController.SearchBody("年假", "STAFF", 6));
@@ -152,7 +152,7 @@ class KnowledgeAdminControllerTest {
 
     private static RbacService rbacService() {
         RbacService rbacService = mock(RbacService.class);
-        when(rbacService.permissionsOfRole("STAFF")).thenReturn(Set.of("role:STAFF"));
+        when(rbacService.permissionsOfRole("STAFF")).thenReturn(Set.of("admin:policy"));
         return rbacService;
     }
 

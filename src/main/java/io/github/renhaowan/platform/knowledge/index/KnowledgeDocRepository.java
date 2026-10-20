@@ -57,23 +57,6 @@ public class KnowledgeDocRepository {
                 "ALTER TABLE knowledge_chunk ADD COLUMN IF NOT EXISTS visible_permission VARCHAR(64) NOT NULL DEFAULT 'public'");
         jdbcTemplate.execute(
                 "ALTER TABLE knowledge_chunk ADD COLUMN IF NOT EXISTS raw_text TEXT NOT NULL DEFAULT ''");
-        // 旧数据迁移：visible_role → visible_permission（PUBLIC 归一为 public，其余映射为 role:<ROLE>）。
-        // 只在旧列存在时执行；条件里的 visible_permission = 'public' 保证幂等，不覆盖新写入的值。
-        Boolean hasVisibleRole = jdbcTemplate.queryForObject("""
-                SELECT EXISTS (
-                    SELECT 1 FROM information_schema.columns
-                    WHERE table_name = 'knowledge_chunk' AND column_name = 'visible_role')
-                """, Boolean.class);
-        if (Boolean.TRUE.equals(hasVisibleRole)) {
-            jdbcTemplate.execute("""
-                    UPDATE knowledge_chunk
-                    SET visible_permission = CASE
-                            WHEN UPPER(visible_role) = 'PUBLIC' THEN 'public'
-                            ELSE 'role:' || UPPER(visible_role) END
-                    WHERE visible_role IS NOT NULL AND UPPER(visible_role) <> 'PUBLIC'
-                      AND visible_permission = 'public'
-                    """);
-        };
         jdbcTemplate.execute(
                 "CREATE INDEX IF NOT EXISTS idx_knowledge_chunk_doc ON knowledge_chunk(doc_path)");
         jdbcTemplate.execute(

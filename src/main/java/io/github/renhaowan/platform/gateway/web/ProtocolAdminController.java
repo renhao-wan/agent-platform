@@ -30,14 +30,14 @@ public class ProtocolAdminController {
 
     public record ToolView(Long id, String name, String description, String httpMethod,
                            String urlTemplate, boolean requireConfirm, String requiredPermission,
-                           String requiredRole, String sourceKey, String contractHash,
+                           String sourceKey, String contractHash,
                            boolean present, boolean enabled, LocalDateTime updatedAt) {
 
         public static ToolView of(ToolDefinition t) {
             return new ToolView(t.getId(), t.getName(), t.getDescription(),
                     t.getHttpMethod(), t.getUrlTemplate(),
                     t.getRequireConfirm() != null && t.getRequireConfirm() == 1,
-                    t.getRequiredPermission(), t.getRequiredRole(), t.getSourceKey(), t.getContractHash(),
+                    t.getRequiredPermission(), t.getSourceKey(), t.getContractHash(),
                     t.getPresent() == null || t.getPresent() == 1,
                     t.getEnabled() == null || t.getEnabled() == 1,
                     t.getUpdatedAt());

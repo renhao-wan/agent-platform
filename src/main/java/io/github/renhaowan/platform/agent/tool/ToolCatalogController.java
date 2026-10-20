@@ -14,14 +14,14 @@ import org.springframework.web.bind.annotation.RestController;
  * 示例指令不写死在页面里——写死就意味着"平台代码里躺着某个业务系统的词汇"，
  * 换个业务系统接入，示例就成了错的。改为运行时按工具生成：接什么系统，示例就是什么。
  * <p>
- * 只出 {@code name} / {@code description} / {@code requiredPermission} / {@code requiredRole}：
+ * 只出 {@code name} / {@code description} / {@code requiredPermission}：
  * {@code auth_header_value} 是转发用的服务凭证，不出这个边界。
  */
 @RestController
 @RequiredArgsConstructor
 public class ToolCatalogController {
 
-    public record ToolBrief(String name, String description, String requiredPermission, String requiredRole) {
+    public record ToolBrief(String name, String description, String requiredPermission) {
     }
 
     private final ToolGateway toolGateway;
@@ -30,7 +30,7 @@ public class ToolCatalogController {
     public List<ToolBrief> list() {
         return toolGateway.listTools().stream()
                 .map(tool -> new ToolBrief(tool.getName(), tool.getDescription(),
-                        tool.getRequiredPermission(), tool.getRequiredRole()))
+                        tool.getRequiredPermission()))
                 .toList();
     }
 }

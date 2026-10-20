@@ -18,7 +18,7 @@ import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 
 /**
- * 知识检索：query 向量化 + SQL 相似度检索 + 角色过滤。
+ * 知识检索：query 向量化 + SQL 相似度检索 + 权限过滤。
  * <p>过滤条件写进检索表达式而不是"查出来再筛"——无权内容从不进入候选集。
  * <p>向量结果为空时按关键词回查 chunk 表：制度编号、专有名词这类查询向量不敏感，
  * 但精确子串能命中。兜底结果不伪造相关度（score 为 NaN）。
@@ -47,19 +47,9 @@ public class KnowledgeSearchService {
         this.meterRegistry = meterRegistry;
     }
 
-    /** 兼容入口：按角色推导权限集合（ADMIN 全见，其余为 role:&lt;ROLE&gt;）。 */
-    public List<SearchHit> search(long userId, String query, int requestedTopK, String role) {
-        return search(userId, query, requestedTopK, legacyPermissions(role), role);
-    }
-
     public List<SearchHit> search(long userId, String query, int requestedTopK,
             Set<String> permissions, String actorRole) {
         return searchDetailed(userId, query, requestedTopK, permissions, actorRole).hits();
-    }
-
-    /** 兼容入口：按角色推导权限集合。 */
-    public SearchOutcome searchDetailed(long userId, String query, int requestedTopK, String role) {
-        return searchDetailed(userId, query, requestedTopK, legacyPermissions(role), role);
     }
 
     /**
@@ -167,16 +157,6 @@ public class KnowledgeSearchService {
                     .append("]");
         }
         return filter.toString();
-    }
-
-    /** 旧角色语义：ADMIN 全见，其余只读 public 与 own role 对应的 role:&lt;ROLE&gt;。 */
-    private static Set<String> legacyPermissions(String role) {
-        if (role == null || role.isBlank()) {
-            return Set.of();
-        }
-        return "ADMIN".equals(role)
-                ? Set.of(RbacService.WILDCARD)
-                : Set.of("role:" + role);
     }
 
     private void recordObservability(long userId, String query, int topK, String role,

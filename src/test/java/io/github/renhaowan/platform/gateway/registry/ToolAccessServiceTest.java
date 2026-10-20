@@ -42,14 +42,6 @@ class ToolAccessServiceTest {
         return tool;
     }
 
-    private ToolDefinition legacyRoleTool(String name, String requiredRole) {
-        ToolDefinition tool = new ToolDefinition();
-        tool.setName(name);
-        tool.setDescription("desc " + name);
-        tool.setRequiredRole(requiredRole);
-        return tool;
-    }
-
     private UserPrincipal user(long uid, String... permissions) {
         return new UserPrincipal(uid, "STAFF", Set.of(permissions));
     }
@@ -128,19 +120,6 @@ class ToolAccessServiceTest {
                 .thenReturn(new GenericHttpForwarder.ForwardResult(true, 200, "{\"rooms\":3}", null));
 
         assertThat(service().invoke(GATEWAY, user(9L), "search_rooms", "{}").isError()).isFalse();
-    }
-
-    @Test
-    void legacyRoleDeclarationStillEnforcesViaSyntheticPermission() {
-        when(registryService.find(GATEWAY, "legacy_op"))
-                .thenReturn(Optional.of(legacyRoleTool("legacy_op", "ADMIN")));
-
-        ToolAccessService.ToolCallResult denied =
-                service().invoke(GATEWAY, user(9L, "role:STAFF"), "legacy_op", "{}");
-
-        assertThat(denied.isError()).isTrue();
-        assertThat(denied.text()).contains("权限不足").contains("ADMIN");
-        verify(forwarder, never()).forward(any(), any(), any());
     }
 
     @Test

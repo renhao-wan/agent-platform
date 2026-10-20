@@ -54,24 +54,13 @@ public class ToolAccessService {
     }
 
     /**
-     * 权限判定：优先看契约声明的权限码；历史上只写了 required_role 的行回退为
-     * {@code role:<ROLE>} 语义，保持旧数据可解释。
+     * 权限判定：工具声明的权限码命中用户权限集合即放行；未声明权限的工具全员可用。
      */
     private static Optional<String> permissionDenial(ToolDefinition tool, UserPrincipal user) {
         String requiredPermission = tool.getRequiredPermission();
-        if (requiredPermission != null && !requiredPermission.isBlank()) {
-            if (user == null || !user.hasPermission(requiredPermission)) {
-                return Optional.of("权限不足：需要 " + requiredPermission + " 权限");
-            }
-            return Optional.empty();
-        }
-        String requiredRole = tool.getRequiredRole();
-        if (requiredRole != null && !requiredRole.isBlank()) {
-            boolean roleMatches = user != null
-                    && (requiredRole.equals(user.role()) || user.hasPermission("role:" + requiredRole));
-            if (!roleMatches) {
-                return Optional.of("权限不足：需要 " + requiredRole + " 角色");
-            }
+        if (requiredPermission != null && !requiredPermission.isBlank()
+                && (user == null || !user.hasPermission(requiredPermission))) {
+            return Optional.of("权限不足：需要 " + requiredPermission + " 权限");
         }
         return Optional.empty();
     }

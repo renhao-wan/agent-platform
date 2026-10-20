@@ -34,7 +34,7 @@ staff01："帮我把 3 号预订取消"（cancel 声明 x-required-permission=bo
 
 ## 3. 关键设计
 
-- **权限要求来自业务契约**：`x-required-permission` 由业务系统在 OpenAPI operation 上声明，平台只读不猜。平台代码里没有"取消=管理员"这类业务判断；旧 `x-required-role` 在导入时归一为 `role:<ROLE>`，保证历史契约可用。
+- **权限要求来自业务契约**：`x-required-permission` 由业务系统在 OpenAPI operation 上声明，平台只读不猜。平台代码里没有"取消=管理员"这类业务判断。
 - **身份显式跨线程传递**：`ChatController` 在 HTTP 线程取出 `UserPrincipal`，作为参数传给线程池里的 `AgentRunner`。ThreadLocal 不跨线程池，循环内再取会拿到 null。
 - **业务侧身份**：转发时附服务级凭证 `X-Service-Key` 与 `X-On-Behalf-Of-User: {uid}`；业务系统仅在服务凭证校验通过时才采信用户头。
 - **闸门 2 只有二十行**：定位工具 → 查权限集合 → 不命中返回文本 → 放行给转发器。安全逻辑短，是为了能被审计和穷举测试。

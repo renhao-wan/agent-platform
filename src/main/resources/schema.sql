@@ -192,20 +192,18 @@ SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
 SET @ddl = IF(@col_exists > 0, 'ALTER TABLE chat_session DROP COLUMN title', 'SELECT 1');
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
--- M4.2：工具级角色闸门（幂等：information_schema 守卫，已存在则跳过）。
--- 历史列：旧契约用 x-required-role 声明角色，导入时归一成 required_permission=role:<ROLE>；
--- 该列只保留用于兼容与展示，执行点只看 required_permission
-SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_definition' AND COLUMN_NAME='required_role');
-SET @ddl = IF(@col_exists = 0, 'ALTER TABLE tool_definition ADD COLUMN required_role VARCHAR(16) NULL AFTER require_confirm', 'SELECT 1');
-PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-
 -- RBAC：工具执行点按权限码鉴权（如 booking:cancel / admin:tool），由业务契约
--- x-required-permission 声明，平台只读不解释。required_role 保留用于兼容旧契约与展示。
+-- x-required-permission 声明，平台只读不解释。
 SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_definition' AND COLUMN_NAME='required_permission');
 SET @ddl = IF(@col_exists = 0,
-  'ALTER TABLE tool_definition ADD COLUMN required_permission VARCHAR(128) NULL AFTER required_role', 'SELECT 1');
+  'ALTER TABLE tool_definition ADD COLUMN required_permission VARCHAR(128) NULL AFTER require_confirm', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- 删除历史列 required_role：权限判定已统一到 required_permission。
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_definition' AND COLUMN_NAME='required_role');
+SET @ddl = IF(@col_exists > 0, 'ALTER TABLE tool_definition DROP COLUMN required_role', 'SELECT 1');
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- RBAC：角色与角色-权限映射。用户保持单角色（app_user.role -> app_role.code），

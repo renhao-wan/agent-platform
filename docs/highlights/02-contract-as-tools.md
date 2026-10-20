@@ -28,7 +28,7 @@
 | `operationId` | `name` | 缺失时按 method + path 生成 slug 兜底 |
 | `summary` | `description` | **直接决定模型选工具的准确率**，必须是动作句（"查询指定时间段可用的会议室"） |
 | path / query / requestBody | `input_schema` | 合并成一个 JSON Schema；`$ref` **就地展开** |
-| `x-required-permission` | `required_permission` | 权限码（如 `booking:cancel`）；兼容裸值与 springdoc `@Extension` 的嵌套形状。旧 `x-required-role` 归一为 `role:<ROLE>` |
+| `x-required-permission` | `required_permission` | 权限码（如 `booking:cancel`）；兼容裸值与 springdoc `@Extension` 的嵌套形状 |
 | `x-require-confirm` | `require_confirm` | 敏感操作人工确认 |
 | `servers[0].url` 或配置 `baseUrl` | `url_template` 前缀 | 平台优先用抓取契约的 origin 或显式 baseUrl，契约自称的 host 不可信 |
 

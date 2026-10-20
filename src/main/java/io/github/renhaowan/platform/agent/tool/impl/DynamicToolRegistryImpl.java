@@ -100,17 +100,12 @@ public class DynamicToolRegistryImpl implements DynamicToolRegistry {
 
         /**
          * 权限要求写进描述：模型据此知道"这个能力存在、但当前身份不够"，可先告知用户而非盲目尝试。
-         * 新契约给权限码；只有 required_role 的历史行按 {@code role:<ROLE>} 披露。
          */
         private static String describe(ToolDefinition tool) {
             String description = tool.getDescription() == null ? "" : tool.getDescription();
             String requiredPermission = tool.getRequiredPermission();
             if (requiredPermission == null || requiredPermission.isBlank()) {
-                String requiredRole = tool.getRequiredRole();
-                if (requiredRole == null || requiredRole.isBlank()) {
-                    return description;
-                }
-                requiredPermission = "role:" + requiredRole;
+                return description;
             }
             return description + "（此操作需要 " + requiredPermission + " 权限）";
         }

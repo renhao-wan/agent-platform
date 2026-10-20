@@ -10,15 +10,17 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 
 /**
  * 检索质量评估：拿固定题库跑一遍检索，算 Recall@K、MRR 与空结果率。
  * <p>没有评估集时，"改了切块参数/阈值是否更好"只能靠感觉。题库是 jsonl，
- * 每行 {@code {"question":"...","expected":["文档标题 > 章节"],"role":"ADMIN"}}，
- * role 可选（缺省按匿名 PUBLIC 检索）。
+ * 每行 {@code {"question":"...","expected":["文档标题 > 章节"],"permissions":["*"]}}，
+ * permissions 可选（缺省空集合，只检索 public 块）。
  */
 @Slf4j
 public class KnowledgeEvalService {
@@ -51,7 +53,8 @@ public class KnowledgeEvalService {
         for (EvalCase evalCase : cases) {
             List<SearchHit> hits;
             try {
-                hits = searchService.search(0L, evalCase.question(), topK, evalCase.role());
+                hits = searchService.search(0L, evalCase.question(), topK,
+                        evalCase.permissions(), "eval");
             } catch (RuntimeException e) {
                 // 单题检索失败按未命中计：评估要覆盖全部题，不因一题中断
                 log.warn("评估检索失败 question=\"{}\"：{}", evalCase.question(), e.getMessage());
@@ -107,8 +110,14 @@ public class KnowledgeEvalService {
             if (expected.isEmpty()) {
                 throw new IllegalArgumentException("expected 为空");
             }
-            String role = node.hasNonNull("role") ? node.get("role").asText() : null;
-            return new EvalCase(question, expected, role);
+            Set<String> permissions = new LinkedHashSet<>();
+            node.path("permissions").forEach(item -> {
+                String value = item.asText("");
+                if (!value.isBlank()) {
+                    permissions.add(value);
+                }
+            });
+            return new EvalCase(question, expected, permissions);
         } catch (Exception e) {
             throw new IllegalStateException("评估集行格式错误：" + line, e);
         }
@@ -140,7 +149,7 @@ public class KnowledgeEvalService {
         return text == null ? "" : text.replaceAll("\\s+", "").toLowerCase();
     }
 
-    public record EvalCase(String question, List<String> expected, String role) {
+    public record EvalCase(String question, List<String> expected, Set<String> permissions) {
     }
 
     public record EvalDetail(String question, int rank, String matchedSource, List<String> sources) {

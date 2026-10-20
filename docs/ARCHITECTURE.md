@@ -138,7 +138,7 @@
 
 **权限码**：`*` 为通配（ADMIN 默认持有）。平台内置 `admin:console` / `admin:source` / `admin:tool` / `admin:knowledge` / `admin:rbac`；业务侧自定义（`booking:cancel`、`expense:approve`、`repair:assign`）；知识块使用 `public` 或任意权限码。管理端提供角色-权限矩阵（查看、覆盖式保存），不做角色 CRUD 与用户角色分配。
 
-**权限粒度仍在操作上**：业务系统在 OpenAPI operation 上声明 `x-required-permission`，对账写入 `tool_definition.required_permission`，执行点检查用户权限集合是否命中。旧字段 `x-required-role` 兼容：导入时归一为合成权限码 `role:<ROLE>`，执行点只看权限码。**平台依然不编码业务语义**——"取消要什么权限"由业务契约定义，"哪个角色拥有该权限"由管理员配置，删掉一个业务系统后平台逻辑无需改动。
+**权限粒度仍在操作上**：业务系统在 OpenAPI operation 上声明 `x-required-permission`，对账写入 `tool_definition.required_permission`，执行点检查用户权限集合是否命中。**平台依然不编码业务语义**——"取消要什么权限"由业务契约定义，"哪个角色拥有该权限"由管理员配置，删掉一个业务系统后平台逻辑无需改动。
 
 **仍然不做**：多角色、角色继承、按来源分角色、强制下线。当前是单角色 + 全局权限集合；"同一用户在不同系统能做的事不同"仍由各系统对自己的操作声明不同权限码来表达——用户角色没变，变的是每个操作的门槛。按来源分配角色需要 `(user_id, source_key) -> role` 映射表，属于另一个产品形态，本项目明确不做（见 §8）。
 
@@ -189,7 +189,7 @@ if (required != null && !required.isBlank() && !user.hasPermission(required)) {
 }
 ```
 
-`UserPrincipal.hasPermission` 命中规则只有一条：`permissions.contains("*") || permissions.contains(required)`。旧 `required_role` 行由导入阶段归一为 `role:<ROLE>`，执行点不再有第二套比较逻辑。
+`UserPrincipal.hasPermission` 命中规则只有一条：`permissions.contains("*") || permissions.contains(required)`。
 
 两道闸门的共同约定：**失败永不抛异常**，一律返回文本观察（`ToolCallResult.isError`）——这是 ReAct 循环能"看到失败并自己决定下一步"的前提。
 
@@ -245,7 +245,7 @@ if (required != null && !required.isBlank() && !user.hasPermission(required)) {
 |---|---|
 | SSE 并发 | 40 并发 200/200，P50 1.03s / P99 1.35s |
 | Token 裁剪 | 30 轮长会话总量降 31.8%；单次调用 prompt 降 78.6% |
-| 自动化测试 | 251 项（转发拼装与超时故障/裁剪策略/循环三态/越权拦截/RBAC 身份加载与权限映射/契约导入·来源注册表·快照对账/路由责任链/端到端自愈/切块与知识检索/索引任务与评估） |
+| 自动化测试 | 247 项（转发拼装与超时故障/裁剪策略/循环三态/越权拦截/RBAC 身份加载与权限映射/契约导入·来源注册表·快照对账/路由责任链/端到端自愈/切块与知识检索/索引任务与评估） |
 
 ## 8. 非目标：为什么不做成生产级通用网关
 

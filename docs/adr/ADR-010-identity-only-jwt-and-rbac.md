@@ -24,10 +24,10 @@
 1. **JWT 只证明身份**：只写 `uid`（+ iat/exp），不含角色与权限。旧 token 中残留的 `role` claim 一律忽略。
 2. **授权在请求时解析**：`JwtAuthFilter` 解析 `uid` 后调用 `RbacService.loadPrincipal(uid)`，回库读取用户状态、单角色（`app_user.role`）与角色-权限映射（`app_role_permission`），构造 `UserPrincipal(uid, role, permissions)` 写入 `UserContext`。停用账号返回 401，权限不足返回 403。
 3. **轻量 RBAC 数据模型**：`app_user.role` → `app_role` → `app_role_permission`。单角色、无角色继承、无按来源角色。`*` 是通配权限；平台内置 `admin:console` / `admin:source` / `admin:tool` / `admin:knowledge` / `admin:rbac`。
-4. **业务契约声明权限码**：`x-required-permission`，执行点判定 `user.hasPermission(required)`。旧 `x-required-role` 在导入时归一为 `role:<ROLE>`，保证历史契约与旧库数据继续可用；平台仍然不解释权限码的业务含义。
+4. **业务契约声明权限码**：`x-required-permission`，执行点判定 `user.hasPermission(required)`。旧 `x-required-role` 已彻底移除，不做兼容归一；平台仍然不解释权限码的业务含义。
 5. **管理端只做角色-权限矩阵**：查看角色与权限、覆盖式保存映射。不做角色 CRUD、用户角色分配——那些属于完整 IAM，不是本项目的目标。
 6. **种子不覆盖人工配置**：`app_role.seeded` 标记默认权限是否已种过，`RbacSeeder` 只在未种过时写入。管理员在界面上改过之后，重启不会复活默认值。
-7. **知识库可见性纳入同一套权限集合**：`knowledge_chunk.visible_permission`，缺省 `public`。检索 SQL 内过滤；`*` 不过滤；旧 `visible_role` 迁移为 `role:<ROLE>` / `public`。
+7. **知识库可见性纳入同一套权限集合**：`knowledge_chunk.visible_permission`，缺省 `public`。检索 SQL 内过滤；`*` 不过滤；`visible_role` 已移除。
 
 ## 后果
 

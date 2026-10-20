@@ -31,6 +31,7 @@ import io.github.renhaowan.platform.agent.sse.AgentEventEmitter;
 import io.github.renhaowan.platform.agent.tool.DynamicToolRegistry;
 import io.github.renhaowan.platform.agent.tool.ToolGateway;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -68,7 +69,7 @@ class AgentRunnerTest {
     @Mock
     private AgentEventEmitter events;
 
-    private final UserPrincipal staff = new UserPrincipal(1L, "STAFF");
+    private final UserPrincipal staff = new UserPrincipal(1L, "STAFF", Set.of());
     private final ConfirmManager confirmManager = new ConfirmManagerImpl();
     private final AgentProperties properties = new AgentProperties();
 

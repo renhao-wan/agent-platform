@@ -132,11 +132,11 @@ class OpenApiImportServiceTest {
     }
 
     @Test
-    void requiredRoleReadFromExtensionAsPlainString() {
+    void requiredPermissionReadFromExtensionAsPlainString() {
         String openapi = """
                 {"openapi":"3.0.0","servers":[{"url":"http://h"}],
                  "paths":{"/api/v1/bookings/{id}/cancel":{
-                   "post":{"operationId":"cancel_booking","x-required-role":"ADMIN","summary":"取消指定预订",
+                   "post":{"operationId":"cancel_booking","x-required-permission":"booking:cancel","summary":"取消指定预订",
                      "parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"integer"}}]},
                    "get":{"operationId":"get_booking","summary":"查询预订详情",
                      "parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"integer"}}]}}}}
@@ -145,28 +145,11 @@ class OpenApiImportServiceTest {
 
         assertThat(tools).extracting(ToolDefinition::getName)
                 .containsExactlyInAnyOrder("cancel_booking", "get_booking");
-        // 角色声明绑在具体 operation 上，不是整份文档的全局属性
+        // 权限声明绑在具体 operation 上，不是整份文档的全局属性
         assertThat(tools).filteredOn(t -> "cancel_booking".equals(t.getName()))
-                .allSatisfy(t -> assertThat(t.getRequiredRole()).isEqualTo("ADMIN"));
-        // 旧声明归一为合成权限码，执行点只需看 requiredPermission
-        assertThat(tools).filteredOn(t -> "cancel_booking".equals(t.getName()))
-                .allSatisfy(t -> assertThat(t.getRequiredPermission()).isEqualTo("role:ADMIN"));
+                .allSatisfy(t -> assertThat(t.getRequiredPermission()).isEqualTo("booking:cancel"));
         assertThat(tools).filteredOn(t -> "get_booking".equals(t.getName()))
-                .allSatisfy(t -> assertThat(t.getRequiredRole()).isNull());
-    }
-
-    @Test
-    void requiredPermissionReadFromExtensionWinsOverLegacyRole() {
-        String openapi = """
-                {"openapi":"3.0.0","servers":[{"url":"http://h"}],
-                 "paths":{"/api/v1/bookings/{id}/cancel":{"post":{
-                   "operationId":"cancel_booking","summary":"取消指定预订",
-                   "x-required-permission":"booking:cancel","x-required-role":"ADMIN",
-                   "parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"integer"}}]}}}}
-                """;
-        var tools = service.parse("gw1", openapi, null);
-
-        assertThat(tools.get(0).getRequiredPermission()).isEqualTo("booking:cancel");
+                .allSatisfy(t -> assertThat(t.getRequiredPermission()).isNull());
     }
 
     @Test
@@ -184,29 +167,15 @@ class OpenApiImportServiceTest {
     }
 
     @Test
-    void requiredRoleReadFromSpringdocNestedExtension() {
-        // springdoc @Extension 的产物形状：{"value": "ADMIN"}
-        String openapi = """
-                {"openapi":"3.0.0","servers":[{"url":"http://h"}],
-                 "paths":{"/api/v1/bookings/{id}/cancel":{"post":{
-                   "operationId":"cancel_booking","x-required-role":{"value":"ADMIN"},"summary":"取消指定预订",
-                   "parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"integer"}}]}}}}
-                """;
-        var tools = service.parse("gw1", openapi, null);
-
-        assertThat(tools.get(0).getRequiredRole()).isEqualTo("ADMIN");
-    }
-
-    @Test
     void blankExtensionsTreatedAsAbsent() {
         String openapi = """
                 {"openapi":"3.0.0","servers":[{"url":"http://h"}],
                  "paths":{"/api/v1/rooms":{"get":{"operationId":"search_rooms","summary":"查询",
-                   "x-required-role":"   ","x-require-confirm":"false"}}}}
+                   "x-required-permission":"   ","x-require-confirm":"false"}}}}
                 """;
         var tools = service.parse("gw1", openapi, null);
 
-        assertThat(tools.get(0).getRequiredRole()).isNull();
+        assertThat(tools.get(0).getRequiredPermission()).isNull();
         assertThat(tools.get(0).getRequireConfirm()).isZero();
     }
 

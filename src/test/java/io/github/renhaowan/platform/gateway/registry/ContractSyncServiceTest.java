@@ -40,7 +40,7 @@ class ContractSyncServiceTest {
                   "post": {
                     "operationId": "cancel_thing",
                     "summary": "取消指定事项",
-                    "x-required-role": "ADMIN",
+                    "x-required-permission": "booking:cancel",
                     "x-require-confirm": true,
                     "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer"}}]
                   }
@@ -110,7 +110,7 @@ class ContractSyncServiceTest {
         assertThat(report.added()).isEqualTo(1);
         ToolDefinition tool = appliedTools().get(0);
         assertThat(tool.getName()).isEqualTo("cancel_thing");
-        assertThat(tool.getRequiredRole()).isEqualTo("ADMIN");
+        assertThat(tool.getRequiredPermission()).isEqualTo("booking:cancel");
         assertThat(tool.getRequireConfirm()).isEqualTo(1);
         assertThat(tool.getAuthHeaderValue()).isEqualTo("demo-key");
         // 契约自称的 host 不可信：既然从 source.local 拉到，就发回 source.local

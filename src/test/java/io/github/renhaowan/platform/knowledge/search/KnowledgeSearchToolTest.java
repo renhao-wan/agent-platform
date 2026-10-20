@@ -52,7 +52,7 @@ class KnowledgeSearchToolTest {
 
     @Test
     void emptyHitsYieldsNotFoundText() {
-        when(searchService.search(eq(1L), eq("住宿标准"), anyInt(), eq(Set.of("role:STAFF")), eq("STAFF")))
+        when(searchService.search(eq(1L), eq("住宿标准"), anyInt(), eq(Set.of("admin:policy")), eq("STAFF")))
                 .thenReturn(List.of());
 
         String result = tool.execute(staff(), "{\"query\":\"住宿标准\"}");
@@ -62,7 +62,7 @@ class KnowledgeSearchToolTest {
 
     @Test
     void rendersSourceAndScoreForEachHit() {
-        when(searchService.search(eq(1L), eq("住宿标准"), eq(2), eq(Set.of("role:STAFF")), eq("STAFF")))
+        when(searchService.search(eq(1L), eq("住宿标准"), eq(2), eq(Set.of("admin:policy")), eq("STAFF")))
                 .thenReturn(List.of(
                 new SearchHit("差旅报销制度", "住宿标准", "一线城市每晚不超过 600 元。", 0.82),
                 new SearchHit("差旅报销制度", "", "第二条正文。", Double.NaN)));
@@ -109,6 +109,6 @@ class KnowledgeSearchToolTest {
     }
 
     private static UserPrincipal staff() {
-        return new UserPrincipal(1L, "STAFF");
+        return new UserPrincipal(1L, "STAFF", Set.of("admin:policy"));
     }
 }

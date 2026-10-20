@@ -30,9 +30,9 @@ class DynamicToolRegistryTest {
         return definition;
     }
 
-    private static ToolDefinition adminOnlyTool(String name, String description, String schema) {
+    private static ToolDefinition restrictedTool(String name, String description, String schema) {
         ToolDefinition definition = tool(name, description, schema, 0);
-        definition.setRequiredRole("ADMIN");
+        definition.setRequiredPermission("booking:cancel");
         return definition;
     }
 
@@ -62,15 +62,15 @@ class DynamicToolRegistryTest {
     }
 
     @Test
-    void roleRequirementIsDisclosedInToolDescription() {
+    void permissionRequirementIsDisclosedInToolDescription() {
         when(toolGateway.listTools()).thenReturn(List.of(
-                adminOnlyTool("cancel_booking", "取消指定预订", CANCEL_SCHEMA)));
+                restrictedTool("cancel_booking", "取消指定预订", CANCEL_SCHEMA)));
         DynamicToolRegistry registry = new DynamicToolRegistryImpl(toolGateway);
 
         // 无权工具照常下发，权限要求写进描述——模型据此提前判断，而非盲目尝试后被拒
         assertThat(registry.callbacks()).hasSize(1);
         assertThat(registry.callbacks().get(0).getToolDefinition().description())
-                .isEqualTo("取消指定预订（此操作需要 role:ADMIN 权限）");
+                .isEqualTo("取消指定预订（此操作需要 booking:cancel 权限）");
     }
 
     @Test

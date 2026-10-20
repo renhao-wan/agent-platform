@@ -72,16 +72,9 @@ public class OpenApiImportServiceImpl implements OpenApiImportService {
         tool.setHttpMethod(method.toUpperCase());
         tool.setUrlTemplate(join(baseUrl, path));
         // 敏感与权限要求一律由业务系统在契约里声明，平台不猜测接口语义（业务词不落平台代码）。
-        // x-required-permission 是当前字段；只有 x-required-role 的旧契约按 role:<ROLE> 兼容映射。
         tool.setRequireConfirm("DELETE".equalsIgnoreCase(tool.getHttpMethod())
                 || extensionFlag(operation, "x-require-confirm") ? 1 : 0);
-        String requiredRole = extensionText(operation, "x-required-role");
-        String requiredPermission = extensionText(operation, "x-required-permission");
-        if (requiredPermission == null && requiredRole != null) {
-            requiredPermission = "role:" + requiredRole;
-        }
-        tool.setRequiredRole(requiredRole);
-        tool.setRequiredPermission(requiredPermission);
+        tool.setRequiredPermission(extensionText(operation, "x-required-permission"));
         tool.setEnabled(1);
         tool.setPresent(1);
         tool.setInputSchema(buildInputSchema(operation, root).toString());
@@ -143,8 +136,8 @@ public class OpenApiImportServiceImpl implements OpenApiImportService {
     }
 
     /**
-     * 读 OpenAPI 扩展字段的文本值，兼容两种写法：{@code "x-required-role": "ADMIN"}，
-     * 以及 springdoc {@code @Extension} 生成的 {@code {"value": "ADMIN"}}。
+     * 读 OpenAPI 扩展字段的文本值，兼容两种写法：{@code "x-required-permission": "booking:cancel"}，
+     * 以及 springdoc {@code @Extension} 生成的 {@code {"value": "booking:cancel"}}。
      */
     private static String extensionText(JsonNode operation, String name) {
         JsonNode node = operation.path(name);

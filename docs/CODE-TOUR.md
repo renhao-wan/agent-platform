@@ -31,7 +31,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 - **SourceConflictException.java**：重复创建来源、或试图删除配置管理的来源 → 全局异常映射 409（后者提示改配置）。
 - **ContractSyncScheduler.java**：`sync-interval-ms`（默认 5 分钟）周期对账；`sync-enabled=false` 关闭。与启动对账共用同一路径，首次执行延迟一个周期避免重复拉取。
 - **ToolSource.java / ToolSourceMapper.java**：`tool_source` 表——每个来源的 `origin`（CONFIG/ADMIN）、`enabled`、`status`（PENDING/OK/FAILED/CONFLICT/RETIRED）、契约地址与可选 `base_url`、服务凭证、`contract_hash`、`tool_count`、上次新增/更新/下线/破坏性变更计数、`last_attempt_at` / `last_success_at` / `last_error`。是"这个来源现在到底怎么了"的观测面。可被管理端清空的字段标 `updateStrategy = ALWAYS`。
-- **OpenApiImportService.java** ★【②】：OpenAPI JSON → 工具定义。规则：`operationId`→工具名（缺失则 slug 兜底）、`summary`→描述（模型选工具的依据）、path 参数填 `url_template` 占位、query/requestBody 合并生成 `inputSchema`、**敏感与权限要求一律读业务系统的扩展字段**（`x-require-confirm` / `x-required-permission`，DELETE 天然算敏感）；旧 `x-required-role` 兼容归一为合成权限码 `role:<ROLE>`——平台不猜测接口语义，所以"取消"二字本身不再触发任何标记。
+- **OpenApiImportService.java** ★【②】：OpenAPI JSON → 工具定义。规则：`operationId`→工具名（缺失则 slug 兜底）、`summary`→描述（模型选工具的依据）、path 参数填 `url_template` 占位、query/requestBody 合并生成 `inputSchema`、**敏感与权限要求一律读业务系统的扩展字段**（`x-require-confirm` / `x-required-permission`，DELETE 天然算敏感）——平台不猜测接口语义，所以"取消"二字本身不触发任何标记。
   `$ref` 必须**就地展开**：工具 schema 是脱离原契约、单独发给模型的片段，`#/components/schemas/...` 在模型侧查不到，OpenAI 兼容接口会以 "Pointer ... does not exist" 拒绝整轮请求。自引用按层截断成宽松 object 骨架，不会无限展开。
 - **ToolRegistryService.java + impl/ToolRegistryServiceImpl.java** ★【② ADR-008】：按 gatewayId 作用域查询/更新。`applySnapshot` 是快照对账本体：新增 / 指纹变化则更新（保留 `id`、`createdAt`、人工 `enabled`）/ 未变不动 / 契约里消失则 `present=0` 软下线（不删行，重新出现时复活）。写入前整体判冲突：同名工具仍被其他来源以 `present=1` 声明时整份放弃，不留半新半旧状态。**工具名在同一网关内是全局命名空间**。
 - **ContractHashes.java**：契约指纹。只覆盖契约决定的字段（name/method/url_template/description/inputSchema/require_confirm/required_permission），服务凭证单独比对；整份契约的指纹按逐工具指纹排序后再哈希，工具顺序变化不算变更。
@@ -103,7 +103,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 - **KnowledgeConfig.java**：手动装配 pgvector 与 embedding 模型（不走 starter，避免自动配置抓主 DataSource / 复用 DeepSeek 的 base-url）。Postgres 连不上时抛带指引的异常（fail fast，不静默摘掉知识库）。
 - **KnowledgeJdbc.java**：私有 Hikari 连接池（`knowledge-pg`）。**故意不注册为 DataSource bean**——第二个 DataSource 会让 MyBatis 的 `@ConditionalOnSingleCandidate` 失去唯一候选。
 - **chunk/MarkdownChunker.java** ★：纯函数。H2 主切分 → 超长节按 H3 → 段落 → 句子 → 硬切逐级降级；表格按行拆且重复表头，代码块不拆；过小块并入相邻块（导语并入首节时采用首节标题，否则"住宿标准"这类标题会被吞掉）。`VERSION` 参与 `chunk_config` 指纹——改切分规则必须加一，否则文档 hash 未变时旧索引不会被重建。
-- **chunk/FrontMatter.java**：解析 `key: value` 前置元数据；`visible_permission` 缺省为 `public`（权限默认收紧而不是放开），旧 `visible_role` 归一为 `role:<ROLE>` / `public`。
+- **chunk/FrontMatter.java**：解析 `key: value` 前置元数据；`visible_permission` 缺省为 `public`（权限默认收紧而不是放开）。
 - **index/KnowledgeIndexService.java** ★：扫描目录 → SHA-256 比对 → 只重索引变更文档。跳过条件同时看 **status（FAILED 必重试）、content hash、embedding model、切块参数**。写入采用**版本化**：块 id 由 `doc_path#序号` 确定性生成，先 `add` 新块（同 id upsert），再只删"新版本不再包含"的 stale id——不先按 `doc_path` 全删，避免重建期间检索空白窗口。每次索引对应一条任务记录，完成/失败回写状态。
 - **index/KnowledgeIndexJobRepository.java**：`knowledge_index_job` 任务表。跨实例互斥靠部分唯一索引 `WHERE status='RUNNING'`；`start` 会先把超时 RUNNING 标 FAILED，避免进程被 kill 后永久阻塞。
 - **index/KnowledgeDocRepository.java**：`knowledge_doc`（增量判断）+ `knowledge_chunk`（块明细、关键词兜底正文、可见权限列）两张表，建表幂等，旧库用 `ADD COLUMN IF NOT EXISTS` 补列。
@@ -125,7 +125,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
 - `knowledge/`：5 份制度语料（4 份 `public` + 1 份 `admin:policy`）+ 评估题库；镜像内带一份，compose 另把宿主目录只读挂到 `/app/knowledge`，改文档后重启或 reindex 即生效，不必重建镜像。
 
-## 5. 测试（38 类，251 项）
+## 5. 测试（38 类，247 项）
 
 | 测试类 | 覆盖 |
 |---|---|

@@ -162,15 +162,6 @@ class MarkdownChunkerTest {
     }
 
     @Test
-    void legacyVisibleRoleMapsToSyntheticPermission() {
-        // 旧 front-matter 仍可用：ADMIN 映射为 role:ADMIN，其余角色同理；PUBLIC 视同 public
-        assertThat(FrontMatter.parse("---\nvisible_role: ADMIN\n---\n正文").visiblePermission())
-                .isEqualTo("role:ADMIN");
-        assertThat(FrontMatter.parse("---\nvisible_role: PUBLIC\n---\n正文").visiblePermission())
-                .isEqualTo("public");
-    }
-
-    @Test
     void defaultVisiblePermissionIsPublic() {
         assertThat(FrontMatter.parse("# 标题\n正文").visiblePermission()).isEqualTo("public");
         assertThat(FrontMatter.parse("---\ntitle: x\n---\n正文").visiblePermission()).isEqualTo("public");

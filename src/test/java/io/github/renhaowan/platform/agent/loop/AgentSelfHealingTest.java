@@ -38,6 +38,7 @@ import io.github.renhaowan.platform.gateway.registry.ToolAccessService;
 import io.github.renhaowan.platform.gateway.registry.ToolRegistryService;
 import io.github.renhaowan.platform.gateway.registry.entity.ToolDefinition;
 import java.util.List;
+import java.util.Set;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -87,7 +88,7 @@ class AgentSelfHealingTest {
 
     private final ConfirmManager confirmManager = new ConfirmManagerImpl();
     private final AgentProperties properties = new AgentProperties();
-    private final UserPrincipal staff = new UserPrincipal(1L, "STAFF");
+    private final UserPrincipal staff = new UserPrincipal(1L, "STAFF", Set.of());
 
     @BeforeAll
     static void startBackend() {

@@ -67,12 +67,8 @@ final class ToolChangeAnalyzer {
         return changes;
     }
 
-    /** 新契约为权限码；只有 required_role 的历史行按 role:<ROLE> 归一后比较。 */
     private static String effectivePermission(ToolDefinition tool) {
-        if (!isBlank(tool.getRequiredPermission())) {
-            return tool.getRequiredPermission();
-        }
-        return isBlank(tool.getRequiredRole()) ? null : "role:" + tool.getRequiredRole();
+        return isBlank(tool.getRequiredPermission()) ? null : tool.getRequiredPermission();
     }
 
     private static JsonNode schemaOf(ToolDefinition tool) {

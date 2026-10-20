@@ -12,6 +12,7 @@ import io.github.renhaowan.platform.agent.auth.UserPrincipal;
 import io.github.renhaowan.platform.gateway.registry.entity.ToolDefinition;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -51,7 +52,7 @@ class ToolCatalogControllerTest {
     void toolsListIsServedToAuthenticatedUser() throws Exception {
         when(toolGateway.listTools())
                 .thenReturn(List.of(tool("search_rooms", "查询指定时间段可用的会议室")));
-        when(rbacService.loadPrincipal(7L)).thenReturn(Optional.of(new UserPrincipal(7L, "STAFF")));
+        when(rbacService.loadPrincipal(7L)).thenReturn(Optional.of(new UserPrincipal(7L, "STAFF", Set.of())));
 
         mockMvc.perform(get("/api/v1/tools")
                         .header("Authorization", "Bearer " + jwtService.issue(7L)))
@@ -66,7 +67,7 @@ class ToolCatalogControllerTest {
         withSecret.setAuthHeaderName("X-Service-Key");
         withSecret.setAuthHeaderValue("super-secret-service-key");
         when(toolGateway.listTools()).thenReturn(List.of(withSecret));
-        when(rbacService.loadPrincipal(1L)).thenReturn(Optional.of(new UserPrincipal(1L, "ADMIN")));
+        when(rbacService.loadPrincipal(1L)).thenReturn(Optional.of(new UserPrincipal(1L, "ADMIN", Set.of("*"))));
 
         String body = mockMvc.perform(get("/api/v1/tools")
                         .header("Authorization", "Bearer " + jwtService.issue(1L)))

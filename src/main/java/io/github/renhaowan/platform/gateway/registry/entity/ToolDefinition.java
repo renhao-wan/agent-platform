@@ -45,13 +45,6 @@ public class ToolDefinition {
     private Integer requireConfirm;
 
     /**
-     * 兼容旧契约的角色声明（x-required-role）：仅在 {@link #requiredPermission} 为空时回退使用，
-     * 保留用于展示与历史数据。新契约应声明权限码。
-     */
-    @TableField(updateStrategy = FieldStrategy.ALWAYS)
-    private String requiredRole;
-
-    /**
      * 权限闸门：NULL=全员可用；否则要求执行用户的权限集合包含该码
      * （如 booking:cancel / expense:approve / admin:tool）。由业务契约 x-required-permission 声明。
      */

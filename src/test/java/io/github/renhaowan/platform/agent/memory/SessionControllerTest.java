@@ -15,6 +15,7 @@ import io.github.renhaowan.platform.agent.memory.entity.ChatMessage;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -48,7 +49,7 @@ class SessionControllerTest {
 
     @BeforeEach
     void authorizeStaff() {
-        when(rbacService.loadPrincipal(7L)).thenReturn(Optional.of(new UserPrincipal(7L, "STAFF")));
+        when(rbacService.loadPrincipal(7L)).thenReturn(Optional.of(new UserPrincipal(7L, "STAFF", Set.of())));
     }
 
     @Test
