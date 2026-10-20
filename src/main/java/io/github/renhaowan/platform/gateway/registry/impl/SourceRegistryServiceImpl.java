@@ -144,15 +144,20 @@ public class SourceRegistryServiceImpl implements SourceRegistryService {
         if (command.serviceKeyValue() != null) {
             source.setServiceKeyValue(blankToNull(command.serviceKeyValue()));
         }
-        if (command.enabled() != null) {
-            source.setEnabled(command.enabled() ? 1 : 0);
-            if (command.enabled() && ToolSource.STATUS_RETIRED.equals(source.getStatus())) {
-                source.setStatus(ToolSource.STATUS_PENDING);
-            }
-        }
         // 管理员接管后配置不再覆盖：否则下次重启会悄悄改回配置文件里的地址/凭证
         source.setOrigin(ToolSource.ORIGIN_ADMIN);
-        updateQuietly(source);
+        if (command.enabled() != null && !command.enabled()) {
+            // 停用与下线同义：只置 enabled=0 只能阻止后续对账，已下发的工具仍会留在模型清单里
+            retireRow(source);
+        } else {
+            if (command.enabled() != null) {
+                source.setEnabled(1);
+                if (ToolSource.STATUS_RETIRED.equals(source.getStatus())) {
+                    source.setStatus(ToolSource.STATUS_PENDING);
+                }
+            }
+            updateQuietly(source);
+        }
         log.info("管理端更新来源 {} -> {}", sourceKey, source.getContractUrl());
         return Optional.of(source);
     }

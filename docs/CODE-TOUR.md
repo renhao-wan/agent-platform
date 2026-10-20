@@ -26,7 +26,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 ### registry/ 工具注册与访问控制
 - **OpenApiSourceRegistrar.java**【②】：启动对账的触发器——从来源注册表取激活来源，逐个做完整快照对账（实际逻辑在 `ContractSyncService`）。**"契约可访问"就等于"工具可用"**，且这个等式持续成立：接口新增/修改/删除会在下一次对账收敛，不必重启平台。单个来源失败只告警跳过、保留它上一版工具，不阻断启动。`platform.gateway.sync-on-startup=false` 可关掉启动这一轮（例如平台先于业务系统启动时）。
 - **ContractSyncService.java + impl/ContractSyncServiceImpl.java** ★【② ADR-008】：契约对账主流程：抓取 → 解析 → `applySnapshot` → 记录来源状态。失败时只更新 `tool_source.status/last_error`，**保留 `contract_hash` / `tool_count` / `last_success_at`**（last-known-good），不下线任何工具；同名冲突标 `CONFLICT` 并整份放弃。有实际变化时发布 `ToolCatalogChangedEvent`。定时、启动、管理端新建/编辑后的立即对账与手工触发共用一把进程内 `ReentrantLock`：抢不到直接返回 `BUSY`，不排队、不并发写同一份工具集合。每次对账打 Micrometer 指标（`platform.contract.sync` / `platform.contract.sync.duration` / `platform.contract.breaking`）。
-- **SourceRegistryService.java + impl/SourceRegistryServiceImpl.java**【ADR-009】：来源注册表。`seedFromConfig()` 启动时把 yml 里的 `sources` 种进库；`listAll` / `listActive` / `find`；`create` / `update` / `retire` 供管理端使用。**所有权规则**：`origin=CONFIG` 的来源每次启动按配置刷新；管理员编辑后提升为 `origin=ADMIN`，配置不再覆盖；配置里移除的来源软下线（`enabled=0`、`status=RETIRED`，名下工具 `present=0`）。配置错误（缺 id、id 重复、非 http(s)）按启动前置条件失败处理，请求参数错误返回 400。
+- **SourceRegistryService.java + impl/SourceRegistryServiceImpl.java**【ADR-009】：来源注册表。`seedFromConfig()` 启动时把 yml 里的 `sources` 种进库；`listAll` / `listActive` / `find`；`create` / `update` / `retire` 供管理端使用。**所有权规则**：`origin=CONFIG` 的来源每次启动按配置刷新；管理员编辑后提升为 `origin=ADMIN`，配置不再覆盖；配置里移除的来源软下线（`enabled=0`、`status=RETIRED`，名下工具 `present=0`）。编辑时关闭"启用"与 `DELETE` 同义——只置 `enabled=0` 只能阻止后续对账，已下发的工具必须一并软下线；重新启用会回到 `PENDING`，由随后的对账按契约恢复工具。配置错误（缺 id、id 重复、非 http(s)）按启动前置条件失败处理，请求参数错误返回 400。
 - **SourceConfigSeeder.java**：`@Order(0)` 的 `ApplicationRunner`，只做种子、不访问业务系统，因此 `sync-on-startup=false` 时仍执行；`seed-on-startup=false` 可关闭（测试用）。
 - **SourceConflictException.java**：重复创建来源、或试图删除配置管理的来源 → 全局异常映射 409（后者提示改配置）。
 - **ContractSyncScheduler.java**：`sync-interval-ms`（默认 5 分钟）周期对账；`sync-enabled=false` 关闭。与启动对账共用同一路径，首次执行延迟一个周期避免重复拉取。
@@ -122,7 +122,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
 - `knowledge/`：5 份制度语料（4 份 PUBLIC + 1 份 ADMIN）+ 评估题库；镜像内带一份，compose 另把宿主目录只读挂到 `/app/knowledge`，改文档后重启或 reindex 即生效，不必重建镜像。
 
-## 5. 测试（34 类，221 项）
+## 5. 测试（34 类，223 项）
 
 | 测试类 | 覆盖 |
 |---|---|
@@ -140,7 +140,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 | OpenApiSourceRegistrarTest (1) | 启动入口触发全量对账 |
 | ContractSyncServiceTest (11) | 成功对账与凭证绑定、baseUrl 覆盖、抓取/解析失败保留 last-known-good、冲突不发布事件且 `last_error` 含冲突工具与占用来源、监听器失败不影响成功状态、从注册表取来源、单来源对账、并发返回 BUSY、完成后释放锁 |
 | ToolSourceAdminControllerTest (9) | HTTP 契约：400 参数校验、404 不存在、409 重复创建/下线配置来源、创建后立即对账、凭证只披露 `serviceKeyConfigured` |
-| SourceRegistryServiceTest (8) | 配置种子插入/刷新/不覆盖 ADMIN、配置移除软下线工具、id 缺失与重复 fail fast、重复创建 409、编辑提升 ADMIN 且凭证 null 保持、retire 拒绝 CONFIG / 软下线 ADMIN、查询不回显凭证 |
+| SourceRegistryServiceTest (10) | 配置种子插入/刷新/不覆盖 ADMIN、配置移除软下线工具、id 缺失与重复 fail fast、重复创建 409、编辑提升 ADMIN 且凭证 null 保持、编辑停用即下线其工具、重新启用回到 PENDING、retire 拒绝 CONFIG / 软下线 ADMIN、查询不回显凭证 |
 | SourceConfigSeederTest (1) | 启动种子器调用注册表 |
 | ToolChangeAnalyzerTest (8) | 新增必填参数、可选转必填、必填类型变化、端点变化、角色收紧/变更、无变化、非法 schema |
 | GenericHttpForwarderTimeoutTest (4) | WireMock：读超时、连接中断、非 JSON 响应体、截断边界 |

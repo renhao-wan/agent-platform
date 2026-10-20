@@ -176,6 +176,40 @@ class SourceRegistryServiceTest {
     }
 
     @Test
+    void updateDisablingSourceRetiresItAndOfflinesItsTools() {
+        ToolSource existing = row("expense", ToolSource.ORIGIN_ADMIN);
+        when(sourceMapper.selectById("expense")).thenReturn(existing);
+        when(registryService.retireSource("gw1", "expense")).thenReturn(2);
+
+        Optional<ToolSource> updated = service().update("expense",
+                new SourceRegistryService.SourceCommand("expense", "http://expense.local/openapi.json",
+                        null, null, null, false));
+
+        assertThat(updated).isPresent();
+        assertThat(updated.get().getEnabled()).isZero();
+        assertThat(updated.get().getStatus()).isEqualTo(ToolSource.STATUS_RETIRED);
+        verify(registryService).retireSource("gw1", "expense");
+        verify(events).publishEvent(any(ToolCatalogChangedEvent.class));
+    }
+
+    @Test
+    void updateReEnablingRetiredSourceRestoresPendingWithoutRetiringAgain() {
+        ToolSource existing = row("expense", ToolSource.ORIGIN_ADMIN);
+        existing.setEnabled(0);
+        existing.setStatus(ToolSource.STATUS_RETIRED);
+        when(sourceMapper.selectById("expense")).thenReturn(existing);
+
+        Optional<ToolSource> updated = service().update("expense",
+                new SourceRegistryService.SourceCommand("expense", "http://expense.local/openapi.json",
+                        null, null, null, true));
+
+        assertThat(updated).isPresent();
+        assertThat(updated.get().getEnabled()).isEqualTo(1);
+        assertThat(updated.get().getStatus()).isEqualTo(ToolSource.STATUS_PENDING);
+        verify(registryService, never()).retireSource(any(), any());
+    }
+
+    @Test
     void retireRejectsConfigManagedSourceButRetiresAdminSource() {
         when(sourceMapper.selectById("booking")).thenReturn(row("booking", ToolSource.ORIGIN_CONFIG));
         when(sourceMapper.selectById("expense")).thenReturn(row("expense", ToolSource.ORIGIN_ADMIN));
