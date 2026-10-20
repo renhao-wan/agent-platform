@@ -24,10 +24,17 @@ KnowledgeSearchService/KnowledgeSearchTool
 > 与 `agent/` 同处一个 Spring 应用，被 `ToolGateway` 以普通方法调用触达。
 
 ### registry/ 工具注册与访问控制
-- **OpenApiSourceRegistrar.java**【②】：启动时按 `platform.gateway.sources` 逐个拉取业务系统的 OpenAPI 契约、解析、注册。**"契约可访问"就等于"工具可用"**——不必手工导入，改了业务系统的 `@Operation` 说明或角色声明，重启平台即生效。契约地址的 origin 直接作为该来源工具的调用基地址，故契约本身不必写死主机名。单个来源失败只告警跳过，不阻断启动。
+- **OpenApiSourceRegistrar.java**【②】：启动对账的触发器——按 `platform.gateway.sources` 让每个来源做一次完整快照对账（实际逻辑在 `ContractSyncService`）。**"契约可访问"就等于"工具可用"**，且这个等式持续成立：接口新增/修改/删除会在下一次对账收敛，不必重启平台。单个来源失败只告警跳过、保留它上一版工具，不阻断启动。`platform.gateway.sync-on-startup=false` 可关掉启动这一轮（例如平台先于业务系统启动时）。
+- **ContractSyncService.java + impl/ContractSyncServiceImpl.java** ★【② ADR-008】：契约对账主流程：抓取 → 解析 → `applySnapshot` → 记录来源状态。失败时只更新 `tool_source.status/last_error`，**保留 `contract_hash` / `tool_count` / `last_success_at`**（last-known-good），不下线任何工具；同名冲突标 `CONFLICT` 并整份放弃。有实际变化时发布 `ToolCatalogChangedEvent`。来源 `id` 未配置时按 host+端口兜底并告警（容器内外会得到不同键，不推荐依赖）。
+- **ContractSyncScheduler.java**：`sync-interval-ms`（默认 5 分钟）周期对账；`sync-enabled=false` 关闭。与启动对账共用同一路径，首次执行延迟一个周期避免重复拉取。
+- **ToolSource.java / ToolSourceMapper.java**：`tool_source` 表——每个来源的 `status`（PENDING/OK/FAILED/CONFLICT）、`contract_hash`、`tool_count`、上次新增/更新/下线/破坏性变更计数、`last_attempt_at` / `last_success_at` / `last_error`。是"这个来源现在到底怎么了"的观测面。
 - **OpenApiImportService.java** ★【②】：OpenAPI JSON → 工具定义。规则：`operationId`→工具名（缺失则 slug 兜底）、`summary`→描述（模型选工具的依据）、path 参数填 `url_template` 占位、query/requestBody 合并生成 `inputSchema`、**敏感与角色一律读业务系统的扩展字段**（`x-require-confirm` / `x-required-role`，DELETE 天然算敏感）——平台不猜测接口语义，所以"取消"二字本身不再触发任何标记。
   `$ref` 必须**就地展开**：工具 schema 是脱离原契约、单独发给模型的片段，`#/components/schemas/...` 在模型侧查不到，OpenAI 兼容接口会以 "Pointer ... does not exist" 拒绝整轮请求。自引用按层截断成宽松 object 骨架，不会无限展开。
-- **ToolRegistryService.java**：按 gatewayId 作用域查询/更新；同名工具更新不重复插入。**工具名在同一网关内是全局命名空间**，多个业务系统共用一个 gatewayId 时后来的同名工具会顶掉先前的——导入时若发现同名但"主机与路径都不同"，留下来源变更告警（只改地址、改端口属正常操作，不告警）。
+- **ToolRegistryService.java + impl/ToolRegistryServiceImpl.java** ★【② ADR-008】：按 gatewayId 作用域查询/更新。`applySnapshot` 是快照对账本体：新增 / 指纹变化则更新（保留 `id`、`createdAt`、人工 `enabled`）/ 未变不动 / 契约里消失则 `present=0` 软下线（不删行，重新出现时复活）。写入前整体判冲突：同名工具仍被其他来源以 `present=1` 声明时整份放弃，不留半新半旧状态。**工具名在同一网关内是全局命名空间**。
+- **ContractHashes.java**：契约指纹。只覆盖契约决定的字段（name/method/url_template/description/inputSchema/require_confirm/required_role），服务凭证单独比对；整份契约的指纹按逐工具指纹排序后再哈希，工具顺序变化不算变更。
+- **ToolChangeAnalyzer.java**：破坏性变更识别，只告警不阻断。四类：端点变化、新增必填参数、必填参数类型变化、角色收紧/变更。完整语义 diff 交给 oasdiff 这类专用工具，平台不重复造轮子。
+- **ToolDefinition.java / ToolDefinitionMapper.java**：`tool_definition` 表实体。`present`（契约里是否仍存在，对账写）与 `enabled`（管理员启停，人工写）分离，有效工具 = 两者都为 1。`description`/`required_role`/`auth_header_*`/`source_key`/`contract_hash` 标了 `updateStrategy = ALWAYS`——MyBatis-Plus 默认跳过 null 字段，会让"业务系统已撤销的声明"永远留在库里。
+- **GatewayProperties.java**：`platform.gateway.sources` 配置项（稳定 `id` + 契约地址 + 服务凭证 + 可选 baseUrl）、`sync-enabled` / `sync-on-startup` / `sync-interval-ms`。
 - **ToolAccessService.java** ★★【① 安全边界】：系统里**唯一的工具访问入口**，两道闸门都在这一个类里。
   `listForModel(gatewayId)` 做**闸门 1·清单组装**——下发该网关**全部启用工具，不按角色裁剪**；角色要求写进工具描述随清单一起给模型，于是模型知道"这个能力存在、但当前身份可能不够"。
   面试点：为什么不在清单里就把没权限的工具裁掉？裁掉的话模型只会答"我没有这个功能"，**把权限问题说成了能力问题**，用户拿不到"你需要找管理员开权限"这个正确结论。
@@ -41,7 +48,8 @@ KnowledgeSearchService/KnowledgeSearchTool
 - **ForwardProperties.java**：`platform.gateway.forward.connect-timeout-ms` / `read-timeout-ms`（默认 2000 / 10000，原先硬编码在类里）。
 
 ### web/ 管理端
-- **ProtocolAdminController.java** ★：`POST /admin/protocols/import`（gatewayId + openapi + baseUrl + 服务级 auth header；**角色与敏感度不在这里传**——它们是业务系统写在契约里的声明）与 `GET /admin/tools`。整个 `/admin/**` 由 `JwtAuthFilter` 要求 ADMIN 角色——**没有第二套凭证体系**。
+- **ProtocolAdminController.java** ★：`POST /admin/protocols/import`（gatewayId + openapi + baseUrl + 服务级 auth header；**角色与敏感度不在这里传**——它们是业务系统写在契约里的声明；带可选 `sourceKey` 时按快照对账，不带则沿用逐条 upsert）、`GET /admin/tools`（含已下线/已禁用工具，便于观察对账结果）、`PUT /admin/tools/{id}/enabled`（人工启停，对账不会覆盖）。整个 `/admin/**` 由 `JwtAuthFilter` 要求 ADMIN 角色——**没有第二套凭证体系**。
+- **ToolSourceAdminController.java**【ADR-008】：`GET /admin/sources`（各来源最后对账状态与计数）、`POST /admin/sources/sync`（全部立即对账）、`POST /admin/sources/{sourceKey}/sync`（单来源，未配置 404）。用于排障和"改完契约立刻生效"的演示，与定时任务走同一条路径。
 
 ---
 
@@ -110,7 +118,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
 - `knowledge/`：5 份制度语料（4 份 PUBLIC + 1 份 ADMIN）+ 评估题库；镜像内带一份，compose 另把宿主目录只读挂到 `/app/knowledge`，改文档后重启或 reindex 即生效，不必重建镜像。
 
-## 5. 测试（26 类，151 项）
+## 5. 测试（30 类，184 项）
 
 | 测试类 | 覆盖 |
 |---|---|
@@ -123,14 +131,16 @@ KnowledgeSearchService/KnowledgeSearchTool
 | JwtServiceTest (5) | 签发/解析、过期、篡改签名 |
 | ChatAuthFilterTest (5) | 401 三态、放行、admin 范围（403） |
 | AgentRunnerTest (5) | 循环三态：执行/同意/拒绝/超步数、recall 本地执行 |
-| OpenApiSourceRegistrarTest (5) | 启动注册、基地址随契约来源而非其声明、显式覆盖、来源不可达不阻断启动、空清单跳过 |
+| OpenApiSourceRegistrarTest (1) | 启动入口触发全量对账 |
+| ContractSyncServiceTest (8) | 成功对账与凭证绑定、baseUrl 覆盖、抓取/解析失败保留 last-known-good、冲突不发布事件、按 id 对账、无 id 兜底键、未知来源 |
+| ToolChangeAnalyzerTest (8) | 新增必填参数、可选转必填、必填类型变化、端点变化、角色收紧/变更、无变化、非法 schema |
 | GenericHttpForwarderTimeoutTest (4) | WireMock：读超时、连接中断、非 JSON 响应体、截断边界 |
 | DynamicToolRegistryTest (4) | 确认映射、空清单、刷新失败保留旧桶 |
 | ConfirmManagerTest (4) | 同意/拒绝/超时/未知 token |
 | AuthControllerTest (4) | 登录成功/密码错/用户不存在/参数校验 |
 | ToolCatalogControllerTest (3) | 工具目录端点：未登录 401、身份透传、服务凭证不外泄 |
 | ContextTrimmerTest (3) | 不裁剪/裁剪结构/摘要计数 |
-| ToolRegistryServiceTest (2) | upsert 插入/更新 |
+| ToolRegistryServiceTest (12) | upsert 插入/更新、快照新增/未变不重写/更新保留人工禁用/软下线/已下线不重复处理/跨来源冲突整份放弃/已下线可被接管/契约内重名、启停 |
 | PlatformApplicationTests (1) | 上下文启动 |
 | AgentSelfHealingTest (1) | ★ 端到端：WireMock 业务系统首次 500、二次 200，ReAct 循环不中断、两次观察都回填落库 |
 | MarkdownChunkerTest (10) | 按 H2 切分、前缀、H3 降级、硬切重叠、小段合并、导语并入首节时保留小节名、代码块/表格、front-matter |

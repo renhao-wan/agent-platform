@@ -1,0 +1,60 @@
+# ADR-008：工具契约按来源做快照对账，而不是一次导入后长期持有
+
+日期：2026-10-20　状态：已采纳
+
+## 背景
+
+ADR-007 让工具来源在启动时自动拉取，但"注册"这件事本身仍是**一次性写入**：解析出的每个 operation 按 `(gateway_id, name)` upsert，写入后就不再回头看契约。于是出现了四类问题：
+
+1. **只增不删**：业务系统删掉的接口或改名的 `operationId`，旧工具永远留在 `tool_definition` 里，模型仍会看见并调用它，直到后端回 404。
+2. **运行中不感知**：契约在平台启动后变更（业务系统滚动发布、改角色声明），必须重启平台才能看到新工具。
+3. **重复导入幂等，但不代表契约状态收敛**：同一份契约重复导入不会重复插入，这是对的；但"契约少了一个接口"表达不出来。
+4. **人工启停会被覆盖**：`enabled` 与"契约里有没有这个接口"混在同一个写入路径里，管理员手工禁用的工具，下次导入又会被打开。
+
+镜像这个问题的标准做法是 **controller 的 reconcile 循环**：不记录"曾经执行过什么导入"，而是每一轮都拿**期望状态**（从契约推导）与**当前状态**（库里的工具）比对并收敛。Kubernetes 的 controllers、MCP 的 `tools/list` + `notifications/tools/list_changed`、oasdiff 的 breaking-change diff 都是同一思路的不同侧面。
+
+## 备选方案
+
+| 方案 | 评估 |
+|---|---|
+| 继续用"导入即 upsert" | 无法表达删除与改名；运行中变更不感知；人工启停与契约同步互相覆盖 |
+| 每次同步先按来源全删再全量插入 | 实现最省事，但工具 id 会变（管理端/审计失去稳定标识），同步窗口内清单为空或错乱，人工 `enabled` 全部丢失 |
+| **按来源做快照对账：逐工具比对后新增/更新/软下线** | ✅ 采纳：id 稳定、人工状态保留、失败可回退到上一版、删除有明确语义 |
+
+## 决策
+
+1. **来源是稳定的一等标识**。`platform.gateway.sources[].id`（如 `booking`）显式配置，不能由 host/端口推导——同一来源在宿主机与容器里 host 不同，推导键会把一份契约算成两份。`tool_definition.source_key` 记录归属，`tool_source` 记录每个来源的最后一次对账状态。
+2. **每份契约是一份完整快照**。`ToolRegistryService.applySnapshot(gatewayId, sourceKey, desired)`：
+   - 契约里出现而库里没有 → 新增；
+   - 契约指纹变化 → 更新（保留 `id`、`createdAt`、人工 `enabled`）；
+   - 契约指纹未变 → 不动；
+   - 库里有、契约里没有 → `present = 0` **软下线**（不删行，保留审计与稳定 id；重新出现时复活）。
+3. **契约状态与人工状态分离**。`present` 由对账写，`enabled` 只由管理员写；对账永不修改 `enabled`。有效工具 = `present=1 AND enabled=1`。
+4. **契约指纹只覆盖契约决定的字段**：name / method / url_template / description / inputSchema / require_confirm / required_role。服务凭证（`auth_header_*`）是部署配置，单独比对；两者都没变才跳过写入。
+5. **写入前整体判冲突**。同名工具仍由其他来源以 `present=1` 声明时，本次快照整份放弃并标记 `CONFLICT`——不做"部分写入"，否则一个来源的异常会让清单处于半新半旧的状态。同一份契约内部工具名重复同理。
+6. **失败保留 last-known-good**。抓取/解析/DB 失败只更新 `tool_source.status` 与 `last_error`，不清空 `contract_hash` / `tool_count` / `last_success_at`，也不下线任何工具。一个后端暂时没起来，不应把它的工具从模型视野里拿掉。
+7. **三个触发点共享同一条对账路径**：启动时一次（`OpenApiSourceRegistrar`）、定时（`sync-interval-ms`，默认 5 分钟）、管理端手工（`POST /admin/sources/sync`）。对账产生实际变化时发布 `ToolCatalogChangedEvent`，`DynamicToolRegistry` 立即失效 5 分钟工具缓存，不必等缓存自然过期。
+8. **破坏性变更只告警不阻断**。与工具调用直接相关的四类（端点变化、新增必填参数、必填参数类型变化、角色收紧/变更）由 `ToolChangeAnalyzer` 识别，写入 `SyncReport.breakingChanges` 并记日志。完整语义 diff 交给 oasdiff 这类专用工具，平台不重复造轮子；不阻断是因为让一次上游发布把整份契约卡在旧版本，代价高于"先同步、同时告警"。
+9. **单实例假设显式化**。定时对账与 `ConfirmManager` 一样没有分布式锁；多实例部署时每个实例都会各自对账，写操作是幂等的（快照收敛），但 `ToolCatalogChangedEvent` 只是进程内刷新，其他实例要等下一次定时对账。需要多实例时再把来源级互斥（如 `tool_source` 上的租约列）补上。
+
+## 后果
+
+**正面**
+
+- "契约可访问就等于工具可用"从启动时的一次性事实，变成持续成立的不变量：接口新增、修改、删除都会在下一个对账周期收敛；
+- 工具 id 稳定，管理端启停、审计记录、人工禁用都不会被同步覆盖；
+- 后端不可用时保留上一版工具，不会因为一次抓取失败导致能力面突然缩水；
+- 来源状态可观测（`GET /admin/sources` 能看出哪个系统最后一次成功是什么时候、这次新增/下线了多少）。
+
+**负面 / 代价**
+
+- `tool_definition` 与 `tool_source` 多了一组状态列，`schema.sql` 需要沿用幂等守卫加列；
+- "软下线"意味着表会积累历史行，需要时再清理（当前规模不值得做归档）；
+- 对账是**最终一致**而非实时：默认窗口 5 分钟，需要立刻生效就手工触发；
+- 破坏性变更识别是启发式的，只覆盖与本平台相关的四类，不能替代完整的契约兼容性检查。
+
+## 相关
+
+- 契约驱动权限的来源：`docs/adr/ADR-007-contract-driven-authorization.md`
+- 状态存放位置：`docs/ARCHITECTURE.md §5`
+- 逐文件说明：`docs/CODE-TOUR.md` 的 `registry/` 一节

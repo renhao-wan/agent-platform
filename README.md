@@ -55,7 +55,8 @@ docker compose up -d --build
 
 ```bash
 cd ../business-systems && docker compose up -d --build
-# 再以 ADMIN 身份登录——平台启动时会自动拉取三个系统的契约并注册，无需手工导入
+# 再以 ADMIN 身份登录——平台启动时会自动拉取三个系统的契约并注册，无需手工导入；
+# 之后默认每 5 分钟重新对账，接口新增/修改/删除会自动收敛（也可 POST /admin/sources/sync 立即触发）
 ```
 
 ## 设计决策（ADR）
@@ -67,6 +68,7 @@ cd ../business-systems && docker compose up -d --build
 | [ADR-005](docs/adr/ADR-005-session-memory-recall.md) | 会话记忆用内部工具调回，不用 RAG | 对话消息短碎、上下文依赖强，嵌入质量天然差；把 RAG 推迟到数据规模证明它必要的时刻 |
 | [ADR-006](docs/adr/ADR-006-in-process-tool-invocation.md) | 进程内工具调用，删除 MCP 协议层与 HTTP 自环 | 自环的理由只有"预留拆分部署"一句且从未兑现，代价是每次调用多一跳网络、异常跨协议层 |
 | [ADR-007](docs/adr/ADR-007-contract-driven-authorization.md) | 权限要求与工具来源一律从业务契约读取 | 角色与敏感度由业务方在契约里声明、工具来源启动时自动拉取——平台不编码业务语义，"零改造接入"才成立 |
+| [ADR-008](docs/adr/ADR-008-contract-reconciliation.md) | 工具契约按来源做快照对账 | 每轮用契约推导的期望状态与库内工具收敛：新增/更新/软下线；人工启停不被覆盖，抓取失败保留上一版 |
 
 ## 性能数据
 
@@ -85,5 +87,5 @@ Java 17 · Spring Boot 3.4 · Spring AI 1.1（OpenAI 兼容协议）· MyBatis-P
 ## 测试
 
 ```bash
-mvn test    # 98 项：转发拼装与超时故障 / OpenAPI 解析与 $ref 展开 / 契约自动注册 / 裁剪策略 / 循环三态（执行·同意·拒绝·超步数）/ 越权拦截 / 工具路由责任链 / 端到端自愈
+mvn test    # 184 项：转发拼装与超时故障 / OpenAPI 解析与 $ref 展开 / 契约自动注册与快照对账 / 裁剪策略 / 循环三态（执行·同意·拒绝·超步数）/ 越权拦截 / 工具路由责任链 / 端到端自愈
 ```
