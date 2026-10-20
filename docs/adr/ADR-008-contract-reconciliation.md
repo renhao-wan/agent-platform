@@ -56,5 +56,5 @@ ADR-007 让工具来源在启动时自动拉取，但"注册"这件事本身仍�
 ## 相关
 
 - 契约驱动权限的来源：`docs/adr/ADR-007-contract-driven-authorization.md`
-- 状态存放位置：`docs/ARCHITECTURE.md §5`
-- 逐文件说明：`docs/CODE-TOUR.md` 的 `registry/` 一节
+- 状态存放位置：`docs/architecture/ARCHITECTURE.md §5`
+- 逐文件说明：`docs/architecture/CODE-TOUR.md` 的 `registry/` 一节

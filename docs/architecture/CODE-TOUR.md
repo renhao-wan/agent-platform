@@ -98,7 +98,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 ## 3. knowledge/ —— 知识库 RAG（Agentic Retrieval）
 
 > 与 `agent/`、`gateway/` 平级的独立模块；整包受 `EMBEDDING_API_KEY` 开关控制，未配置时所有 bean 不装配。
-> 设计权衡见 `docs/KNOWLEDGE-RAG.md`。
+> 设计权衡见 `docs/architecture/KNOWLEDGE-RAG.md`。
 
 - **KnowledgeConfig.java**：手动装配 pgvector 与 embedding 模型（不走 starter，避免自动配置抓主 DataSource / 复用 DeepSeek 的 base-url）。Postgres 连不上时抛带指引的异常（fail fast，不静默摘掉知识库）。
 - **KnowledgeJdbc.java**：私有 Hikari 连接池（`knowledge-pg`）。**故意不注册为 DataSource bean**——第二个 DataSource 会让 MyBatis 的 `@ConditionalOnSingleCandidate` 失去唯一候选。

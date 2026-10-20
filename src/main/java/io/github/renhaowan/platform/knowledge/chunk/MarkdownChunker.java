@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Markdown 切块器（纯函数，见 docs/KNOWLEDGE-RAG.md §4）。
+ * Markdown 切块器（纯函数，见 docs/architecture/KNOWLEDGE-RAG.md §4）。
  * <p>规则：H2 为切分点；超长节再按 H3、段落、句子逐级降级；仍超长才硬切并保留重叠。
  * 表格整表尽量不拆（超长时按行切且重复表头），代码块永不拆开。
  * <p>为什么按标题切：作者写的标题就是语义边界，比任何算法猜的切点都准且零成本。

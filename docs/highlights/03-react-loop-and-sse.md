@@ -87,7 +87,7 @@ ReAct 的典型链路是"查可用性 → 创建 → 回答"两三步；8 步给
 
 ## 7. 相关文档
 
-- `docs/ARCHITECTURE.md §3`：完整请求时序图
-- `docs/CODE-TOUR.md`：`AgentRunner` / `ChatController` 逐文件说明
+- `docs/architecture/ARCHITECTURE.md §3`：完整请求时序图
+- `docs/architecture/CODE-TOUR.md`：`AgentRunner` / `ChatController` 逐文件说明
 - `docs/adr/ADR-006-in-process-tool-invocation.md`：删除 MCP 自环的理由
 - `docs/adr/ADR-004-tool-routing-deferred.md`：路由责任链的触发条件

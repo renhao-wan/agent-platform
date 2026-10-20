@@ -177,7 +177,7 @@ public class AgentRunner {
                     resultText = historyRecallTool.execute(sessionKey, call.arguments());
                     events.toolResult(call.name(), summarize(resultText));
                 } else if (knowledgeSearch != null && knowledgeSearch.handles(call.name())) {
-                    // 知识检索同样是平台内部工具；角色过滤发生在检索 SQL 内（docs/KNOWLEDGE-RAG.md §8）
+                    // 知识检索同样是平台内部工具；角色过滤发生在检索 SQL 内（docs/architecture/KNOWLEDGE-RAG.md §8）
                     events.toolCall(call.name(), call.arguments() == null ? "{}" : call.arguments());
                     resultText = knowledgeSearch.execute(principal, call.arguments());
                     events.toolResult(call.name(), summarize(resultText));

@@ -3,7 +3,7 @@
 > 一句话：**模型只提议、不授权；权限校验在代码里，不在模型脑里。**
 >
 > 代码入口：`gateway/registry/ToolAccessService`、`agent/auth/JwtAuthFilter`、`agent/confirm/ConfirmManagerImpl`
-> 背景决策：`docs/adr/ADR-007-contract-driven-authorization.md`、`docs/ARCHITECTURE.md §4`
+> 背景决策：`docs/adr/ADR-007-contract-driven-authorization.md`、`docs/architecture/ARCHITECTURE.md §4`
 
 ## 1. 30 秒版本
 
@@ -82,6 +82,6 @@ prompt 是模型输入的一部分，可被注入覆盖；模型没有可信身�
 
 ## 6. 相关文档
 
-- `docs/ARCHITECTURE.md §4`：闸门分层与实测证据
-- `docs/CODE-TOUR.md`：`ToolAccessService` 逐行说明
+- `docs/architecture/ARCHITECTURE.md §4`：闸门分层与实测证据
+- `docs/architecture/CODE-TOUR.md`：`ToolAccessService` 逐行说明
 - `docs/adr/ADR-007-contract-driven-authorization.md`：角色声明为何上移到契约

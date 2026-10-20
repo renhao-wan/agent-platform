@@ -3,7 +3,7 @@
 > 一句话：**不是把更多内容塞进上下文，而是让模型在需要时自己取**。会话历史用"内部工具调回"，制度文档用"模型自主检索"。
 >
 > 代码入口：`agent/context/ContextTrimmer`、`agent/memory/HistoryRecallTool`、`knowledge/search/KnowledgeSearchService`、`knowledge/chunk/MarkdownChunker`
-> 背景决策：`docs/adr/ADR-003-context-trimming.md`、`docs/adr/ADR-005-session-memory-recall.md`、`docs/KNOWLEDGE-RAG.md`
+> 背景决策：`docs/adr/ADR-003-context-trimming.md`、`docs/adr/ADR-005-session-memory-recall.md`、`docs/architecture/KNOWLEDGE-RAG.md`
 
 ## 1. 30 秒版本
 
@@ -45,7 +45,7 @@
 | 基础设施 | 向量库、切块、调参、评估 | 复用已有两张表 + 一个内部工具 |
 | 决策权 | 系统猜你要什么 | 模型知道自己缺什么 |
 
-RAG 适合"海量非结构化文档 + 查询模糊"；对话历史恰恰相反——短、碎、强上下文依赖。详见 `docs/MEMORY-STRATEGY.md`。
+RAG 适合"海量非结构化文档 + 查询模糊"；对话历史恰恰相反——短、碎、强上下文依赖。详见 `docs/architecture/MEMORY-STRATEGY.md`。
 
 ## 4. 知识库 RAG 的四层
 
@@ -103,7 +103,7 @@ RAG 适合"海量非结构化文档 + 查询模糊"；对话历史恰恰相反�
 
 ## 7. 相关文档
 
-- `docs/MEMORY-STRATEGY.md`：会话记忆为什么不用 RAG 的完整论证
-- `docs/KNOWLEDGE-RAG.md`：切块、检索、权限、索引、评估的全量设计
+- `docs/architecture/MEMORY-STRATEGY.md`：会话记忆为什么不用 RAG 的完整论证
+- `docs/architecture/KNOWLEDGE-RAG.md`：切块、检索、权限、索引、评估的全量设计
 - `docs/adr/ADR-003-context-trimming.md`：裁剪的 A/B 实验
 - `docs/adr/ADR-005-session-memory-recall.md`：内部工具调回的决策

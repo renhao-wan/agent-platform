@@ -20,7 +20,7 @@ services:
       timeout: 3s
       retries: 30
 
-  # 知识库向量存储。业务数据在 MySQL，向量在 Postgres，两边互不迁移（docs/KNOWLEDGE-RAG.md §6）
+  # 知识库向量存储。业务数据在 MySQL，向量在 Postgres，两边互不迁移（docs/architecture/KNOWLEDGE-RAG.md §6）
   pgvector:
     container_name: agent-platform-pgvector
     image: pgvector/pgvector:pg16

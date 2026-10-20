@@ -100,7 +100,7 @@
 
 ## 7. 相关文档
 
-- `docs/ARCHITECTURE.md §3`：一次完整请求的路径
-- `docs/CODE-TOUR.md`：`registry/` 与 `forward/` 逐文件说明
+- `docs/architecture/ARCHITECTURE.md §3`：一次完整请求的路径
+- `docs/architecture/CODE-TOUR.md`：`registry/` 与 `forward/` 逐文件说明
 - `docs/adr/ADR-008-contract-reconciliation.md`：快照对账的完整决策
 - `docs/adr/ADR-009-source-discovery-and-polling.md`：为什么用轮询、为什么现在不接注册中心

@@ -28,8 +28,8 @@
 
 ## 交叉引用
 
-- 完整架构：`docs/ARCHITECTURE.md`
-- 逐文件导览：`docs/CODE-TOUR.md`
+- 完整架构：`docs/architecture/ARCHITECTURE.md`
+- 逐文件导览：`docs/architecture/CODE-TOUR.md`
 - 决策记录：`docs/adr/`
-- 记忆策略：`docs/MEMORY-STRATEGY.md`
-- 知识库设计：`docs/KNOWLEDGE-RAG.md`
+- 记忆策略：`docs/architecture/MEMORY-STRATEGY.md`
+- 知识库设计：`docs/architecture/KNOWLEDGE-RAG.md`

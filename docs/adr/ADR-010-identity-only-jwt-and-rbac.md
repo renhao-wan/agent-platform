@@ -40,4 +40,4 @@
 
 - [ADR-007](ADR-007-contract-driven-authorization.md)：权限要求由业务契约声明，平台不编码业务语义。
 - [ADR-008](ADR-008-contract-reconciliation.md)：契约对账；`required_permission` 参与契约指纹。
-- [KNOWLEDGE-RAG.md §8](../KNOWLEDGE-RAG.md)：知识库权限过滤为何必须发生在检索 SQL 内。
+- [KNOWLEDGE-RAG.md §8](../architecture/KNOWLEDGE-RAG.md)：知识库权限过滤为何必须发生在检索 SQL 内。
