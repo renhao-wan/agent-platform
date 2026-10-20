@@ -163,11 +163,11 @@ public class ToolRegistryServiceImpl implements ToolRegistryService {
         if (tool == null) {
             return false;
         }
-        ToolDefinition update = new ToolDefinition();
-        update.setId(id);
-        update.setEnabled(enabled ? 1 : 0);
-        update.setUpdatedAt(LocalDateTime.now());
-        mapper.updateById(update);
+        // 必须回写完整实体：description/requiredPermission/authHeader* 是 ALWAYS 策略的列，
+        // 用只含 id/enabled 的临时对象 updateById 会把它们一并置 NULL（闸门 2 与凭证随之失效）。
+        tool.setEnabled(enabled ? 1 : 0);
+        tool.setUpdatedAt(LocalDateTime.now());
+        mapper.updateById(tool);
         return true;
     }
 

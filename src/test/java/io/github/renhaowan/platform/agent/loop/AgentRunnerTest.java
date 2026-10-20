@@ -200,6 +200,8 @@ class AgentRunnerTest {
         runner().run("s1", "算了别取消", events, staff);
 
         verify(toolGateway, never()).callTool(anyString(), anyString(), any());
+        verify(events).toolCall(eq("cancel_booking"), contains("42"));
+        verify(events).toolResult(eq("cancel_booking"), contains("拒绝"));
         verify(sessionService).appendMessage(eq("s1"), eq(ChatMessage.ROLE_TOOL),
                 contains("拒绝"), eq("cancel_booking"), any());
         verify(events).answer("好的，未取消");
@@ -214,7 +216,7 @@ class AgentRunnerTest {
         when(toolRegistry.requireConfirm(eq("cancel_booking"))).thenReturn(true);
         when(toolRegistry.callbacks()).thenReturn(List.of());
         when(toolGateway.denial(eq("cancel_booking"), any()))
-                .thenReturn(java.util.Optional.of("tool error: 权限不足：需要 ADMIN 角色"));
+                .thenReturn(java.util.Optional.of("工具执行失败：权限不足：需要 booking:cancel 权限"));
 
         runner().run("s1", "取消刚才那个预订", events, staff);
 

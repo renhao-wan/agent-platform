@@ -20,6 +20,7 @@ class GenericHttpForwarderTest {
     private final GenericHttpForwarder forwarder = new GenericHttpForwarder(new ForwardProperties());
     private final AtomicReference<String> lastQuery = new AtomicReference<>();
     private final AtomicReference<String> lastBody = new AtomicReference<>();
+    private final AtomicReference<String> lastRawPath = new AtomicReference<>();
 
     @BeforeEach
     void start() throws Exception {
@@ -41,6 +42,13 @@ class GenericHttpForwarderTest {
         });
         server.createContext("/big", exchange -> {
             byte[] body = ("x".repeat(10000)).getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        server.createContext("/rooms/", exchange -> {
+            lastRawPath.set(exchange.getRequestURI().getRawPath());
+            byte[] body = "{\"ok\":true}".getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200, body.length);
             exchange.getResponseBody().write(body);
             exchange.close();
@@ -94,6 +102,16 @@ class GenericHttpForwarderTest {
         assertThat(result.success()).isTrue();
         assertThat(lastBody.get()).doesNotContain("\"id\"");
         assertThat(lastBody.get()).contains("日程冲突");
+    }
+
+    @Test
+    void pathValueIsPercentEncodedNotFormEncoded() throws Exception {
+        var result = forwarder.forward(tool("GET", "http://localhost:" + port + "/rooms/{name}"),
+                args("{\"name\":\"大 会议室\"}"), null);
+
+        assertThat(result.success()).isTrue();
+        // 路径段里的空格必须是 %20；URLEncoder 的 '+' 在 path 中是字面量，会被后端当成不同的名字
+        assertThat(lastRawPath.get()).contains("%20").doesNotContain("+");
     }
 
     @Test

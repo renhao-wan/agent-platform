@@ -53,7 +53,12 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RestController
 public class ChatController {
 
-    public record ChatRequest(String sessionKey, @NotBlank String message) {
+    public record ChatRequest(
+            @jakarta.validation.constraints.Pattern(
+                    regexp = "^$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                    message = "sessionKey 必须是 UUID")
+            String sessionKey,
+            @NotBlank String message) {
     }
 
     private final AgentRunner agentRunner;
@@ -86,6 +91,9 @@ public class ChatController {
     public SseEmitter chat(@RequestBody @Valid ChatRequest request) {
         SseEmitter emitter = new SseEmitter(15 * 60_000L);
         AgentEventEmitter events = new AgentEventEmitter(emitter, objectMapper);
+        emitter.onCompletion(events::close);
+        emitter.onTimeout(events::close);
+        emitter.onError(e -> events.close());
 
         // ThreadLocal 不跨线程池：在 HTTP 线程把身份取出，之后全程显式传参
         UserPrincipal principal = UserContext.get();

@@ -61,7 +61,7 @@ public class DynamicToolRegistryImpl implements DynamicToolRegistry {
             for (ToolDefinition tool : toolGateway.listTools()) {
                 String name = tool.getName();
                 boolean requireConfirm = tool.getRequireConfirm() != null && tool.getRequireConfirm() == 1;
-                rebuilt.add(new GatewayToolCallback(tool, toolGateway));
+                rebuilt.add(new GatewayToolCallback(tool));
                 flags.put(name, requireConfirm);
             }
             log.info("tool registry refreshed: {} tools", rebuilt.size());
@@ -78,15 +78,13 @@ public class DynamicToolRegistryImpl implements DynamicToolRegistry {
     private record Bucket(List<ToolCallback> callbacks, Map<String, Boolean> confirmFlags, long refreshedAt) {
     }
 
-    /** schema 广告位 + 执行委托 ToolGateway 的手写 ToolCallback。 */
+    /** schema 广告位；执行走 AgentRunner 手动通道，本类的 call() 永不执行工具。 */
     static class GatewayToolCallback implements ToolCallback {
 
         private final ToolDefinition tool;
-        private final ToolGateway gateway;
 
-        GatewayToolCallback(ToolDefinition tool, ToolGateway gateway) {
+        GatewayToolCallback(ToolDefinition tool) {
             this.tool = tool;
-            this.gateway = gateway;
         }
 
         @Override
@@ -112,9 +110,11 @@ public class DynamicToolRegistryImpl implements DynamicToolRegistry {
 
         @Override
         public String call(String toolInput) {
-            // ToolCallback 执行点不在 ReAct 循环内（Spring AI 隐式执行），本项目不走该路径；
-            // 真正执行在 AgentRunner 手动通道，角色随调用显式传入
-            return gateway.callTool(tool.getName(), toolInput, null);
+            // 隐式执行在本项目被显式关闭（internalToolExecutionEnabled(false)），本方法不应被调用。
+            // 这里不能委托网关：网关契约要求带用户身份，而 ToolCallback 没有身份参数；
+            // 静默以 null 身份执行会绕过闸门 2。抛错比越权安全。
+            throw new UnsupportedOperationException(
+                    "tool execution is handled by AgentRunner; ToolCallback.call() must not be invoked");
         }
     }
 }

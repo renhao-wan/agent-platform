@@ -1,6 +1,7 @@
 package io.github.renhaowan.platform.agent.tool;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import io.github.renhaowan.platform.agent.tool.impl.DynamicToolRegistryImpl;
@@ -74,15 +75,15 @@ class DynamicToolRegistryTest {
     }
 
     @Test
-    void toolInvocationIsDelegatedToGateway() {
+    void callbackInvocationFailsLoudlyInsteadOfRunningWithoutIdentity() {
         when(toolGateway.listTools()).thenReturn(List.of(
                 tool("search_rooms", "查询可用会议室", SEARCH_SCHEMA, 0)));
-        when(toolGateway.callTool("search_rooms", "{\"date\":\"2026-10-01\"}", null))
-                .thenReturn("{\"rooms\":3}");
         DynamicToolRegistry registry = new DynamicToolRegistryImpl(toolGateway);
 
         var callback = registry.callbacks().get(0);
 
-        assertThat(callback.call("{\"date\":\"2026-10-01\"}")).isEqualTo("{\"rooms\":3}");
+        // 隐式执行已关闭；即便被误调也不能以 null 身份越过闸门 2
+        assertThatThrownBy(() -> callback.call("{\"date\":\"2026-10-01\"}"))
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 }

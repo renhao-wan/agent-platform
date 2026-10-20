@@ -105,6 +105,10 @@ public class AgentRunner {
         }
 
         for (int step = 0; step < properties.getMaxSteps(); step++) {
+            // 连接已断开时不再继续调用模型：结果已无人接收，继续跑只会占住 loop 线程
+            if (events.isClosed()) {
+                return;
+            }
             ChatResponse response = planner.decide(history, tools);
             steps++;
             var usage = response.getMetadata() == null ? null : response.getMetadata().getUsage();
@@ -144,9 +148,16 @@ public class AgentRunner {
                     // 预判只决定"是否弹确认"，真正的边界仍是执行点的闸门 2。
                     denial = toolGateway.denial(call.name(), principal).orElse(null);
                     if (denial == null) {
-                        String token = confirmManager.request(sessionKey, call.name(), call.arguments());
-                        events.confirmRequest(token, "即将执行敏感操作：" + call.name() + "，请确认");
-                        approved = Boolean.TRUE.equals(confirmManager.await(token, properties.getConfirmTimeoutSeconds()));
+                        if (events.isClosed()) {
+                            // 连接已断开：没人能点确认，按拒绝处理，避免线程空等超时
+                            approved = false;
+                        } else {
+                            String token = confirmManager.request(sessionKey, principal.uid(),
+                                    call.name(), call.arguments());
+                            events.confirmRequest(token, "即将执行敏感操作：" + call.name() + "，请确认");
+                            approved = Boolean.TRUE.equals(
+                                    confirmManager.await(token, properties.getConfirmTimeoutSeconds()));
+                        }
                     }
                 }
 
@@ -156,7 +167,10 @@ public class AgentRunner {
                     events.toolResult(call.name(), summarize(denial));
                     resultText = denial;
                 } else if (!approved) {
+                    // 与权限不足分支保持同样的可观察轨迹：前端不应跳过"已拒绝"这一步
+                    events.toolCall(call.name(), call.arguments() == null ? "{}" : call.arguments());
                     resultText = "用户拒绝了该操作";
+                    events.toolResult(call.name(), summarize(resultText));
                 } else if (historyRecallTool.handles(call.name())) {
                     // 平台内部工具本地执行：不进网关、无确认/角色闸门（只读当前会话自己的历史）
                     events.toolCall(call.name(), call.arguments() == null ? "{}" : call.arguments());

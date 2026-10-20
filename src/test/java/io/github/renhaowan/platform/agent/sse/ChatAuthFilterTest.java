@@ -39,6 +39,10 @@ import org.springframework.test.web.servlet.MvcResult;
 @AutoConfigureMockMvc
 class ChatAuthFilterTest {
 
+    /** 会话 key 由服务端生成 UUID，契约上不接受自造字符串（见 ChatController.ChatRequest）。 */
+    private static final String FOREIGN_SESSION = "11111111-1111-4111-8111-111111111111";
+    private static final String OWN_SESSION = "22222222-2222-4222-8222-222222222222";
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -93,12 +97,12 @@ class ChatAuthFilterTest {
 
     @Test
     void chatContinuationOnForeignSessionRejectedWith403Event() throws Exception {
-        when(sessionService.ownsSession("sk-owned-by-other", 1L)).thenReturn(false);
+        when(sessionService.ownsSession(FOREIGN_SESSION, 1L)).thenReturn(false);
 
         MvcResult result = mockMvc.perform(post("/api/v1/chat")
                         .header("Authorization", "Bearer " + jwtService.issue(1L))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"sessionKey\":\"sk-owned-by-other\",\"message\":\"继续\"}"))
+                        .content("{\"sessionKey\":\"" + FOREIGN_SESSION + "\",\"message\":\"继续\"}"))
                 .andExpect(status().isOk())
                 .andReturn();
         result = settleAsync(result);
@@ -112,18 +116,18 @@ class ChatAuthFilterTest {
 
     @Test
     void chatContinuationOnOwnSessionPassesOwnership() throws Exception {
-        when(sessionService.ownsSession("sk-mine", 1L)).thenReturn(true);
+        when(sessionService.ownsSession(OWN_SESSION, 1L)).thenReturn(true);
 
         MvcResult result = mockMvc.perform(post("/api/v1/chat")
                         .header("Authorization", "Bearer " + jwtService.issue(1L))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"sessionKey\":\"sk-mine\",\"message\":\"继续\"}"))
+                        .content("{\"sessionKey\":\"" + OWN_SESSION + "\",\"message\":\"继续\"}"))
                 .andExpect(status().isOk())
                 .andReturn();
         result = settleAsync(result);
 
         assertThat(result.getResponse().getContentAsString()).contains("event:session");
-        verify(agentRunner).run(org.mockito.ArgumentMatchers.eq("sk-mine"), org.mockito.ArgumentMatchers.eq("继续"),
+        verify(agentRunner).run(org.mockito.ArgumentMatchers.eq(OWN_SESSION), org.mockito.ArgumentMatchers.eq("继续"),
                 any(), org.mockito.ArgumentMatchers.eq(new UserPrincipal(1L, "STAFF", Set.of())));
     }
 

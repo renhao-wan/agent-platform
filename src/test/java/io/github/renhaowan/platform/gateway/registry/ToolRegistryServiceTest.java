@@ -231,7 +231,11 @@ class ToolRegistryServiceTest {
         verify(mapper).updateById(captor.capture());
         assertThat(captor.getValue().getId()).isEqualTo(42L);
         assertThat(captor.getValue().getEnabled()).isZero();
-        assertThat(captor.getValue().getName()).isNull();
+        // 必须回写完整实体：description/requiredPermission/authHeader* 是 ALWAYS 策略的列，
+        // 只带 id/enabled 的临时对象会把它们置 NULL（权限校验与服务凭证随之失效）
+        assertThat(captor.getValue().getName()).isEqualTo("search_rooms");
+        assertThat(captor.getValue().getDescription()).isEqualTo("查询 search_rooms");
+        assertThat(captor.getValue().getUrlTemplate()).isEqualTo("http://h/search_rooms");
     }
 
     @Test

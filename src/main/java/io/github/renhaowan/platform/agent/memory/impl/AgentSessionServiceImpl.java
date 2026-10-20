@@ -53,8 +53,12 @@ public class AgentSessionServiceImpl implements AgentSessionService {
 
     @Override
     public List<ChatMessage> loadHistory(String sessionKey) {
-        return messageMapper.selectList(new QueryWrapper<ChatMessage>()
-                .eq("session_key", sessionKey).orderByAsc("id").last("LIMIT 200"));
+        // 取最近 200 条再反转回时间正序；取最早 200 条会在长会话里丢掉最新上下文
+        List<ChatMessage> recent = new java.util.ArrayList<>(messageMapper.selectList(
+                new QueryWrapper<ChatMessage>()
+                        .eq("session_key", sessionKey).orderByDesc("id").last("LIMIT 200")));
+        java.util.Collections.reverse(recent);
+        return recent;
     }
 
     @Override
@@ -122,9 +126,11 @@ public class AgentSessionServiceImpl implements AgentSessionService {
 
     @Override
     public boolean ownsSession(String sessionKey, Long userId) {
+        // deny by default：查无会话不等于"可以续聊"，否则任意自造 key 都能写入孤儿消息，
+        // 且同一 key 可被其他用户复用
         return findBySessionKey(sessionKey)
-                .map(session -> session.getUserId() == null || session.getUserId().equals(userId))
-                .orElse(true);
+                .map(session -> session.getUserId() != null && session.getUserId().equals(userId))
+                .orElse(false);
     }
 
     @Override

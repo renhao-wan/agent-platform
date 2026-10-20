@@ -78,8 +78,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     /** 鉴权范围：对话、确认、工具目录、历史会话四个用户端点 + 管理端（登录页自身不在其列）。 */
     static boolean requiresAuth(String uri) {
-        return "/api/v1/chat".equals(uri) || "/api/v1/confirm".equals(uri) || "/api/v1/tools".equals(uri)
-                || uri.startsWith("/api/v1/sessions") || uri.startsWith("/admin/");
+        // 先剥掉矩阵参数：/api/v1/chat;jsessionid=x 在容器里仍会路由到 chat，
+        // 但与常量做 equals 就漏判了。鉴权判断必须落在容器实际路由的路径上。
+        String path = stripMatrixParams(uri);
+        return "/api/v1/chat".equals(path) || "/api/v1/confirm".equals(path) || "/api/v1/tools".equals(path)
+                || path.startsWith("/api/v1/sessions") || path.startsWith("/admin/");
+    }
+
+    private static String stripMatrixParams(String uri) {
+        int semicolon = uri.indexOf(';');
+        return semicolon < 0 ? uri : uri.substring(0, semicolon);
     }
 
     /** 管理端 URI → 权限码。更具体的前缀优先，其余落到管理台入口权限。 */

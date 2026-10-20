@@ -1,7 +1,9 @@
 package io.github.renhaowan.platform.agent.confirm;
 
-import jakarta.validation.constraints.NotNull;
+import io.github.renhaowan.platform.agent.auth.UserContext;
+import io.github.renhaowan.platform.agent.auth.UserPrincipal;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,7 +31,13 @@ public class ConfirmController {
 
     @PostMapping
     public ConfirmResult confirm(@RequestBody @Valid ConfirmRequest request) {
-        boolean completed = confirmManager.complete(request.confirmToken(), request.approved());
-        return new ConfirmResult(completed);
+        // confirmToken 只是随机串，必须再核对发起者：否则任何登录用户拿到 token
+        // 就能批准/拒绝他人的敏感操作
+        ConfirmManager.PendingCall pending = confirmManager.pendingOf(request.confirmToken());
+        UserPrincipal me = UserContext.get();
+        if (pending == null || me == null || pending.userId() != me.uid()) {
+            return new ConfirmResult(false);
+        }
+        return new ConfirmResult(confirmManager.complete(request.confirmToken(), request.approved()));
     }
 }

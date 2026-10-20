@@ -49,6 +49,16 @@ public class AgentEventEmitter {
         }
     }
 
+    /** 连接是否已断开；AgentRunner 据此停止循环、把待确认操作按拒绝处理。 */
+    public boolean isClosed() {
+        return closed;
+    }
+
+    /** ChatController 在 emitter 的完成/超时/错误回调里调用，主动标记连接结束。 */
+    public void close() {
+        closed = true;
+    }
+
     public void session(String sessionKey) {
         send(EventType.SESSION, Map.of("sessionKey", sessionKey));
     }

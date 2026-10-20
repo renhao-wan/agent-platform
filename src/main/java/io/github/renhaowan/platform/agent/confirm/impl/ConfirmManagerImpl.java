@@ -19,10 +19,10 @@ public class ConfirmManagerImpl implements ConfirmManager {
     private final Map<String, CompletableFuture<Boolean>> futures = new ConcurrentHashMap<>();
 
     @Override
-    public String request(String sessionKey, String toolName, String argumentsJson) {
+    public String request(String sessionKey, long userId, String toolName, String argumentsJson) {
         String token = UUID.randomUUID().toString();
         futures.put(token, new CompletableFuture<>());
-        pendings.put(token, new PendingCall(sessionKey, toolName, argumentsJson));
+        pendings.put(token, new PendingCall(userId, sessionKey, toolName, argumentsJson));
         return token;
     }
 
@@ -36,22 +36,32 @@ public class ConfirmManagerImpl implements ConfirmManager {
             return future.get(timeoutSeconds, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
             log.warn("confirm timeout, treat as rejected: {}", token);
-            pendings.remove(token);
-            futures.remove(token);
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             return false;
         } catch (Exception e) {
             return false;
+        } finally {
+            // 超时/中断/异常时清理；正常完成由 complete 负责，重复 remove 无副作用
+            if (!future.isDone()) {
+                pendings.remove(token);
+                futures.remove(token);
+            }
         }
     }
 
     @Override
     public boolean complete(String token, boolean approved) {
-        CompletableFuture<Boolean> future = futures.remove(token);
+        CompletableFuture<Boolean> future = futures.get(token);
         if (future == null) {
             return false;
         }
-        pendings.remove(token);
+        // 先唤醒等待者再移除：反过来会在"确认已生效"与"await 读 map"之间留一个窗口，
+        // 极快点击可能被当成拒绝
         future.complete(approved);
+        pendings.remove(token);
+        futures.remove(token);
         return true;
     }
 

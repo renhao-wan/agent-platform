@@ -122,7 +122,7 @@ public class GenericHttpForwarder {
         while (matcher.find()) {
             String name = matcher.group(1);
             JsonNode value = arguments == null ? null : arguments.get(name);
-            values.put(name, value == null ? "" : urlEncode(value.asText()));
+            values.put(name, value == null ? "" : encodePathValue(value.asText()));
         }
         return values;
     }
@@ -162,6 +162,11 @@ public class GenericHttpForwarder {
 
     private String urlEncode(String value) {
         return java.net.URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    /** 路径段编码：URLEncoder 会把空格编成 '+'，而 path 里的 '+' 是字面量，必须用 %20。 */
+    private String encodePathValue(String value) {
+        return org.springframework.web.util.UriUtils.encodePathSegment(value, StandardCharsets.UTF_8);
     }
 
     private String truncate(String body) {

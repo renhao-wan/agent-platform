@@ -98,17 +98,35 @@ class AgentSessionServiceImplTest {
     }
 
     @Test
-    void ownsSessionAllowsLegacyRowWithoutOwner() {
+    void ownsSessionRejectsLegacyRowWithoutOwner() {
         when(sessionMapper.selectOne(any())).thenReturn(session("sk-legacy", null, null));
 
-        assertThat(service.ownsSession("sk-legacy", 99L)).isTrue();
+        // 无归属的行无法证明属于谁，按 deny by default 处理
+        assertThat(service.ownsSession("sk-legacy", 99L)).isFalse();
     }
 
     @Test
-    void ownsSessionAllowsUnknownSessionKey() {
+    void ownsSessionRejectsUnknownSessionKey() {
         when(sessionMapper.selectOne(any())).thenReturn(null);
 
-        assertThat(service.ownsSession("sk-missing", 7L)).isTrue();
+        // 查无会话不等于"可以续聊"：否则任意自造 key 都能写入孤儿消息
+        assertThat(service.ownsSession("sk-missing", 7L)).isFalse();
+    }
+
+    @Test
+    void loadHistoryTakesMostRecentMessagesInChronologicalOrder() {
+        when(messageMapper.selectList(any())).thenReturn(List.of(
+                messageWithId(3L, "最新"), messageWithId(2L, "中间"), messageWithId(1L, "最早")));
+
+        List<ChatMessage> history = service.loadHistory("sk-mine");
+
+        // 取最近 N 条（倒序查库）后必须反转回时间正序
+        assertThat(history).extracting(ChatMessage::getContent)
+                .containsExactly("最早", "中间", "最新");
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.query.QueryWrapper> captor =
+                ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.query.QueryWrapper.class);
+        verify(messageMapper).selectList(captor.capture());
+        assertThat(captor.getValue().getSqlSegment()).contains("ORDER BY id DESC").contains("LIMIT 200");
     }
 
     @Test
@@ -190,6 +208,12 @@ class AgentSessionServiceImplTest {
         message.setSessionKey(key);
         message.setRole(role);
         message.setContent(content);
+        return message;
+    }
+
+    private ChatMessage messageWithId(long id, String content) {
+        ChatMessage message = message("sk-mine", ChatMessage.ROLE_USER, content);
+        message.setId(id);
         return message;
     }
 }

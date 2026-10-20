@@ -7,10 +7,10 @@ package io.github.renhaowan.platform.agent.confirm;
  */
 public interface ConfirmManager {
 
-    record PendingCall(String sessionKey, String toolName, String argumentsJson) {
+    record PendingCall(long userId, String sessionKey, String toolName, String argumentsJson) {
     }
 
-    String request(String sessionKey, String toolName, String argumentsJson);
+    String request(String sessionKey, long userId, String toolName, String argumentsJson);
 
     Boolean await(String token, int timeoutSeconds);
 

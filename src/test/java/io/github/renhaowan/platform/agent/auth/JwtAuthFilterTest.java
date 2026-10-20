@@ -49,6 +49,14 @@ class JwtAuthFilterTest {
     }
 
     @Test
+    void matrixParamsCannotBypassProtection() {
+        // /api/v1/chat;jsessionid=x 在容器里仍路由到 chat，鉴权判断必须剥掉矩阵参数
+        assertThat(JwtAuthFilter.requiresAuth("/api/v1/chat;jsessionid=x")).isTrue();
+        assertThat(JwtAuthFilter.requiresAuth("/api/v1/confirm;v=2")).isTrue();
+        assertThat(JwtAuthFilter.requiresAuth("/api/v1/tools;a=b")).isTrue();
+    }
+
+    @Test
     void adminUrisMapToSpecificPermissionCodes() {
         assertThat(JwtAuthFilter.requiredAdminPermission("/admin/rbac/roles"))
                 .isEqualTo(RbacService.ADMIN_RBAC);
