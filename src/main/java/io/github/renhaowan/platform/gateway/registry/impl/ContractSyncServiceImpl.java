@@ -87,7 +87,7 @@ public class ContractSyncServiceImpl implements ContractSyncService {
             String contractHash = ContractHashes.ofAll(tools);
             recordSuccess(spec, contractHash, tools.size(), result);
             if (result.added() + result.updated() + result.stale() > 0) {
-                events.publishEvent(new ToolCatalogChangedEvent(spec.sourceKey()));
+                publishChanged(spec);
             }
             if (!result.breakingChanges().isEmpty()) {
                 log.warn("契约 {} 存在 {} 项破坏性变更：{}", spec.sourceKey(),
@@ -124,8 +124,16 @@ public class ContractSyncServiceImpl implements ContractSyncService {
                 .toList();
     }
 
-    private SyncReport failed(SourceSpec spec, String status, Exception error) {
-        log.warn("契约 {} 对账失败（{}）：{}", spec.sourceKey(), status, error.toString());
+    /** 缓存刷新是尽力而为：监听器失败不能让一次已经落库成功的对账变成 FAILED。 */
+    private void publishChanged(SourceSpec spec) {
+        try {
+            events.publishEvent(new ToolCatalogChangedEvent(spec.sourceKey()));
+        } catch (Exception e) {
+            log.warn("发布工具目录变更事件失败，等待下一次刷新：{}", e.toString());
+        }
+    }
+
+    private SyncReport failed(SourceSpec spec, String status, Exception error) {        log.warn("契约 {} 对账失败（{}）：{}", spec.sourceKey(), status, error.toString());
         recordFailure(spec, status, error);
         return new SyncReport(spec.sourceKey(), status, null, 0, 0, 0, 0, 0,
                 List.of(), List.of(), error.toString(), LocalDateTime.now());

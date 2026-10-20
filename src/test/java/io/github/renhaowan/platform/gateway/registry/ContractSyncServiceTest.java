@@ -2,6 +2,7 @@ package io.github.renhaowan.platform.gateway.registry;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -172,6 +173,19 @@ class ContractSyncServiceTest {
         assertThat(report.status()).isEqualTo(ToolSource.STATUS_CONFLICT);
         assertThat(report.error()).contains("工具名冲突");
         verify(events, never()).publishEvent(any(ToolCatalogChangedEvent.class));
+    }
+
+    @Test
+    void listenerFailureDoesNotTurnSuccessfulReconciliationIntoFailure() {
+        firstSyncWritesNewSource();
+        doThrow(new IllegalStateException("refresh boom"))
+                .when(events).publishEvent(any(ToolCatalogChangedEvent.class));
+
+        ContractSyncService.SyncReport report = service().sync(
+                new ContractSyncService.SourceSpec("booking", "http://source.local/openapi.json", null, null, null));
+
+        assertThat(report.status()).isEqualTo(ToolSource.STATUS_OK);
+        assertThat(report.added()).isEqualTo(1);
     }
 
     @Test

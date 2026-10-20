@@ -118,7 +118,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
 - `knowledge/`：5 份制度语料（4 份 PUBLIC + 1 份 ADMIN）+ 评估题库；镜像内带一份，compose 另把宿主目录只读挂到 `/app/knowledge`，改文档后重启或 reindex 即生效，不必重建镜像。
 
-## 5. 测试（30 类，184 项）
+## 5. 测试（30 类，185 项）
 
 | 测试类 | 覆盖 |
 |---|---|
@@ -132,7 +132,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 | ChatAuthFilterTest (5) | 401 三态、放行、admin 范围（403） |
 | AgentRunnerTest (5) | 循环三态：执行/同意/拒绝/超步数、recall 本地执行 |
 | OpenApiSourceRegistrarTest (1) | 启动入口触发全量对账 |
-| ContractSyncServiceTest (8) | 成功对账与凭证绑定、baseUrl 覆盖、抓取/解析失败保留 last-known-good、冲突不发布事件、按 id 对账、无 id 兜底键、未知来源 |
+| ContractSyncServiceTest (9) | 成功对账与凭证绑定、baseUrl 覆盖、抓取/解析失败保留 last-known-good、冲突不发布事件、监听器失败不影响成功状态、按 id 对账、无 id 兜底键、未知来源 |
 | ToolChangeAnalyzerTest (8) | 新增必填参数、可选转必填、必填类型变化、端点变化、角色收紧/变更、无变化、非法 schema |
 | GenericHttpForwarderTimeoutTest (4) | WireMock：读超时、连接中断、非 JSON 响应体、截断边界 |
 | DynamicToolRegistryTest (4) | 确认映射、空清单、刷新失败保留旧桶 |
