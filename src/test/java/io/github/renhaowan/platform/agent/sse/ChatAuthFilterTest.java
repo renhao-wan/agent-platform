@@ -3,7 +3,9 @@ package io.github.renhaowan.platform.agent.sse;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
@@ -18,6 +20,8 @@ import io.github.renhaowan.platform.agent.loop.AgentRunner;
 import io.github.renhaowan.platform.agent.memory.AgentSessionService;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +46,8 @@ class ChatAuthFilterTest {
     /** 会话 key 由服务端生成 UUID，契约上不接受自造字符串（见 ChatController.ChatRequest）。 */
     private static final String FOREIGN_SESSION = "11111111-1111-4111-8111-111111111111";
     private static final String OWN_SESSION = "22222222-2222-4222-8222-222222222222";
+    /** 并发锁测试专用，避免与其它用例共用会话锁。 */
+    private static final String LOCK_SESSION = "33333333-3333-4333-8333-333333333333";
 
     @Autowired
     private MockMvc mockMvc;
@@ -129,6 +135,43 @@ class ChatAuthFilterTest {
         assertThat(result.getResponse().getContentAsString()).contains("event:session");
         verify(agentRunner).run(org.mockito.ArgumentMatchers.eq(OWN_SESSION), org.mockito.ArgumentMatchers.eq("继续"),
                 any(), org.mockito.ArgumentMatchers.eq(new UserPrincipal(1L, "STAFF", Set.of())));
+    }
+
+    @Test
+    void concurrentChatOnSameSessionIsRejectedWhileFirstIsRunning() throws Exception {
+        when(sessionService.ownsSession(LOCK_SESSION, 1L)).thenReturn(true);
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            entered.countDown();
+            release.await(5, TimeUnit.SECONDS);
+            return null;
+        }).when(agentRunner).run(eq(LOCK_SESSION), anyString(), any(), any());
+
+        MvcResult first = mockMvc.perform(post("/api/v1/chat")
+                        .header("Authorization", "Bearer " + jwtService.issue(1L))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sessionKey\":\"" + LOCK_SESSION + "\",\"message\":\"第一条\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        try {
+            assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
+
+            MvcResult second = mockMvc.perform(post("/api/v1/chat")
+                            .header("Authorization", "Bearer " + jwtService.issue(1L))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"sessionKey\":\"" + LOCK_SESSION + "\",\"message\":\"第二条\"}"))
+                    .andExpect(status().isOk())
+                    .andReturn();
+
+            // 后来者被拒绝，且没有第二个循环在跑
+            assertThat(second.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8))
+                    .contains("正在处理中");
+            verify(agentRunner, times(1)).run(anyString(), anyString(), any(), any());
+        } finally {
+            release.countDown();
+            settleAsync(first);
+        }
     }
 
     private MvcResult settleAsync(MvcResult result) throws Exception {

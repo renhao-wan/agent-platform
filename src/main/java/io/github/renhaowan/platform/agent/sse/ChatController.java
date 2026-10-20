@@ -64,6 +64,7 @@ public class ChatController {
     private final AgentRunner agentRunner;
     private final AgentSessionService sessionService;
     private final ObjectMapper objectMapper;
+    private final SessionLockRegistry sessionLocks;
 
     /** 循环执行线程池：带初始化的 final 字段，不参与 @RequiredArgsConstructor 生成的构造器。 */
     private final ThreadPoolExecutor executor = newLoopExecutor();
@@ -113,6 +114,14 @@ public class ChatController {
         }
         events.session(sessionKey);
 
+        // 同一会话只跑一个循环：并发续聊会交错写历史，模型看到的消息顺序会错乱
+        if (!sessionLocks.tryAcquire(sessionKey)) {
+            events.error("该会话正在处理中，请等待当前回复完成");
+            events.done();
+            emitter.complete();
+            return emitter;
+        }
+
         try {
             executor.execute(() -> {
                 try {
@@ -123,11 +132,14 @@ public class ChatController {
                     events.error("内部错误：" + e.getMessage());
                     events.done();
                     emitter.complete();
+                } finally {
+                    sessionLocks.release(sessionKey);
                 }
             });
         } catch (RejectedExecutionException e) {
             // AbortPolicy 拒绝（队列 64 + 线程 8 全满）：快速失败并给用户明确反馈
             log.warn("chat rejected, executor saturated, session {}", sessionKey);
+            sessionLocks.release(sessionKey);
             events.error("系统繁忙，请稍后重试");
             events.done();
             emitter.complete();

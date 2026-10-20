@@ -178,8 +178,11 @@ public class KnowledgeSearchService {
             meterRegistry.timer("knowledge.search.duration", "mode", mode)
                     .record(Duration.ofMillis(elapsedMs));
         }
-        log.info("知识检索 query=\"{}\" role={} topK={} mode={} hits={} elapsed={}ms sources={}",
-                query, role, topK, mode, hits.size(), elapsedMs, sources);
+        // INFO 不落 query 原文：检索词可能含姓名、金额、制度编号等敏感内容；
+        // 需要排障时看 DEBUG，合规审计看 knowledge_search_audit 表。
+        log.info("知识检索 queryLen={} role={} topK={} mode={} hits={} elapsed={}ms sources={}",
+                query == null ? 0 : query.length(), role, topK, mode, hits.size(), elapsedMs, sources);
+        log.debug("知识检索 query=\"{}\"", query);
     }
 
     private static String likePattern(String text) {
