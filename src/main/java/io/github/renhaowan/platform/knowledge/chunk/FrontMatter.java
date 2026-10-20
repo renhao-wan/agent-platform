@@ -9,7 +9,7 @@ import java.util.Map;
  */
 public record FrontMatter(Map<String, String> fields, String body) {
 
-    public static final String DEFAULT_VISIBLE_ROLE = "PUBLIC";
+    public static final String DEFAULT_VISIBLE_PERMISSION = "public";
 
     public static FrontMatter parse(String markdown) {
         String text = markdown == null ? "" : markdown.replace("\r\n", "\n");
@@ -43,8 +43,21 @@ public record FrontMatter(Map<String, String> fields, String body) {
         return fields.get("title");
     }
 
-    public String visibleRole() {
+    /**
+     * 文档可见性：新文档写 {@code visible_permission}（如 public / admin:policy）；
+     * 只有旧字段 {@code visible_role} 的文档按 {@code role:<ROLE>} 兼容映射，PUBLIC 归一为 public。
+     * 缺省 public——制度文档默认对所有登录用户可见。
+     */
+    public String visiblePermission() {
+        String permission = fields.get("visible_permission");
+        if (permission != null && !permission.isBlank()) {
+            return permission.strip();
+        }
         String role = fields.get("visible_role");
-        return role == null || role.isBlank() ? DEFAULT_VISIBLE_ROLE : role.strip().toUpperCase();
+        if (role == null || role.isBlank()) {
+            return DEFAULT_VISIBLE_PERMISSION;
+        }
+        String normalized = role.strip().toUpperCase();
+        return "PUBLIC".equals(normalized) ? DEFAULT_VISIBLE_PERMISSION : "role:" + normalized;
     }
 }

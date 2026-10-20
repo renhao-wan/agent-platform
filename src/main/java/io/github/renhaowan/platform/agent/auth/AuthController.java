@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 用户登录入口：POST /api/v1/auth/login {username,password} → {token, role}。
+ * 用户登录入口：POST /api/v1/auth/login {username,password} → {token, role, permissions}。
  * 登录端点本身不拦 JWT（JwtAuthFilter 只覆盖 /api/v1/chat 与 /api/v1/confirm）。
  */
 @RestController

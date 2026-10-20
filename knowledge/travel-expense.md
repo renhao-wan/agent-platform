@@ -1,6 +1,6 @@
 ---
 title: 差旅费用标准
-visible_role: PUBLIC
+visible_permission: public
 ---
 
 # 差旅费用标准

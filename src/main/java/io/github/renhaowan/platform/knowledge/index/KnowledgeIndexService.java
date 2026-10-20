@@ -178,7 +178,7 @@ public class KnowledgeIndexService {
         FrontMatter frontMatter = FrontMatter.parse(content);
         String docTitle = firstNonBlank(frontMatter.title(),
                 MarkdownChunker.firstH1(frontMatter.body()), fileNameWithoutSuffix(docPath));
-        String visibleRole = frontMatter.visibleRole();
+        String visiblePermission = frontMatter.visiblePermission();
         List<KnowledgeChunk> chunks = chunker.chunk(frontMatter.body());
 
         List<Document> documents = new ArrayList<>(chunks.size());
@@ -192,7 +192,7 @@ public class KnowledgeIndexService {
             metadata.put("doc_path", docPath);
             metadata.put("doc_title", docTitle);
             metadata.put("section", chunk.section());
-            metadata.put("visible_role", visibleRole);
+            metadata.put("visible_permission", visiblePermission);
             metadata.put("chunk_index", i);
             metadata.put("embedding_model", properties.getEmbeddingModel());
             // text 带前缀参与向量化；raw_text 保留正文，返回给模型时不重复来源标题
@@ -204,7 +204,7 @@ public class KnowledgeIndexService {
                     .metadata(metadata)
                     .build());
             refs.add(new KnowledgeDocRepository.ChunkRef(
-                    id, docTitle, chunk.section(), i, visibleRole, chunk.text()));
+                    id, docTitle, chunk.section(), i, visiblePermission, chunk.text()));
         }
 
         // 版本化写入：先写新块，成功后再删"新版本不再包含"的旧块。

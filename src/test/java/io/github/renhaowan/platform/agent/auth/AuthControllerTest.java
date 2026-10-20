@@ -19,10 +19,15 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.Set;
+
 /**
- * 登录端到端（HTTP 层）：成功签发 {token, role}；密码错误/用户不存在 → 401。
+ * 登录端到端（HTTP 层）：成功签发 {token, role, permissions}；密码错误/用户不存在 → 401。
  */
-@SpringBootTest(properties = "spring.sql.init.mode=never")
+@SpringBootTest(properties = {
+        "spring.sql.init.mode=never",
+        "platform.rbac.seed-on-startup=false"
+})
 @AutoConfigureMockMvc
 class AuthControllerTest {
 
@@ -43,20 +48,25 @@ class AuthControllerTest {
     @MockitoBean
     private AppUserMapper appUserMapper;
 
+    @MockitoBean
+    private RbacService rbacService;
+
     @Test
-    void loginSuccessReturnsTokenAndRole() throws Exception {
+    void loginSuccessReturnsTokenRoleAndPermissions() throws Exception {
         when(appUserMapper.selectOne(any())).thenReturn(user("admin", ADMIN_HASH, "ADMIN"));
+        when(rbacService.permissionsOfRole("ADMIN")).thenReturn(Set.of("*"));
 
         mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"admin\",\"password\":\"admin123\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").isNotEmpty())
-                .andExpect(jsonPath("$.role").value("ADMIN"));
+                .andExpect(jsonPath("$.role").value("ADMIN"))
+                .andExpect(jsonPath("$.permissions[0]").value("*"));
     }
 
     @Test
-    void loginSuccessTokenCarriesUidAndRoleClaims() throws Exception {
+    void loginTokenCarriesOnlyUid() throws Exception {
         when(appUserMapper.selectOne(any())).thenReturn(user("staff01", STAFF_HASH, "STAFF"));
 
         String body = mockMvc.perform(post("/api/v1/auth/login")
@@ -66,8 +76,7 @@ class AuthControllerTest {
 
         JsonNode json = MAPPER.readTree(body);
         assertThat(json.path("role").asText()).isEqualTo("STAFF");
-        UserPrincipal principal = jwtService.parse(json.path("token").asText());
-        assertThat(principal.role()).isEqualTo("STAFF");
+        assertThat(jwtService.parseUid(json.path("token").asText())).isEqualTo(2L);
     }
 
     @Test

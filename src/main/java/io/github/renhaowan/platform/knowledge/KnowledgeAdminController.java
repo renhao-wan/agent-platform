@@ -1,5 +1,6 @@
 package io.github.renhaowan.platform.knowledge;
 
+import io.github.renhaowan.platform.agent.auth.RbacService;
 import io.github.renhaowan.platform.common.ApiResponse;
 import io.github.renhaowan.platform.knowledge.embedding.EmbeddingUsageRepository;
 import io.github.renhaowan.platform.knowledge.eval.KnowledgeEvalService;
@@ -17,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 知识库管理端。{@code /admin/**} 已由 JwtAuthFilter 强制 ADMIN。
+ * 知识库管理端。{@code /admin/**} 已由 JwtAuthFilter 按权限码（默认 admin:knowledge）强制。
  * <p>用 ObjectProvider 而不是直接注入：知识库未启用时这些 bean 不存在，控制器仍要能启动。
  */
 @RestController
@@ -29,14 +30,15 @@ public class KnowledgeAdminController {
     private final ObjectProvider<EmbeddingUsageRepository> usageRepository;
     private final ObjectProvider<KnowledgeEvalService> evalService;
     private final ObjectProvider<KnowledgeSearchService> searchService;
+    private final RbacService rbacService;
 
     public record SearchBody(String query, String role, Integer topK) {
     }
 
     /**
-     * 检索调试：用指定角色跑一次真实检索，直接看到命中块与 SQL 级角色过滤的效果。
-     * <p>仅 /admin/** 可达。允许指定角色是为了验证"STAFF 看不到 ADMIN 文档"；
-     * 这不是越权通道——它只读，且 ADMIN 本身就有全量可见性。
+     * 检索调试：用指定角色的权限跑一次真实检索，直接看到命中块与 SQL 级权限过滤的效果。
+     * <p>仅管理端可达。允许指定角色是为了验证"STAFF 看不到受限文档"；
+     * 这不是越权通道——它只读，且管理员本身就有全量可见性。
      */
     @PostMapping("/admin/knowledge/search")
     public ApiResponse<?> search(@RequestBody SearchBody body) {
@@ -50,7 +52,8 @@ public class KnowledgeAdminController {
         }
         int topK = body.topK() == null ? 4 : body.topK();
         try {
-            return ApiResponse.ok(service.searchDetailed(0L, query, topK, body.role()));
+            return ApiResponse.ok(service.searchDetailed(0L, query, topK,
+                    rbacService.permissionsOfRole(body.role()), body.role()));
         } catch (RuntimeException e) {
             return ApiResponse.error(500, "检索失败：" + e.getMessage());
         }

@@ -145,7 +145,7 @@ class MarkdownChunkerTest {
         String markdown = """
                 ---
                 title: 差旅报销制度
-                visible_role: ADMIN
+                visible_permission: admin:policy
                 ---
                 # 差旅报销制度
 
@@ -156,14 +156,23 @@ class MarkdownChunkerTest {
         FrontMatter frontMatter = FrontMatter.parse(markdown);
 
         assertThat(frontMatter.title()).isEqualTo("差旅报销制度");
-        assertThat(frontMatter.visibleRole()).isEqualTo("ADMIN");
-        assertThat(frontMatter.body()).doesNotContain("visible_role");
+        assertThat(frontMatter.visiblePermission()).isEqualTo("admin:policy");
+        assertThat(frontMatter.body()).doesNotContain("visible_permission");
         assertThat(MarkdownChunker.firstH1(frontMatter.body())).isEqualTo("差旅报销制度");
     }
 
     @Test
-    void defaultVisibleRoleIsPublic() {
-        assertThat(FrontMatter.parse("# 标题\n正文").visibleRole()).isEqualTo("PUBLIC");
-        assertThat(FrontMatter.parse("---\ntitle: x\n---\n正文").visibleRole()).isEqualTo("PUBLIC");
+    void legacyVisibleRoleMapsToSyntheticPermission() {
+        // 旧 front-matter 仍可用：ADMIN 映射为 role:ADMIN，其余角色同理；PUBLIC 视同 public
+        assertThat(FrontMatter.parse("---\nvisible_role: ADMIN\n---\n正文").visiblePermission())
+                .isEqualTo("role:ADMIN");
+        assertThat(FrontMatter.parse("---\nvisible_role: PUBLIC\n---\n正文").visiblePermission())
+                .isEqualTo("public");
+    }
+
+    @Test
+    void defaultVisiblePermissionIsPublic() {
+        assertThat(FrontMatter.parse("# 标题\n正文").visiblePermission()).isEqualTo("public");
+        assertThat(FrontMatter.parse("---\ntitle: x\n---\n正文").visiblePermission()).isEqualTo("public");
     }
 }

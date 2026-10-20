@@ -1,6 +1,7 @@
 package io.github.renhaowan.platform.knowledge.search;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -14,6 +15,7 @@ import io.github.renhaowan.platform.agent.auth.UserPrincipal;
 import io.github.renhaowan.platform.knowledge.KnowledgeProperties;
 import io.github.renhaowan.platform.knowledge.search.KnowledgeSearchService.SearchHit;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,7 +52,8 @@ class KnowledgeSearchToolTest {
 
     @Test
     void emptyHitsYieldsNotFoundText() {
-        when(searchService.search(eq(1L), eq("住宿标准"), anyInt(), eq("STAFF"))).thenReturn(List.of());
+        when(searchService.search(eq(1L), eq("住宿标准"), anyInt(), eq(Set.of("role:STAFF")), eq("STAFF")))
+                .thenReturn(List.of());
 
         String result = tool.execute(staff(), "{\"query\":\"住宿标准\"}");
 
@@ -59,7 +62,8 @@ class KnowledgeSearchToolTest {
 
     @Test
     void rendersSourceAndScoreForEachHit() {
-        when(searchService.search(eq(1L), eq("住宿标准"), eq(2), eq("STAFF"))).thenReturn(List.of(
+        when(searchService.search(eq(1L), eq("住宿标准"), eq(2), eq(Set.of("role:STAFF")), eq("STAFF")))
+                .thenReturn(List.of(
                 new SearchHit("差旅报销制度", "住宿标准", "一线城市每晚不超过 600 元。", 0.82),
                 new SearchHit("差旅报销制度", "", "第二条正文。", Double.NaN)));
 
@@ -76,17 +80,17 @@ class KnowledgeSearchToolTest {
 
     @Test
     void defaultsTopKFromPropertiesAndPassesZeroUserAndNullRoleForAnonymous() {
-        when(searchService.search(eq(0L), eq("审批权限"), eq(properties.getTopK()), isNull()))
+        when(searchService.search(eq(0L), eq("审批权限"), eq(properties.getTopK()), eq(Set.of()), isNull()))
                 .thenReturn(List.of());
 
         tool.execute(null, "{\"query\":\"审批权限\"}");
 
-        verify(searchService).search(0L, "审批权限", properties.getTopK(), null);
+        verify(searchService).search(0L, "审批权限", properties.getTopK(), Set.of(), null);
     }
 
     @Test
     void searchFailureDegradesToText() {
-        when(searchService.search(anyLong(), anyString(), anyInt(), eq("STAFF")))
+        when(searchService.search(anyLong(), anyString(), anyInt(), any(), eq("STAFF")))
                 .thenThrow(new IllegalStateException("pgvector down"));
 
         String result = tool.execute(staff(), "{\"query\":\"报销流程\"}");

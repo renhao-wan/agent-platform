@@ -12,35 +12,41 @@ class JwtServiceTest {
     private final JwtService jwtService = new JwtService("unit-test-secret-0123456789abcdef0123456789abcdef");
 
     @Test
-    void issueThenParseRoundTripsUidAndRole() {
-        String token = jwtService.issue(new UserPrincipal(42L, "ADMIN"));
+    void issueThenParseRoundTripsUid() {
+        String token = jwtService.issue(42L);
 
-        UserPrincipal principal = jwtService.parse(token);
-
-        assertThat(principal.uid()).isEqualTo(42L);
-        assertThat(principal.role()).isEqualTo("ADMIN");
+        assertThat(jwtService.parseUid(token)).isEqualTo(42L);
     }
 
     @Test
     void parseRejectsTokenSignedWithForeignSecret() {
         String token = new JwtService("another-secret-0123456789abcdef0123456789abcdef")
-                .issue(new UserPrincipal(1L, "STAFF"));
+                .issue(1L);
 
-        assertThatThrownBy(() -> jwtService.parse(token)).isInstanceOf(JwtException.class);
+        assertThatThrownBy(() -> jwtService.parseUid(token)).isInstanceOf(JwtException.class);
     }
 
     @Test
     void parseRejectsGarbageInput() {
-        assertThatThrownBy(() -> jwtService.parse("not-a-jwt")).isInstanceOf(JwtException.class);
+        assertThatThrownBy(() -> jwtService.parseUid("not-a-jwt")).isInstanceOf(JwtException.class);
     }
 
     @Test
     void shortSecretIsDerivedNotRejected() {
         // 默认 dev secret 仅 28 字节（224 位）——HS256 要求 256 位，应 SHA-256 派生而非抛 WeakKey 异常
         JwtService shortKeyService = new JwtService("dev-jwt-secret-please-change");
-        String token = shortKeyService.issue(new UserPrincipal(7L, "STAFF"));
+        String token = shortKeyService.issue(7L);
 
-        assertThat(shortKeyService.parse(token).uid()).isEqualTo(7L);
+        assertThat(shortKeyService.parseUid(token)).isEqualTo(7L);
+    }
+
+    @Test
+    void tokenCarriesNoRoleClaim() {
+        // 角色是服务端可变状态，token 只证明身份；旧 token 里残留的 role claim 也必须被忽略
+        String token = jwtService.issue(9L);
+
+        assertThat(jwtService.parseUid(token)).isEqualTo(9L);
+        assertThat(token.split("\\.")).hasSize(3);
     }
 
     @Test

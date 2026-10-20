@@ -9,10 +9,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.renhaowan.platform.agent.auth.JwtService;
+import io.github.renhaowan.platform.agent.auth.RbacService;
 import io.github.renhaowan.platform.agent.auth.UserPrincipal;
 import io.github.renhaowan.platform.agent.memory.entity.ChatMessage;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -24,7 +27,10 @@ import org.springframework.test.web.servlet.MockMvc;
  * 历史会话端点（HTTP 层）：鉴权范围、只列当前用户的会话、他人会话 403、
  * 只回放用户与最终回答（工具轨迹不进入历史）。
  */
-@SpringBootTest(properties = "spring.sql.init.mode=never")
+@SpringBootTest(properties = {
+        "spring.sql.init.mode=never",
+        "platform.rbac.seed-on-startup=false"
+})
 @AutoConfigureMockMvc
 class SessionControllerTest {
 
@@ -36,6 +42,14 @@ class SessionControllerTest {
 
     @MockitoBean
     private AgentSessionService sessionService;
+
+    @MockitoBean
+    private RbacService rbacService;
+
+    @BeforeEach
+    void authorizeStaff() {
+        when(rbacService.loadPrincipal(7L)).thenReturn(Optional.of(new UserPrincipal(7L, "STAFF")));
+    }
 
     @Test
     void sessionsWithoutTokenRejectedWith401() throws Exception {
@@ -49,7 +63,7 @@ class SessionControllerTest {
                 new AgentSessionService.SessionSummary("sk-1", "帮我订明天下午的会议室", LocalDateTime.of(2026, 10, 20, 10, 0))));
 
         mockMvc.perform(get("/api/v1/sessions")
-                        .header("Authorization", "Bearer " + jwtService.issue(new UserPrincipal(7L, "STAFF"))))
+                        .header("Authorization", "Bearer " + jwtService.issue(7L)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].sessionKey").value("sk-1"))
                 .andExpect(jsonPath("$[0].title").value("帮我订明天下午的会议室"))
@@ -63,7 +77,7 @@ class SessionControllerTest {
         when(sessionService.ownsSession("sk-owned-by-other", 7L)).thenReturn(false);
 
         mockMvc.perform(get("/api/v1/sessions/sk-owned-by-other/messages")
-                        .header("Authorization", "Bearer " + jwtService.issue(new UserPrincipal(7L, "STAFF"))))
+                        .header("Authorization", "Bearer " + jwtService.issue(7L)))
                 .andExpect(status().isForbidden());
 
         verify(sessionService, never()).loadHistory("sk-owned-by-other");
@@ -78,7 +92,7 @@ class SessionControllerTest {
                 message(ChatMessage.ROLE_ASSISTANT, "你有一笔待提交的报销单。")));
 
         mockMvc.perform(get("/api/v1/sessions/sk-mine/messages")
-                        .header("Authorization", "Bearer " + jwtService.issue(new UserPrincipal(7L, "STAFF"))))
+                        .header("Authorization", "Bearer " + jwtService.issue(7L)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0].role").value(ChatMessage.ROLE_USER))
@@ -98,7 +112,7 @@ class SessionControllerTest {
         when(sessionService.ownsSession("sk-other", 7L)).thenReturn(false);
 
         mockMvc.perform(get("/api/v1/sessions/sk-other/usage")
-                        .header("Authorization", "Bearer " + jwtService.issue(new UserPrincipal(7L, "STAFF"))))
+                        .header("Authorization", "Bearer " + jwtService.issue(7L)))
                 .andExpect(status().isForbidden());
     }
 
@@ -109,7 +123,7 @@ class SessionControllerTest {
                 .thenReturn(new AgentSessionService.UsageSummary(320, 110, 430, 2));
 
         mockMvc.perform(get("/api/v1/sessions/sk-mine/usage")
-                        .header("Authorization", "Bearer " + jwtService.issue(new UserPrincipal(7L, "STAFF"))))
+                        .header("Authorization", "Bearer " + jwtService.issue(7L)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.promptTokens").value(320))
                 .andExpect(jsonPath("$.completionTokens").value(110))
@@ -128,7 +142,7 @@ class SessionControllerTest {
         when(sessionService.ownsSession("sk-other", 7L)).thenReturn(false);
 
         mockMvc.perform(delete("/api/v1/sessions/sk-other")
-                        .header("Authorization", "Bearer " + jwtService.issue(new UserPrincipal(7L, "STAFF"))))
+                        .header("Authorization", "Bearer " + jwtService.issue(7L)))
                 .andExpect(status().isForbidden());
 
         verify(sessionService, never()).deleteSession("sk-other", 7L);
@@ -140,7 +154,7 @@ class SessionControllerTest {
         when(sessionService.deleteSession("sk-gone", 7L)).thenReturn(false);
 
         mockMvc.perform(delete("/api/v1/sessions/sk-gone")
-                        .header("Authorization", "Bearer " + jwtService.issue(new UserPrincipal(7L, "STAFF"))))
+                        .header("Authorization", "Bearer " + jwtService.issue(7L)))
                 .andExpect(status().isNotFound());
     }
 
@@ -150,7 +164,7 @@ class SessionControllerTest {
         when(sessionService.deleteSession("sk-mine", 7L)).thenReturn(true);
 
         mockMvc.perform(delete("/api/v1/sessions/sk-mine")
-                        .header("Authorization", "Bearer " + jwtService.issue(new UserPrincipal(7L, "STAFF"))))
+                        .header("Authorization", "Bearer " + jwtService.issue(7L)))
                 .andExpect(status().isNoContent());
     }
 

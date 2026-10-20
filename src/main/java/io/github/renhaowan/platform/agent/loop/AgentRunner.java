@@ -167,7 +167,7 @@ public class AgentRunner {
                     events.toolResult(call.name(), summarize(resultText));
                 } else {
                     events.toolCall(call.name(), call.arguments() == null ? "{}" : call.arguments());
-                    // 用户身份随调用下穿工具层：闸门 2（执行点鉴权）在那里校验 required_role
+                    // 用户身份随调用下穿工具层：闸门 2（执行点鉴权）在那里校验 required_permission
                     resultText = toolGateway.callTool(call.name(), call.arguments(), principal);
                     events.toolResult(call.name(), summarize(resultText));
                 }

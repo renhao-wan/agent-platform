@@ -71,10 +71,17 @@ public class OpenApiImportServiceImpl implements OpenApiImportService {
                 method.toUpperCase() + " " + path));
         tool.setHttpMethod(method.toUpperCase());
         tool.setUrlTemplate(join(baseUrl, path));
-        // 敏感与角色要求一律由业务系统在契约里声明，平台不猜测接口语义（业务词不落平台代码）
+        // 敏感与权限要求一律由业务系统在契约里声明，平台不猜测接口语义（业务词不落平台代码）。
+        // x-required-permission 是当前字段；只有 x-required-role 的旧契约按 role:<ROLE> 兼容映射。
         tool.setRequireConfirm("DELETE".equalsIgnoreCase(tool.getHttpMethod())
                 || extensionFlag(operation, "x-require-confirm") ? 1 : 0);
-        tool.setRequiredRole(extensionText(operation, "x-required-role"));
+        String requiredRole = extensionText(operation, "x-required-role");
+        String requiredPermission = extensionText(operation, "x-required-permission");
+        if (requiredPermission == null && requiredRole != null) {
+            requiredPermission = "role:" + requiredRole;
+        }
+        tool.setRequiredRole(requiredRole);
+        tool.setRequiredPermission(requiredPermission);
         tool.setEnabled(1);
         tool.setPresent(1);
         tool.setInputSchema(buildInputSchema(operation, root).toString());

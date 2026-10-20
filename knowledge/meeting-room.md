@@ -1,6 +1,6 @@
 ---
 title: 会议室使用规定
-visible_role: PUBLIC
+visible_permission: public
 ---
 
 # 会议室使用规定

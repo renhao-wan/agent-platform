@@ -1,6 +1,6 @@
 ---
 title: 会议室管理员操作规范
-visible_role: ADMIN
+visible_permission: admin:policy
 ---
 
 # 会议室管理员操作规范

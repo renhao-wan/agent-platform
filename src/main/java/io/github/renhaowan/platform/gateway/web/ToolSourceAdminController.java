@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 契约来源的注册、启停、对账与可观测性入口。整个 /admin/** 由 JwtAuthFilter 要求 ADMIN 角色。
+ * 契约来源的注册、启停、对账与可观测性入口。整个 /admin/** 由 JwtAuthFilter 按 URI 映射权限码校验。
  * <p>
  * 这里能编辑的只有"来源"：契约地址、调用基地址、服务凭证、启停。工具定义永远由拉到的契约
  * 推导，管理端只读（启停在 /admin/tools），否则"契约即工具"就不成立了。

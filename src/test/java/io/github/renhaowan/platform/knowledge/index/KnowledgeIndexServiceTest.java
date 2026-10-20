@@ -78,7 +78,7 @@ class KnowledgeIndexServiceTest {
     void indexesNewDocumentWithMetadata() throws Exception {
         write("leave.md", """
                 ---
-                visible_role: PUBLIC
+                visible_permission: public
                 ---
                 # 差旅报销制度
 
@@ -97,7 +97,7 @@ class KnowledgeIndexServiceTest {
         Document document = documents.getValue().get(0);
         assertThat(document.getText()).startsWith("差旅报销制度 > 住宿标准");
         assertThat(document.getMetadata()).containsEntry("doc_path", "leave.md")
-                .containsEntry("visible_role", "PUBLIC")
+                .containsEntry("visible_permission", "public")
                 .containsEntry("raw_text", "一线城市每晚不超过 600 元，二线城市不超过 400 元。");
 
         verify(repository).upsertDoc(argThat(doc -> doc.chunkCount() == 1

@@ -79,7 +79,9 @@ public class KnowledgeSearchTool {
         try {
             List<SearchHit> hits = searchService.search(
                     principal == null ? 0 : principal.uid(),
-                    query, topK, principal == null ? null : principal.role());
+                    query, topK,
+                    principal == null ? java.util.Set.of() : principal.permissions(),
+                    principal == null ? null : principal.role());
             if (hits.isEmpty()) {
                 return "未在知识库中检索到与「" + query + "」相关的内容，可尝试更换关键词或向用户确认。";
             }

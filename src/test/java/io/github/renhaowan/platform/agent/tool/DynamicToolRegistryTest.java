@@ -67,10 +67,10 @@ class DynamicToolRegistryTest {
                 adminOnlyTool("cancel_booking", "取消指定预订", CANCEL_SCHEMA)));
         DynamicToolRegistry registry = new DynamicToolRegistryImpl(toolGateway);
 
-        // 无权工具照常下发，角色要求写进描述——模型据此提前判断，而非盲目尝试后被拒
+        // 无权工具照常下发，权限要求写进描述——模型据此提前判断，而非盲目尝试后被拒
         assertThat(registry.callbacks()).hasSize(1);
         assertThat(registry.callbacks().get(0).getToolDefinition().description())
-                .isEqualTo("取消指定预订（此操作需要 ADMIN 权限）");
+                .isEqualTo("取消指定预订（此操作需要 role:ADMIN 权限）");
     }
 
     @Test

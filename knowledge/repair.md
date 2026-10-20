@@ -1,6 +1,6 @@
 ---
 title: 办公设施报修流程
-visible_role: PUBLIC
+visible_permission: public
 ---
 
 # 办公设施报修流程

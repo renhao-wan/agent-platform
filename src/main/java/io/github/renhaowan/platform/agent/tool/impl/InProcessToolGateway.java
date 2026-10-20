@@ -32,18 +32,14 @@ public class InProcessToolGateway implements ToolGateway {
 
     @Override
     public String callTool(String name, String argumentsJson, UserPrincipal user) {
-        ToolAccessService.ToolCallResult result = toolAccessService.invoke(properties.getGatewayId(),
-                roleOf(user), user == null ? null : user.uid(), name, argumentsJson);
+        ToolAccessService.ToolCallResult result =
+                toolAccessService.invoke(properties.getGatewayId(), user, name, argumentsJson);
         return result.isError() ? ERROR_PREFIX + result.text() : result.text();
     }
 
     @Override
     public Optional<String> denial(String name, UserPrincipal user) {
-        return toolAccessService.denial(properties.getGatewayId(), roleOf(user), name)
+        return toolAccessService.denial(properties.getGatewayId(), user, name)
                 .map(reason -> ERROR_PREFIX + reason);
-    }
-
-    private static String roleOf(UserPrincipal user) {
-        return user == null ? null : user.role();
     }
 }

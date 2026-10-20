@@ -12,9 +12,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.renhaowan.platform.agent.auth.JwtService;
+import io.github.renhaowan.platform.agent.auth.RbacService;
 import io.github.renhaowan.platform.agent.auth.UserPrincipal;
 import io.github.renhaowan.platform.agent.loop.AgentRunner;
 import io.github.renhaowan.platform.agent.memory.AgentSessionService;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -28,7 +31,10 @@ import org.springframework.test.web.servlet.MvcResult;
  * 对话端点鉴权与会话归属（HTTP 层）：
  * 缺 token / token 解析失败 → 401；续聊他人会话 → SSE 错误事件（403 语义）且不启动循环。
  */
-@SpringBootTest(properties = "spring.sql.init.mode=never")
+@SpringBootTest(properties = {
+        "spring.sql.init.mode=never",
+        "platform.rbac.seed-on-startup=false"
+})
 @AutoConfigureMockMvc
 class ChatAuthFilterTest {
 
@@ -43,6 +49,14 @@ class ChatAuthFilterTest {
 
     @MockitoBean
     private AgentSessionService sessionService;
+
+    @MockitoBean
+    private RbacService rbacService;
+
+    @BeforeEach
+    void authorizeStaff() {
+        when(rbacService.loadPrincipal(1L)).thenReturn(Optional.of(new UserPrincipal(1L, "STAFF")));
+    }
 
     @Test
     void chatWithoutTokenRejectedWith401() throws Exception {
@@ -67,7 +81,7 @@ class ChatAuthFilterTest {
     void chatWithForeignSecretTokenRejectedWith401() throws Exception {
         // 用别的密钥签出的 token（伪造场景）：验签失败 → 401
         String forged = new JwtService("attacker-secret-0123456789abcdef0123456789abcdef")
-                .issue(new UserPrincipal(1L, "ADMIN"));
+                .issue(1L);
 
         mockMvc.perform(post("/api/v1/chat")
                         .header("Authorization", "Bearer " + forged)
@@ -81,7 +95,7 @@ class ChatAuthFilterTest {
         when(sessionService.ownsSession("sk-owned-by-other", 1L)).thenReturn(false);
 
         MvcResult result = mockMvc.perform(post("/api/v1/chat")
-                        .header("Authorization", "Bearer " + jwtService.issue(new UserPrincipal(1L, "STAFF")))
+                        .header("Authorization", "Bearer " + jwtService.issue(1L))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sessionKey\":\"sk-owned-by-other\",\"message\":\"继续\"}"))
                 .andExpect(status().isOk())
@@ -100,7 +114,7 @@ class ChatAuthFilterTest {
         when(sessionService.ownsSession("sk-mine", 1L)).thenReturn(true);
 
         MvcResult result = mockMvc.perform(post("/api/v1/chat")
-                        .header("Authorization", "Bearer " + jwtService.issue(new UserPrincipal(1L, "STAFF")))
+                        .header("Authorization", "Bearer " + jwtService.issue(1L))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sessionKey\":\"sk-mine\",\"message\":\"继续\"}"))
                 .andExpect(status().isOk())

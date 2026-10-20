@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.renhaowan.platform.agent.auth.RbacService;
 import io.github.renhaowan.platform.common.ApiResponse;
 import io.github.renhaowan.platform.knowledge.embedding.EmbeddingUsageRepository;
 import io.github.renhaowan.platform.knowledge.eval.KnowledgeEvalService;
@@ -18,6 +19,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
@@ -81,8 +83,7 @@ class KnowledgeAdminControllerTest {
                 2, 1, 0.5, 0.5, 0.0, 4, List.of());
         when(service.evaluate(4)).thenReturn(report);
 
-        ApiResponse<?> response = new KnowledgeAdminController(mockProvider(null),
-                mockProvider(null), mockProvider(null), mockProvider(service), mockProvider(null)).eval(4);
+        ApiResponse<?> response = controller(null, service, null, rbacService()).eval(4);
 
         assertThat(response.code()).isEqualTo(ApiResponse.OK_CODE);
         assertThat(response.data()).isEqualTo(report);
@@ -93,8 +94,7 @@ class KnowledgeAdminControllerTest {
         KnowledgeEvalService service = mock(KnowledgeEvalService.class);
         when(service.evaluate(4)).thenThrow(new IllegalStateException("评估集不存在"));
 
-        ApiResponse<?> response = new KnowledgeAdminController(mockProvider(null),
-                mockProvider(null), mockProvider(null), mockProvider(service), mockProvider(null)).eval(4);
+        ApiResponse<?> response = controller(null, service, null, rbacService()).eval(4);
 
         assertThat(response.code()).isEqualTo(400);
         assertThat(response.message()).contains("评估集不存在");
@@ -113,8 +113,7 @@ class KnowledgeAdminControllerTest {
     void searchRejectsBlankQueryWithoutHittingSearchService() {
         KnowledgeSearchService service = mock(KnowledgeSearchService.class);
 
-        ApiResponse<?> response = new KnowledgeAdminController(mockProvider(null),
-                mockProvider(null), mockProvider(null), mockProvider(null), mockProvider(service))
+        ApiResponse<?> response = controller(null, null, service, rbacService())
                 .search(new KnowledgeAdminController.SearchBody("   ", "STAFF", 4));
 
         assertThat(response.code()).isEqualTo(400);
@@ -122,6 +121,7 @@ class KnowledgeAdminControllerTest {
                 .searchDetailed(org.mockito.ArgumentMatchers.anyLong(),
                         org.mockito.ArgumentMatchers.anyString(),
                         org.mockito.ArgumentMatchers.anyInt(),
+                        org.mockito.ArgumentMatchers.any(),
                         org.mockito.ArgumentMatchers.any());
     }
 
@@ -131,10 +131,9 @@ class KnowledgeAdminControllerTest {
         SearchOutcome outcome = new SearchOutcome(
                 List.of(new SearchHit("员工手册", "年假", "入职满一年享受 5 天年假", 0.82)),
                 "vector", 12);
-        when(service.searchDetailed(0L, "年假", 6, "STAFF")).thenReturn(outcome);
+        when(service.searchDetailed(0L, "年假", 6, Set.of("role:STAFF"), "STAFF")).thenReturn(outcome);
 
-        ApiResponse<?> response = new KnowledgeAdminController(mockProvider(null),
-                mockProvider(null), mockProvider(null), mockProvider(null), mockProvider(service))
+        ApiResponse<?> response = controller(null, null, service, rbacService())
                 .search(new KnowledgeAdminController.SearchBody("年假", "STAFF", 6));
 
         assertThat(response.code()).isEqualTo(ApiResponse.OK_CODE);
@@ -142,8 +141,19 @@ class KnowledgeAdminControllerTest {
     }
 
     private static KnowledgeAdminController controller(KnowledgeIndexService service) {
-        return new KnowledgeAdminController(mockProvider(service),
-                mockProvider(null), mockProvider(null), mockProvider(null), mockProvider(null));
+        return controller(service, null, null, rbacService());
+    }
+
+    private static KnowledgeAdminController controller(KnowledgeIndexService indexService,
+            KnowledgeEvalService evalService, KnowledgeSearchService searchService, RbacService rbacService) {
+        return new KnowledgeAdminController(mockProvider(indexService), mockProvider(null),
+                mockProvider(null), mockProvider(evalService), mockProvider(searchService), rbacService);
+    }
+
+    private static RbacService rbacService() {
+        RbacService rbacService = mock(RbacService.class);
+        when(rbacService.permissionsOfRole("STAFF")).thenReturn(Set.of("role:STAFF"));
+        return rbacService;
     }
 
     @SuppressWarnings("unchecked")

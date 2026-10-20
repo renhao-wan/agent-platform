@@ -19,6 +19,7 @@ import io.github.renhaowan.platform.knowledge.index.KnowledgeDocRepository.Chunk
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,17 +52,30 @@ class KnowledgeSearchServiceTest {
     }
 
     @Test
-    void staffOnlySearchesPublicAndOwnRole() {
+    void staffOnlySearchesPublicAndOwnSyntheticPermission() {
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
 
         service.search(1L, "住宿标准", 4, "STAFF");
 
         // SearchRequest 把字符串解析为 Expression，断言其语义而非源码文本
         assertThat(capturedRequest().getFilterExpression().toString())
-                .contains("visible_role")
-                .contains("PUBLIC")
-                .contains("STAFF")
-                .doesNotContain("ADMIN");
+                .contains("visible_permission")
+                .contains("public")
+                .contains("role:STAFF")
+                .doesNotContain("admin:policy");
+    }
+
+    @Test
+    void explicitPermissionSetDrivesTheFilterNotTheRoleName() {
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
+
+        service.search(1L, "审批", 4, Set.of("booking:cancel"), "STAFF");
+
+        // 可见性看权限集合；角色只是审计标签，不再参与过滤
+        assertThat(capturedRequest().getFilterExpression().toString())
+                .contains("visible_permission")
+                .contains("booking:cancel")
+                .doesNotContain("role:STAFF");
     }
 
     @Test
@@ -114,7 +128,7 @@ class KnowledgeSearchServiceTest {
     @Test
     void emptyVectorResultFallsBackToKeywordSearchWithRoleFilter() {
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
-        when(docRepository.searchByKeyword(anyString(), eq("STAFF"), eq(4)))
+        when(docRepository.searchByKeyword(anyString(), eq(Set.of("role:STAFF")), eq(4)))
                 .thenReturn(List.of(new ChunkRow("报销制度", "第九条", "制度编号 BX-2024-01 适用于全公司。")));
 
         List<KnowledgeSearchService.SearchHit> hits = service.search(1L, "BX-2024-01", 4, "STAFF");
@@ -123,17 +137,17 @@ class KnowledgeSearchServiceTest {
         assertThat(hits.get(0).title()).isEqualTo("报销制度");
         // 关键词命中没有相似度可言，不能伪造分数
         assertThat(hits.get(0).score()).isNaN();
-        verify(docRepository).searchByKeyword("%BX-2024-01%", "STAFF", 4);
+        verify(docRepository).searchByKeyword("%BX-2024-01%", Set.of("role:STAFF"), 4);
     }
 
     @Test
     void keywordFallbackEscapesLikeWildcards() {
         when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
-        when(docRepository.searchByKeyword(anyString(), anyString(), anyInt())).thenReturn(List.of());
+        when(docRepository.searchByKeyword(anyString(), any(), anyInt())).thenReturn(List.of());
 
         service.search(1L, "100%_完成", 4, "STAFF");
 
-        verify(docRepository).searchByKeyword("%100\\%\\_完成%", "STAFF", 4);
+        verify(docRepository).searchByKeyword("%100\\%\\_完成%", Set.of("role:STAFF"), 4);
     }
 
     @Test

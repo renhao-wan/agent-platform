@@ -1,13 +1,17 @@
 package io.github.renhaowan.platform.knowledge.search;
 
+import io.github.renhaowan.platform.agent.auth.RbacService;
 import io.github.renhaowan.platform.knowledge.KnowledgeProperties;
 import io.github.renhaowan.platform.knowledge.index.KnowledgeDocRepository;
 import io.github.renhaowan.platform.knowledge.index.KnowledgeDocRepository.ChunkRow;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
@@ -43,15 +47,28 @@ public class KnowledgeSearchService {
         this.meterRegistry = meterRegistry;
     }
 
+    /** 兼容入口：按角色推导权限集合（ADMIN 全见，其余为 role:&lt;ROLE&gt;）。 */
     public List<SearchHit> search(long userId, String query, int requestedTopK, String role) {
-        return searchDetailed(userId, query, requestedTopK, role).hits();
+        return search(userId, query, requestedTopK, legacyPermissions(role), role);
+    }
+
+    public List<SearchHit> search(long userId, String query, int requestedTopK,
+            Set<String> permissions, String actorRole) {
+        return searchDetailed(userId, query, requestedTopK, permissions, actorRole).hits();
+    }
+
+    /** 兼容入口：按角色推导权限集合。 */
+    public SearchOutcome searchDetailed(long userId, String query, int requestedTopK, String role) {
+        return searchDetailed(userId, query, requestedTopK, legacyPermissions(role), role);
     }
 
     /**
      * 与 {@link #search} 相同的检索路径，额外返回实际使用的模式与耗时，
      * 供管理端调试面板解释"为什么这次是空结果/关键词兜底"。
+     * <p>{@code permissions} 决定可见性过滤；{@code actorRole} 只用于审计与指标标签。
      */
-    public SearchOutcome searchDetailed(long userId, String query, int requestedTopK, String role) {
+    public SearchOutcome searchDetailed(long userId, String query, int requestedTopK,
+            Set<String> permissions, String actorRole) {
         String normalized = query == null ? "" : query.strip();
         if (normalized.isEmpty()) {
             return new SearchOutcome(List.of(), "empty", 0);
@@ -65,11 +82,11 @@ public class KnowledgeSearchService {
         List<SearchHit> hits = new ArrayList<>();
         String mode = "vector";
         try {
-            hits.addAll(vectorSearch(normalized, topK, role));
+            hits.addAll(vectorSearch(normalized, topK, permissions));
             if (hits.isEmpty()) {
                 mode = "empty";
                 if (properties.isKeywordFallbackEnabled()) {
-                    hits.addAll(keywordSearch(normalized, topK, role));
+                    hits.addAll(keywordSearch(normalized, topK, permissions));
                     if (!hits.isEmpty()) {
                         mode = "keyword";
                     }
@@ -81,16 +98,16 @@ public class KnowledgeSearchService {
             throw e;
         } finally {
             long elapsedMs = (System.nanoTime() - started) / 1_000_000;
-            recordObservability(userId, normalized, topK, role, hits, mode, elapsedMs);
+            recordObservability(userId, normalized, topK, actorRole, hits, mode, elapsedMs);
         }
     }
 
-    private List<SearchHit> vectorSearch(String query, int topK, String role) {
+    private List<SearchHit> vectorSearch(String query, int topK, Set<String> permissions) {
         SearchRequest.Builder builder = SearchRequest.builder()
                 .query(query)
                 .topK(topK)
                 .similarityThreshold(properties.getScoreThreshold());
-        String filter = roleFilter(role);
+        String filter = permissionFilter(permissions);
         if (filter != null) {
             builder.filterExpression(filter);
         }
@@ -112,12 +129,12 @@ public class KnowledgeSearchService {
     }
 
     /** 先按整串查，未命中再退到最长词元；避免把整段自然语言当 LIKE 模式。 */
-    private List<SearchHit> keywordSearch(String query, int topK, String role) {
-        List<ChunkRow> rows = docRepository.searchByKeyword(likePattern(query), role, topK);
+    private List<SearchHit> keywordSearch(String query, int topK, Set<String> permissions) {
+        List<ChunkRow> rows = docRepository.searchByKeyword(likePattern(query), permissions, topK);
         if (rows.isEmpty()) {
             String token = longestToken(query);
             if (!token.isEmpty() && !token.equals(query)) {
-                rows = docRepository.searchByKeyword(likePattern(token), role, topK);
+                rows = docRepository.searchByKeyword(likePattern(token), permissions, topK);
             }
         }
         return rows.stream()
@@ -125,15 +142,41 @@ public class KnowledgeSearchService {
                 .toList();
     }
 
-    /** ADMIN 可读全部；其余角色只读 PUBLIC 与自己的角色。缺省可见性必须是 PUBLIC。 */
-    private String roleFilter(String role) {
-        if ("ADMIN".equals(role)) {
+    /**
+     * 可见性过滤写进检索表达式：{@code public} 对所有登录用户可见；拥有 {@code *} 的用户不过滤；
+     * 其余用户额外可见其权限集合命中的块。无权内容从不进入候选集。
+     */
+    private static String permissionFilter(Set<String> permissions) {
+        if (permissions != null && permissions.contains(RbacService.WILDCARD)) {
             return null;
         }
-        String current = role == null || role.isBlank()
-                ? "PUBLIC"
-                : role.replace("'", "''");
-        return "visible_role == 'PUBLIC' || visible_role == '" + current + "'";
+        Set<String> extra = new LinkedHashSet<>();
+        if (permissions != null) {
+            for (String permission : permissions) {
+                if (permission != null && !permission.isBlank() && !"public".equals(permission)) {
+                    extra.add(permission);
+                }
+            }
+        }
+        StringBuilder filter = new StringBuilder("visible_permission == 'public'");
+        if (!extra.isEmpty()) {
+            filter.append(" || visible_permission in [")
+                    .append(extra.stream()
+                            .map(p -> "'" + p.replace("'", "''") + "'")
+                            .collect(Collectors.joining(", ")))
+                    .append("]");
+        }
+        return filter.toString();
+    }
+
+    /** 旧角色语义：ADMIN 全见，其余只读 public 与 own role 对应的 role:&lt;ROLE&gt;。 */
+    private static Set<String> legacyPermissions(String role) {
+        if (role == null || role.isBlank()) {
+            return Set.of();
+        }
+        return "ADMIN".equals(role)
+                ? Set.of(RbacService.WILDCARD)
+                : Set.of("role:" + role);
     }
 
     private void recordObservability(long userId, String query, int topK, String role,

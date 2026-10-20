@@ -54,15 +54,25 @@ final class ToolChangeAnalyzer {
             }
         }
 
-        if (isBlank(old.getRequiredRole()) && !isBlank(now.getRequiredRole())) {
-            changes.add(new ToolRegistryService.BreakingChange(now.getName(), "ROLE_RESTRICTED",
-                    "null -> " + now.getRequiredRole()));
-        } else if (!isBlank(old.getRequiredRole()) && !isBlank(now.getRequiredRole())
-                && !old.getRequiredRole().equals(now.getRequiredRole())) {
-            changes.add(new ToolRegistryService.BreakingChange(now.getName(), "ROLE_CHANGED",
-                    old.getRequiredRole() + " -> " + now.getRequiredRole()));
+        String oldPermission = effectivePermission(old);
+        String newPermission = effectivePermission(now);
+        if (isBlank(oldPermission) && !isBlank(newPermission)) {
+            changes.add(new ToolRegistryService.BreakingChange(now.getName(), "PERMISSION_RESTRICTED",
+                    "null -> " + newPermission));
+        } else if (!isBlank(oldPermission) && !isBlank(newPermission)
+                && !oldPermission.equals(newPermission)) {
+            changes.add(new ToolRegistryService.BreakingChange(now.getName(), "PERMISSION_CHANGED",
+                    oldPermission + " -> " + newPermission));
         }
         return changes;
+    }
+
+    /** 新契约为权限码；只有 required_role 的历史行按 role:<ROLE> 归一后比较。 */
+    private static String effectivePermission(ToolDefinition tool) {
+        if (!isBlank(tool.getRequiredPermission())) {
+            return tool.getRequiredPermission();
+        }
+        return isBlank(tool.getRequiredRole()) ? null : "role:" + tool.getRequiredRole();
     }
 
     private static JsonNode schemaOf(ToolDefinition tool) {

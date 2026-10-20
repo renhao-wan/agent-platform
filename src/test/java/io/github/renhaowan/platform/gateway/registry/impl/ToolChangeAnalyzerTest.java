@@ -85,25 +85,25 @@ class ToolChangeAnalyzerTest {
     }
 
     @Test
-    void newlyRestrictedRoleIsBreaking() {
+    void newlyRestrictedPermissionIsBreaking() {
         ToolDefinition now = tool();
-        now.setRequiredRole("ADMIN");
+        now.setRequiredPermission("booking:cancel");
 
         List<BreakingChange> changes = ToolChangeAnalyzer.compare(tool(), now);
 
-        assertThat(types(changes)).containsExactly("ROLE_RESTRICTED");
-        assertThat(changes.get(0).detail()).isEqualTo("null -> ADMIN");
+        assertThat(types(changes)).containsExactly("PERMISSION_RESTRICTED");
+        assertThat(changes.get(0).detail()).isEqualTo("null -> booking:cancel");
     }
 
     @Test
-    void changedRoleIsReportedEvenWhenRelaxed() {
+    void changedPermissionIsReportedEvenWhenRelaxed() {
         ToolDefinition before = tool();
-        before.setRequiredRole("ADMIN");
+        before.setRequiredPermission("admin:policy");
         ToolDefinition now = tool();
-        now.setRequiredRole("STAFF");
+        now.setRequiredPermission("public");
 
         assertThat(types(ToolChangeAnalyzer.compare(before, now)))
-                .containsExactly("ROLE_CHANGED");
+                .containsExactly("PERMISSION_CHANGED");
     }
 
     @Test

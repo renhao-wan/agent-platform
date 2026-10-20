@@ -7,9 +7,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.renhaowan.platform.agent.auth.JwtService;
+import io.github.renhaowan.platform.agent.auth.RbacService;
 import io.github.renhaowan.platform.agent.auth.UserPrincipal;
 import io.github.renhaowan.platform.gateway.registry.entity.ToolDefinition;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -20,7 +22,10 @@ import org.springframework.test.web.servlet.MockMvc;
 /**
  * 工具目录端点（HTTP 层）：鉴权范围，以及服务凭证不出边界。
  */
-@SpringBootTest(properties = "spring.sql.init.mode=never")
+@SpringBootTest(properties = {
+        "spring.sql.init.mode=never",
+        "platform.rbac.seed-on-startup=false"
+})
 @AutoConfigureMockMvc
 class ToolCatalogControllerTest {
 
@@ -33,6 +38,9 @@ class ToolCatalogControllerTest {
     @MockitoBean
     private ToolGateway toolGateway;
 
+    @MockitoBean
+    private RbacService rbacService;
+
     @Test
     void toolsWithoutTokenRejectedWith401() throws Exception {
         mockMvc.perform(get("/api/v1/tools"))
@@ -43,9 +51,10 @@ class ToolCatalogControllerTest {
     void toolsListIsServedToAuthenticatedUser() throws Exception {
         when(toolGateway.listTools())
                 .thenReturn(List.of(tool("search_rooms", "查询指定时间段可用的会议室")));
+        when(rbacService.loadPrincipal(7L)).thenReturn(Optional.of(new UserPrincipal(7L, "STAFF")));
 
         mockMvc.perform(get("/api/v1/tools")
-                        .header("Authorization", "Bearer " + jwtService.issue(new UserPrincipal(7L, "STAFF"))))
+                        .header("Authorization", "Bearer " + jwtService.issue(7L)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].name").value("search_rooms"))
                 .andExpect(jsonPath("$[0].description").value("查询指定时间段可用的会议室"));
@@ -57,9 +66,10 @@ class ToolCatalogControllerTest {
         withSecret.setAuthHeaderName("X-Service-Key");
         withSecret.setAuthHeaderValue("super-secret-service-key");
         when(toolGateway.listTools()).thenReturn(List.of(withSecret));
+        when(rbacService.loadPrincipal(1L)).thenReturn(Optional.of(new UserPrincipal(1L, "ADMIN")));
 
         String body = mockMvc.perform(get("/api/v1/tools")
-                        .header("Authorization", "Bearer " + jwtService.issue(new UserPrincipal(1L, "ADMIN"))))
+                        .header("Authorization", "Bearer " + jwtService.issue(1L)))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 

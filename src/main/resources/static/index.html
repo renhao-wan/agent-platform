@@ -618,6 +618,27 @@ button{cursor:pointer;border:0;background:none}
 .tag.confirm{color:var(--accent-ink);border-color:var(--accent-line)}
 .tag.stale{color:var(--danger);border-color:var(--danger-line);background:var(--danger-wash)}
 
+/* 角色权限矩阵 */
+.rbac-role{border-bottom:1px solid var(--line);padding:14px 0}
+.rbac-role:last-child{border-bottom:0}
+.rbac-role-h{display:flex;align-items:baseline;gap:8px;margin-bottom:8px}
+.rbac-role-h b{font-family:var(--mono);font-size:13px;color:var(--t1)}
+.rbac-role-h .n{font-size:11.5px;color:var(--t4)}
+.rbac-perms{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));
+  gap:6px 14px;margin-bottom:9px;
+}
+.rbac-perms label{
+  display:flex;align-items:center;gap:7px;font-family:var(--mono);
+  font-size:12px;color:var(--t2);cursor:pointer;
+}
+.rbac-add{display:flex;gap:8px;max-width:340px}
+.rbac-add input{
+  flex:1;min-width:0;padding:5px 8px;border:1px solid var(--line);border-radius:4px;
+  background:var(--surface);color:var(--t1);font-family:var(--mono);font-size:12px;
+}
+.rbac-add input:focus{outline:none;border-color:var(--accent-line)}
+
 /* 启停开关 */
 .switch{position:relative;flex-shrink:0;width:34px;height:20px;margin-top:3px;cursor:pointer}
 .switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
@@ -911,7 +932,7 @@ button{cursor:pointer;border:0;background:none}
     <header class="drawer-h">
       <div>
         <h2 id="admin-title">管理台</h2>
-        <p class="drawer-sub">契约来源、工具目录与知识检索。仅管理员可见。</p>
+        <p class="drawer-sub">契约来源、工具目录、知识检索与角色权限。按管理权限可见。</p>
       </div>
       <button class="drawer-x" id="sources-close" type="button" aria-label="关闭">×</button>
     </header>
@@ -920,6 +941,7 @@ button{cursor:pointer;border:0;background:none}
       <button class="tab" type="button" role="tab" data-tab="sources" data-on="1">契约来源</button>
       <button class="tab" type="button" role="tab" data-tab="tools">工具目录</button>
       <button class="tab" type="button" role="tab" data-tab="knowledge">知识检索</button>
+      <button class="tab" type="button" role="tab" data-tab="rbac">角色权限</button>
     </nav>
 
     <!-- 契约来源 -->
@@ -999,9 +1021,22 @@ button{cursor:pointer;border:0;background:none}
       <div class="kb-meta" id="kb-meta"></div>
       <div class="pane-body" id="kb-body">
         <p class="pane-empty">
-          用指定角色跑一次真实检索：角色过滤发生在检索 SQL 内，无权文档不会进入候选集。
+          用指定角色跑一次真实检索：权限过滤发生在检索 SQL 内，无权文档不会进入候选集。
           切到 STAFF 再查同一个问题，就能看到它与 ADMIN 的差别。
         </p>
+      </div>
+    </section>
+
+    <!-- 角色权限（轻量 RBAC：单角色 + 角色-权限映射） -->
+    <section class="pane" id="pane-rbac" hidden>
+      <div class="pane-tools">
+        <button class="btn-ghost" id="rbac-refresh" type="button">刷新</button>
+        <span class="spacer"></span>
+        <button class="btn-sm" id="rbac-save" type="button">保存</button>
+      </div>
+      <div class="hintline" id="rbac-hint"></div>
+      <div class="pane-body" id="rbac-body">
+        <p class="pane-empty">加载角色与权限中…</p>
       </div>
     </section>
   </aside>
@@ -1033,6 +1068,20 @@ let sessionKey = localStorage.getItem("sessionKey") || null;
 let token      = localStorage.getItem("token") || null;
 let myName     = localStorage.getItem("myName") || "";
 let myRole     = localStorage.getItem("myRole") || "";
+let myPermissions = [];
+try {
+  const saved = JSON.parse(localStorage.getItem("myPermissions") || "[]");
+  myPermissions = Array.isArray(saved) ? saved : [];
+} catch (_) { myPermissions = []; }
+
+/** 当前身份是否拥有某权限码；* 为通配。 */
+function hasPerm(p) {
+  return myPermissions.includes("*") || myPermissions.includes(p);
+}
+/** 管理台入口：任一管理权限即可进入，具体 tab 再按权限显隐。 */
+function canOpenAdmin() {
+  return ["admin:console", "admin:source", "admin:tool", "admin:knowledge", "admin:rbac"].some(hasPerm);
+}
 let pendingToken = null;
 let busy = false;
 let toolSteps = 0;     // 本轮工具调用次数——这才是「步数」
@@ -1217,21 +1266,23 @@ function setComposerEnabled(on) {
   $("new-chat").disabled = busy;
 }
 
-/** 依据当前角色刷新闸门面板——让抽象的安全模型成为界面上看得见的东西 */
+/** 依据当前权限刷新闸门面板——让抽象的安全模型成为界面上看得见的东西 */
 function renderGates() {
-  const isAdmin = myRole === "ADMIN";
+  const all = hasPerm("*");
 
   $("gate-1-live").dataset.k = "pass";
-  $("gate-1-live").textContent = "全部已启用工具 + 角色要求";
+  $("gate-1-live").textContent = "全部已启用工具 + 所需权限";
 
   const g2 = $("gate-2-live");
-  if (isAdmin) {
+  if (all) {
     g2.dataset.k = "pass";
-    g2.textContent = "ADMIN 全部放行";
+    g2.textContent = "当前身份拥有全部权限";
   } else {
     // 还没发生拦截，只是"会拦"——用琥珀，不用红
     g2.dataset.k = "warn";
-    g2.textContent = "STAFF 拦截 required_role=ADMIN 的工具";
+    g2.textContent = myPermissions.length
+      ? "执行点按权限码放行（已授 " + myPermissions.length + " 项）"
+      : "执行点按权限码放行（未授业务权限）";
   }
 
   const g3 = $("gate-3-live");
@@ -1266,7 +1317,7 @@ function showConsole() {
   rb.textContent = myRole || "—";
   rb.dataset.r = myRole;
   $("ident-role").textContent = myRole || "—";
-  $("sources-open").hidden = myRole !== "ADMIN";
+  $("sources-open").hidden = !canOpenAdmin();
   $("ident-session").textContent = sessionKey ? sessionKey.slice(0, 8) : "待建立";
   $("hint-session").textContent = sessionKey ? "会话 " + sessionKey.slice(0, 8) : "";
   setStatus("idle", "空闲");
@@ -1277,7 +1328,7 @@ function showConsole() {
   refreshUsage();
 }
 function logout() {
-  ["token", "sessionKey", "myName", "myRole"].forEach(k => localStorage.removeItem(k));
+  ["token", "sessionKey", "myName", "myRole", "myPermissions"].forEach(k => localStorage.removeItem(k));
   location.reload();
 }
 
@@ -1485,9 +1536,11 @@ $("login-form").addEventListener("submit", async e => {
     token = j.token;
     myName = $("login-user").value.trim();
     myRole = j.role || "";
+    myPermissions = Array.isArray(j.permissions) ? j.permissions : [];
     localStorage.setItem("token", token);
     localStorage.setItem("myName", myName);
     localStorage.setItem("myRole", myRole);
+    localStorage.setItem("myPermissions", JSON.stringify(myPermissions));
     showConsole();
   } catch (ex) {
     err.textContent = "网络异常：" + ex.message;
@@ -1544,7 +1597,7 @@ $("btn-ok").addEventListener("click", () => confirmAction(true));
 $("btn-no").addEventListener("click", () => confirmAction(false));
 
 function expire() {
-  ["token", "sessionKey", "myName", "myRole"].forEach(k => localStorage.removeItem(k));
+  ["token", "sessionKey", "myName", "myRole", "myPermissions"].forEach(k => localStorage.removeItem(k));
   token = null; sessionKey = null;
   showLogin();
   $("login-err").textContent = "登录已过期，请重新登录";
@@ -1800,21 +1853,39 @@ const KB_MODE = {
   vector: "向量检索", keyword: "关键词兜底", empty: "无命中", error: "失败"
 };
 
+/** 管理台 tab 与所需权限：入口可见 ≠ 每个 tab 可用，按权限逐个显隐。 */
+const ADMIN_TABS = [
+  { key: "sources", perm: "admin:source" },
+  { key: "tools", perm: "admin:tool" },
+  { key: "knowledge", perm: "admin:knowledge" },
+  { key: "rbac", perm: "admin:rbac" }
+];
+
+function applyAdminTabs() {
+  document.querySelectorAll(".tab").forEach(t => {
+    const meta = ADMIN_TABS.find(x => x.key === t.dataset.tab);
+    t.hidden = !!meta && !hasPerm(meta.perm);
+  });
+}
+
 function setAdminTab(name) {
   adminTab = name;
   document.querySelectorAll(".tab").forEach(t => {
     t.dataset.on = t.dataset.tab === name ? "1" : "";
   });
-  ["sources", "tools", "knowledge"].forEach(k => { $("pane-" + k).hidden = k !== name; });
+  ["sources", "tools", "knowledge", "rbac"].forEach(k => { $("pane-" + k).hidden = k !== name; });
   if (name === "tools" && !toolList.length) loadTools();
+  if (name === "rbac") loadRbac();
 }
 
 function openSources() {
-  if (myRole !== "ADMIN") { addError("管理台仅管理员可用"); return; }
+  if (!canOpenAdmin()) { addError("当前账号没有管理权限"); return; }
   $("sources").hidden = false;
+  applyAdminTabs();
   srcHint("");
   closeSourceForm();
-  setAdminTab("sources");
+  const first = ADMIN_TABS.find(t => hasPerm(t.perm));
+  setAdminTab(first ? first.key : "sources");
   loadSources();
 }
 function closeSources() {
@@ -1839,7 +1910,7 @@ function srcHint(text, danger) {
 async function srcFetch(url, opts) {
   const resp = await fetch(url, Object.assign({ headers: authHeaders() }, opts || {}));
   if (resp.status === 401) { expire(); return null; }
-  if (resp.status === 403) throw new Error("需要管理员权限");
+  if (resp.status === 403) throw new Error("权限不足：当前账号不能执行该操作");
   const body = await resp.json().catch(() => null);
   if (!resp.ok || (body && typeof body.code === "number" && body.code !== 0)) {
     throw new Error((body && body.message) || "请求失败（HTTP " + resp.status + "）");
@@ -2140,7 +2211,7 @@ function renderTools() {
     if (filter === "disabled" && t.enabled) return false;
     if (filter === "stale" && t.present) return false;
     if (!q) return true;
-    return [t.name, t.description, t.sourceKey, t.requiredRole]
+    return [t.name, t.description, t.sourceKey, t.requiredPermission, t.requiredRole]
       .filter(Boolean).some(v => String(v).toLowerCase().includes(q));
   });
 
@@ -2196,10 +2267,11 @@ function toolRow(t) {
   const nm = document.createElement("span");
   nm.textContent = t.name || "（未命名）";
   nameLine.appendChild(nm);
-  if (t.requiredRole) {
+  const required = t.requiredPermission || (t.requiredRole ? "role:" + t.requiredRole : null);
+  if (required) {
     const tag = document.createElement("span");
     tag.className = "tag admin";
-    tag.textContent = "需 " + t.requiredRole;
+    tag.textContent = "需 " + required;
     nameLine.appendChild(tag);
   }
   if (t.requireConfirm) {
@@ -2337,6 +2409,139 @@ function renderKnowledgeResult(r, req) {
   });
 }
 
+/* --- 角色权限（轻量 RBAC：单角色 + 角色-权限映射） --- */
+
+let rbacRoles = [];
+let rbacPermissions = [];
+let rbacDraft = {};
+
+async function loadRbac() {
+  const hint = $("rbac-hint");
+  hint.textContent = "";
+  hint.dataset.bad = "";
+  try {
+    const [rolesBody, permsBody] = await Promise.all([
+      srcFetch("/admin/rbac/roles"),
+      srcFetch("/admin/rbac/permissions")
+    ]);
+    if (!rolesBody || !permsBody) return;
+    rbacRoles = rolesBody.data || [];
+    rbacPermissions = permsBody.data || [];
+    rbacDraft = {};
+    rbacRoles.forEach(role => {
+      rbacDraft[role.code] = new Set(role.permissions || []);
+    });
+    renderRbac();
+  } catch (e) {
+    hint.textContent = e.message;
+    hint.dataset.bad = "1";
+  }
+}
+
+/** 已知权限码 = 内置 + 契约声明 + 该角色当前持有（可能来自手工添加）。 */
+function rbacKnownFor(roleCode) {
+  const known = new Set(rbacPermissions);
+  const draft = rbacDraft[roleCode] || new Set();
+  draft.forEach(p => known.add(p));
+  return [...known].sort();
+}
+
+function renderRbac() {
+  const box = $("rbac-body");
+  box.textContent = "";
+  if (!rbacRoles.length) {
+    const p = document.createElement("p");
+    p.className = "pane-empty";
+    p.textContent = "没有角色。检查 app_role 表是否已初始化。";
+    box.appendChild(p);
+    return;
+  }
+
+  rbacRoles.forEach(role => {
+    const card = document.createElement("div");
+    card.className = "rbac-role";
+
+    const head = document.createElement("div");
+    head.className = "rbac-role-h";
+    const title = document.createElement("b");
+    title.textContent = role.name + " · " + role.code;
+    head.appendChild(title);
+    if (role.description) {
+      const desc = document.createElement("span");
+      desc.className = "n";
+      desc.textContent = role.description;
+      head.appendChild(desc);
+    }
+    card.appendChild(head);
+
+    const grid = document.createElement("div");
+    grid.className = "rbac-perms";
+    rbacKnownFor(role.code).forEach(perm => {
+      const label = document.createElement("label");
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = rbacDraft[role.code].has(perm);
+      input.addEventListener("change", () => {
+        if (input.checked) rbacDraft[role.code].add(perm);
+        else rbacDraft[role.code].delete(perm);
+      });
+      const text = document.createElement("span");
+      text.textContent = perm === "*" ? "*（全部权限）" : perm;
+      label.append(input, text);
+      grid.appendChild(label);
+    });
+    card.appendChild(grid);
+
+    const add = document.createElement("div");
+    add.className = "rbac-add";
+    const input = document.createElement("input");
+    input.placeholder = "添加权限码，如 booking:cancel";
+    input.autocomplete = "off";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn-ghost";
+    btn.textContent = "添加";
+    const commit = () => {
+      const value = input.value.trim();
+      if (!value) return;
+      rbacDraft[role.code].add(value);
+      renderRbac();
+    };
+    btn.addEventListener("click", commit);
+    input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); commit(); } });
+    add.append(input, btn);
+    card.appendChild(add);
+
+    box.appendChild(card);
+  });
+}
+
+async function saveRbac() {
+  const hint = $("rbac-hint");
+  hint.textContent = "";
+  hint.dataset.bad = "";
+
+  const mine = rbacDraft[myRole];
+  if (mine && ![...mine].some(p => p === "*" || p.startsWith("admin:"))) {
+    if (!window.confirm("保存后当前角色将没有任何管理权限，可能被锁在管理台之外。仍要保存吗？")) return;
+  }
+
+  try {
+    for (const role of rbacRoles) {
+      await srcFetch("/admin/rbac/roles/" + encodeURIComponent(role.code) + "/permissions", {
+        method: "PUT",
+        headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()),
+        body: JSON.stringify({ permissions: [...(rbacDraft[role.code] || [])] })
+      });
+    }
+    hint.textContent = "已保存。权限在下一个请求生效，不需要重新登录。";
+    await loadRbac();
+  } catch (e) {
+    hint.textContent = e.message;
+    hint.dataset.bad = "1";
+  }
+}
+
 $("sources-open").addEventListener("click", openSources);
 $("sources-close").addEventListener("click", closeSources);
 $("sources-scrim").addEventListener("click", closeSources);
@@ -2350,6 +2555,8 @@ document.querySelectorAll(".tab").forEach(t => {
 $("tool-search").addEventListener("input", renderTools);
 $("tool-filter").addEventListener("change", renderTools);
 $("kb-form").addEventListener("submit", runKnowledgeSearch);
+$("rbac-refresh").addEventListener("click", loadRbac);
+$("rbac-save").addEventListener("click", saveRbac);
 
 $("src-form").addEventListener("submit", async e => {
   e.preventDefault();

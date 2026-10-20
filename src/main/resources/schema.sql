@@ -193,9 +193,35 @@ SET @ddl = IF(@col_exists > 0, 'ALTER TABLE chat_session DROP COLUMN title', 'SE
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- M4.2：工具级角色闸门（幂等：information_schema 守卫，已存在则跳过）。
--- required_role NULL=全员可调；ADMIN|STAFF=仅执行点鉴权（闸门 2）放行该角色。
--- 该值由业务系统在 OpenAPI 扩展字段 x-required-role 声明，平台导入时读取，不在平台侧硬编码
-SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS 
+-- 历史列：旧契约用 x-required-role 声明角色，导入时归一成 required_permission=role:<ROLE>；
+-- 该列只保留用于兼容与展示，执行点只看 required_permission
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_definition' AND COLUMN_NAME='required_role');
 SET @ddl = IF(@col_exists = 0, 'ALTER TABLE tool_definition ADD COLUMN required_role VARCHAR(16) NULL AFTER require_confirm', 'SELECT 1');
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- RBAC：工具执行点按权限码鉴权（如 booking:cancel / admin:tool），由业务契约
+-- x-required-permission 声明，平台只读不解释。required_role 保留用于兼容旧契约与展示。
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_definition' AND COLUMN_NAME='required_permission');
+SET @ddl = IF(@col_exists = 0,
+  'ALTER TABLE tool_definition ADD COLUMN required_permission VARCHAR(128) NULL AFTER required_role', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- RBAC：角色与角色-权限映射。用户保持单角色（app_user.role -> app_role.code），
+-- 不引入用户-角色多对多；权限码由平台内置（admin:*）与业务契约（x-required-permission）共同构成。
+CREATE TABLE IF NOT EXISTS app_role (
+    code        VARCHAR(32)  NOT NULL PRIMARY KEY,
+    name        VARCHAR(64)  NOT NULL,
+    description VARCHAR(255) NULL,
+    builtin     TINYINT      NOT NULL DEFAULT 1,
+    seeded      TINYINT      NOT NULL DEFAULT 0,
+    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'RBAC 角色';
+
+CREATE TABLE IF NOT EXISTS app_role_permission (
+    role_code       VARCHAR(32)  NOT NULL,
+    permission_code VARCHAR(128) NOT NULL,
+    PRIMARY KEY (role_code, permission_code),
+    INDEX idx_role_permission_code (permission_code)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '角色-权限映射';

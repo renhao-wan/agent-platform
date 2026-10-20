@@ -1,6 +1,6 @@
 ---
 title: 费用报销制度
-visible_role: PUBLIC
+visible_permission: public
 ---
 
 # 费用报销制度
