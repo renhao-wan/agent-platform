@@ -23,7 +23,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * 对话入口：POST /api/v1/chat（SSE 流式返回）。
- * ReAct 循环在独立线程池执行（不占用容器工作线程），confirm 等待期内连接保活由心跳兜底。
+ * ReAct 循环在独立线程池执行（不占用容器工作线程）。确认等待期间没有数据下发，
+ * 部署在反向代理之后时，代理的 idle timeout 必须大于确认超时，否则连接会在等待中被断开。
  *
  * <p>【面试点：为什么禁用 Executors 工厂方法，显式 new ThreadPoolExecutor？】
  * <ul>

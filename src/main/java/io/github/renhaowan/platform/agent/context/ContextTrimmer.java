@@ -5,9 +5,8 @@ import org.springframework.ai.chat.messages.Message;
 
 /**
  * 混合上下文裁剪：粗估 token（chars/2）超阈值时，
- * 保留 system 前缀 + 最近 keepRecent 条消息，更早内容压缩为一条摘要 SystemMessage。
- * 确定性规则实现（不调模型），单测友好；摘要同时由调用方落 checkpoint 表。
- * 装配见 AgentConfig（阈值来自 platform.agent.context-threshold）。
+ * 保留 system 前缀 + 最近 keepRecent 条消息，更早内容替换为一条计数标记 SystemMessage。
+ * 确定性规则实现（不调模型），标记不含具体事实，细节由模型调用 recallHistory 调回。
  */
 public interface ContextTrimmer {
 

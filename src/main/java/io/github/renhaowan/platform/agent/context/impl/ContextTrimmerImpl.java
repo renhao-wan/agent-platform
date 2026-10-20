@@ -34,7 +34,8 @@ public class ContextTrimmerImpl implements ContextTrimmer {
                 .filter(m -> m instanceof AssistantMessage am && am.hasToolCalls())
                 .count();
         String summary = "【历史压缩】早期对话共 " + (keepFrom - systemCount)
-                + " 条消息（含 " + toolCalls + " 次工具调用）已被压缩，关键结论以里程碑形式保留。";
+                + " 条消息（含 " + toolCalls + " 次工具调用）已移出上下文；"
+                + "如需具体细节，可调用 recallHistory 按关键词检索。";
 
         List<Message> result = new java.util.ArrayList<>(head);
         result.add(new SystemMessage(summary));
