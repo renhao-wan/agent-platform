@@ -285,3 +285,5 @@ if (requiredRole != null && !requiredRole.equals(userRole)) {
 **如果将来真要做，方向是**把"怎么证明调用方身份"从转发器里抽出来，做成来源级 `AuthStrategy`：`NONE` / `STATIC_HEADER` / `FORWARD_USER_TOKEN` / `OAUTH2_CLIENT_CREDENTIALS` / `LOGIN_SESSION`。策略在转发前注入 header 或 cookie；平台仍然只负责编排与执行点鉴权，不解释业务语义（**本项目不实现**）。**身份映射**（平台用户 ↔ 各业务用户）与 §4.0 的"按来源角色"属于同一类问题，应一起设计，否则 `X-On-Behalf-Of-User` 只能在用户 id 空间碰巧对齐时成立。
 
 **面试口径**：这是明确的非目标，不是未完成的功能——当前只把静态服务凭证这一条路径走通；异构鉴权与按来源角色属于另一个产品形态，不在本项目范围内。
+
+> 以上边界问题的完整追问与回答整理见 [docs/highlights/05-boundaries-and-tradeoffs.md](highlights/05-boundaries-and-tradeoffs.md)。

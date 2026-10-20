@@ -8,6 +8,7 @@
 | ② | 零改造接入：契约即工具 | [02-contract-as-tools.md](02-contract-as-tools.md) | OpenAPI 就是工具，持续对账而非一次性导入 |
 | ③ | ReAct 显式循环与 SSE | [03-react-loop-and-sse.md](03-react-loop-and-sse.md) | 工具执行权在代码里，每步可插桩、可直播 |
 | ④ | 上下文工程 + Agentic RAG | [04-context-and-agentic-rag.md](04-context-and-agentic-rag.md) | 分层记忆按需取回，知识由模型自主检索 |
+| ⑤ | 边界与追问 | [05-boundaries-and-tradeoffs.md](05-boundaries-and-tradeoffs.md) | RBAC、全量导入、异构鉴权：承认没做，但要讲清为什么 |
 
 ## 讲解顺序建议
 
@@ -22,7 +23,8 @@
 - 问"业务系统要改代码吗" → `02 §2-§4`；
 - 问"为什么不用 LangChain / Spring AI 自动执行" → `03 §2、§4`；
 - 问"上下文太长怎么办 / RAG 怎么做" → `04 §2-§4`；
-- 问"多实例 / 服务发现 / 注册中心" → `02 §4` + `adr/ADR-008 §9` + `adr/ADR-009`。
+- 问"多实例 / 服务发现 / 注册中心" → `02 §4` + `adr/ADR-008 §9` + `adr/ADR-009`；
+- 问"是不是 RBAC / 生产怎么落地 / 异构鉴权 / 零改造是不是话术" → `05 §1-§4`。
 
 ## 交叉引用
 
