@@ -154,6 +154,6 @@ class ToolSourceAdminControllerTest {
     private static ContractSyncService.SourceView view(String key) {
         return new ContractSyncService.SourceView(key, "gw1", "http://h/v3/api-docs", null,
                 ToolSource.ORIGIN_ADMIN, true, true, ToolSource.STATUS_OK, "hash", 2,
-                0, 0, 0, 0, LocalDateTime.now(), LocalDateTime.now(), null);
+                0, 0, 0, 0, List.of(), List.of(), LocalDateTime.now(), LocalDateTime.now(), null);
     }
 }

@@ -88,6 +88,36 @@ class SessionControllerTest {
     }
 
     @Test
+    void usageWithoutTokenRejectedWith401() throws Exception {
+        mockMvc.perform(get("/api/v1/sessions/sk-mine/usage"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void usageOfForeignSessionRejectedWith403() throws Exception {
+        when(sessionService.ownsSession("sk-other", 7L)).thenReturn(false);
+
+        mockMvc.perform(get("/api/v1/sessions/sk-other/usage")
+                        .header("Authorization", "Bearer " + jwtService.issue(new UserPrincipal(7L, "STAFF"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void usageReturnsSessionTotals() throws Exception {
+        when(sessionService.ownsSession("sk-mine", 7L)).thenReturn(true);
+        when(sessionService.usageOf("sk-mine"))
+                .thenReturn(new AgentSessionService.UsageSummary(320, 110, 430, 2));
+
+        mockMvc.perform(get("/api/v1/sessions/sk-mine/usage")
+                        .header("Authorization", "Bearer " + jwtService.issue(new UserPrincipal(7L, "STAFF"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.promptTokens").value(320))
+                .andExpect(jsonPath("$.completionTokens").value(110))
+                .andExpect(jsonPath("$.totalTokens").value(430))
+                .andExpect(jsonPath("$.calls").value(2));
+    }
+
+    @Test
     void deleteWithoutTokenRejectedWith401() throws Exception {
         mockMvc.perform(delete("/api/v1/sessions/sk-mine"))
                 .andExpect(status().isUnauthorized());

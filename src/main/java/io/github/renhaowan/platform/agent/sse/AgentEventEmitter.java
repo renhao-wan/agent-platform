@@ -82,4 +82,14 @@ public class AgentEventEmitter {
     public void done() {
         send(EventType.DONE, Map.of());
     }
+
+    /** 正常跑完一轮时的统计：步数、耗时与 token，前端据此展示本轮成本。 */
+    public void done(int steps, long elapsedMs, int promptTokens, int completionTokens) {
+        send(EventType.DONE, Map.of(
+                "steps", steps,
+                "elapsedMs", elapsedMs,
+                "promptTokens", promptTokens,
+                "completionTokens", completionTokens,
+                "totalTokens", promptTokens + completionTokens));
+    }
 }

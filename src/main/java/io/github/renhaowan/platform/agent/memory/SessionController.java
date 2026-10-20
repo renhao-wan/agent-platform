@@ -47,6 +47,16 @@ public class SessionController {
         return ResponseEntity.ok(messages);
     }
 
+    /** 会话累计用量：与历史读取同一套归属校验，不暴露他人会话的成本信息。 */
+    @GetMapping("/api/v1/sessions/{sessionKey}/usage")
+    public ResponseEntity<AgentSessionService.UsageSummary> usage(@PathVariable String sessionKey) {
+        UserPrincipal principal = UserContext.get();
+        if (!sessionService.ownsSession(sessionKey, principal.uid())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        return ResponseEntity.ok(sessionService.usageOf(sessionKey));
+    }
+
     @DeleteMapping("/api/v1/sessions/{sessionKey}")
     public ResponseEntity<Void> delete(@PathVariable String sessionKey) {
         UserPrincipal principal = UserContext.get();

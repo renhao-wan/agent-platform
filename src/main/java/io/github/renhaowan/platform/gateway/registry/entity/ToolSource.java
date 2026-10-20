@@ -65,7 +65,15 @@ public class ToolSource {
 
     private Integer lastStale;
 
+    /** 上次成功对账下线的工具名列表（JSON 数组），供管理端展开查看明细。 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String lastStaleTools;
+
     private Integer lastBreaking;
+
+    /** 上次成功对账的破坏性变更明细（JSON 数组）。 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String lastBreakingChanges;
 
     private LocalDateTime lastAttemptAt;
 

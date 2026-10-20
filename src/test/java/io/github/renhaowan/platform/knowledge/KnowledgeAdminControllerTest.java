@@ -11,6 +11,9 @@ import io.github.renhaowan.platform.knowledge.eval.KnowledgeEvalService;
 import io.github.renhaowan.platform.knowledge.index.KnowledgeIndexJobRepository.Job;
 import io.github.renhaowan.platform.knowledge.index.KnowledgeIndexService;
 import io.github.renhaowan.platform.knowledge.search.KnowledgeSearchAuditRepository;
+import io.github.renhaowan.platform.knowledge.search.KnowledgeSearchService;
+import io.github.renhaowan.platform.knowledge.search.KnowledgeSearchService.SearchHit;
+import io.github.renhaowan.platform.knowledge.search.KnowledgeSearchService.SearchOutcome;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -79,7 +82,7 @@ class KnowledgeAdminControllerTest {
         when(service.evaluate(4)).thenReturn(report);
 
         ApiResponse<?> response = new KnowledgeAdminController(mockProvider(null),
-                mockProvider(null), mockProvider(null), mockProvider(service)).eval(4);
+                mockProvider(null), mockProvider(null), mockProvider(service), mockProvider(null)).eval(4);
 
         assertThat(response.code()).isEqualTo(ApiResponse.OK_CODE);
         assertThat(response.data()).isEqualTo(report);
@@ -91,15 +94,56 @@ class KnowledgeAdminControllerTest {
         when(service.evaluate(4)).thenThrow(new IllegalStateException("评估集不存在"));
 
         ApiResponse<?> response = new KnowledgeAdminController(mockProvider(null),
-                mockProvider(null), mockProvider(null), mockProvider(service)).eval(4);
+                mockProvider(null), mockProvider(null), mockProvider(service), mockProvider(null)).eval(4);
 
         assertThat(response.code()).isEqualTo(400);
         assertThat(response.message()).contains("评估集不存在");
     }
 
+    @Test
+    void searchReturns503WhenKnowledgeDisabled() {
+        ApiResponse<?> response = controller(null)
+                .search(new KnowledgeAdminController.SearchBody("年假怎么算", "STAFF", 4));
+
+        assertThat(response.code()).isEqualTo(503);
+        assertThat(response.message()).contains("EMBEDDING_API_KEY");
+    }
+
+    @Test
+    void searchRejectsBlankQueryWithoutHittingSearchService() {
+        KnowledgeSearchService service = mock(KnowledgeSearchService.class);
+
+        ApiResponse<?> response = new KnowledgeAdminController(mockProvider(null),
+                mockProvider(null), mockProvider(null), mockProvider(null), mockProvider(service))
+                .search(new KnowledgeAdminController.SearchBody("   ", "STAFF", 4));
+
+        assertThat(response.code()).isEqualTo(400);
+        verify(service, org.mockito.Mockito.never())
+                .searchDetailed(org.mockito.ArgumentMatchers.anyLong(),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyInt(),
+                        org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void searchReturnsHitsAndModeWithRequestedRole() {
+        KnowledgeSearchService service = mock(KnowledgeSearchService.class);
+        SearchOutcome outcome = new SearchOutcome(
+                List.of(new SearchHit("员工手册", "年假", "入职满一年享受 5 天年假", 0.82)),
+                "vector", 12);
+        when(service.searchDetailed(0L, "年假", 6, "STAFF")).thenReturn(outcome);
+
+        ApiResponse<?> response = new KnowledgeAdminController(mockProvider(null),
+                mockProvider(null), mockProvider(null), mockProvider(null), mockProvider(service))
+                .search(new KnowledgeAdminController.SearchBody("年假", "STAFF", 6));
+
+        assertThat(response.code()).isEqualTo(ApiResponse.OK_CODE);
+        assertThat(response.data()).isEqualTo(outcome);
+    }
+
     private static KnowledgeAdminController controller(KnowledgeIndexService service) {
         return new KnowledgeAdminController(mockProvider(service),
-                mockProvider(null), mockProvider(null), mockProvider(null));
+                mockProvider(null), mockProvider(null), mockProvider(null), mockProvider(null));
     }
 
     @SuppressWarnings("unchecked")

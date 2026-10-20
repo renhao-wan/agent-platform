@@ -1,6 +1,7 @@
 package io.github.renhaowan.platform.gateway.registry.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.renhaowan.platform.agent.AgentProperties;
 import io.github.renhaowan.platform.gateway.registry.ContractFetcher;
 import io.github.renhaowan.platform.gateway.registry.ContractSyncService;
@@ -44,11 +45,13 @@ public class ContractSyncServiceImpl implements ContractSyncService {
     private final ContractFetcher fetcher;
     private final ApplicationEventPublisher events;
     private final MeterRegistry meterRegistry;
+    private final ObjectMapper objectMapper;
 
     public ContractSyncServiceImpl(SourceRegistryService sourceRegistry, AgentProperties agentProperties,
                                    OpenApiImportService importService, ToolRegistryService registryService,
                                    ToolSourceMapper sourceMapper, ContractFetcher fetcher,
-                                   ApplicationEventPublisher events, MeterRegistry meterRegistry) {
+                                   ApplicationEventPublisher events, MeterRegistry meterRegistry,
+                                   ObjectMapper objectMapper) {
         this.sourceRegistry = sourceRegistry;
         this.agentProperties = agentProperties;
         this.importService = importService;
@@ -57,6 +60,7 @@ public class ContractSyncServiceImpl implements ContractSyncService {
         this.fetcher = fetcher;
         this.events = events;
         this.meterRegistry = meterRegistry;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -233,7 +237,9 @@ public class ContractSyncServiceImpl implements ContractSyncService {
         source.setLastAdded(result.added());
         source.setLastUpdated(result.updated());
         source.setLastStale(result.stale());
+        source.setLastStaleTools(writeJson(result.staleNames()));
         source.setLastBreaking(result.breakingChanges().size());
+        source.setLastBreakingChanges(writeJson(result.breakingChanges()));
         source.setLastAttemptAt(LocalDateTime.now());
         source.setLastSuccessAt(source.getLastAttemptAt());
         source.setLastError(null);
@@ -297,5 +303,15 @@ public class ContractSyncServiceImpl implements ContractSyncService {
 
     private static String truncate(String text) {
         return text.length() <= 500 ? text : text.substring(0, 500);
+    }
+
+    /** 明细只服务管理端展开：序列化失败退化为空数组，不影响对账本身。 */
+    private String writeJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception e) {
+            log.warn("来源对账明细序列化失败：{}", e.getMessage());
+            return "[]";
+        }
     }
 }

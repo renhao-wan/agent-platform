@@ -5,12 +5,14 @@ import io.github.renhaowan.platform.knowledge.embedding.EmbeddingUsageRepository
 import io.github.renhaowan.platform.knowledge.eval.KnowledgeEvalService;
 import io.github.renhaowan.platform.knowledge.index.KnowledgeIndexService;
 import io.github.renhaowan.platform.knowledge.search.KnowledgeSearchAuditRepository;
+import io.github.renhaowan.platform.knowledge.search.KnowledgeSearchService;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -26,6 +28,33 @@ public class KnowledgeAdminController {
     private final ObjectProvider<KnowledgeSearchAuditRepository> auditRepository;
     private final ObjectProvider<EmbeddingUsageRepository> usageRepository;
     private final ObjectProvider<KnowledgeEvalService> evalService;
+    private final ObjectProvider<KnowledgeSearchService> searchService;
+
+    public record SearchBody(String query, String role, Integer topK) {
+    }
+
+    /**
+     * 检索调试：用指定角色跑一次真实检索，直接看到命中块与 SQL 级角色过滤的效果。
+     * <p>仅 /admin/** 可达。允许指定角色是为了验证"STAFF 看不到 ADMIN 文档"；
+     * 这不是越权通道——它只读，且 ADMIN 本身就有全量可见性。
+     */
+    @PostMapping("/admin/knowledge/search")
+    public ApiResponse<?> search(@RequestBody SearchBody body) {
+        KnowledgeSearchService service = searchService.getIfAvailable();
+        if (service == null) {
+            return ApiResponse.error(503, "知识库未启用（EMBEDDING_API_KEY 为空）");
+        }
+        String query = body.query() == null ? "" : body.query().strip();
+        if (query.isEmpty()) {
+            return ApiResponse.error(400, "query 不能为空");
+        }
+        int topK = body.topK() == null ? 4 : body.topK();
+        try {
+            return ApiResponse.ok(service.searchDetailed(0L, query, topK, body.role()));
+        } catch (RuntimeException e) {
+            return ApiResponse.error(500, "检索失败：" + e.getMessage());
+        }
+    }
 
     /** 异步提交：立即返回 jobId，进度用 /jobs 查询，避免管理端请求被长索引拖住。 */
     @PostMapping("/admin/knowledge/reindex")

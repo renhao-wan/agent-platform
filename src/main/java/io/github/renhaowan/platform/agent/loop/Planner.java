@@ -11,6 +11,11 @@ import org.springframework.ai.tool.ToolCallback;
  */
 public interface Planner {
 
+    /** 实际使用的模型名，仅用于用量打点；实现未配置时返回 unknown。 */
+    default String modelName() {
+        return "unknown";
+    }
+
     /**
      * @param history 含 system 前缀、历史消息与本轮用户输入
      * @param tools   网关动态发现的工具（仅作 schema 广告位）

@@ -1,7 +1,9 @@
 package io.github.renhaowan.platform.agent.loop;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.contains;
@@ -108,7 +110,7 @@ class AgentRunnerTest {
         verify(events).toolCall(eq("search_rooms"), contains("2026-10-01"));
         verify(events).toolResult(eq("search_rooms"), contains("rooms"));
         verify(events).answer("已为你找到 3 间可用会议室");
-        verify(events).done();
+        verify(events).done(anyInt(), anyLong(), anyInt(), anyInt());
         verify(sessionService).appendMessage(eq("s1"), eq(ChatMessage.ROLE_USER), anyString(), eq((String) null));
         verify(sessionService).appendMessage(eq("s1"), eq(ChatMessage.ROLE_TOOL), contains("rooms"), eq("search_rooms"));
         verify(sessionService).appendMessage(eq("s1"), eq(ChatMessage.ROLE_ASSISTANT), anyString(), eq((String) null));
@@ -169,7 +171,7 @@ class AgentRunnerTest {
 
         verify(toolGateway).callTool(eq("cancel_booking"), contains("42"), any());
         verify(events).answer("已取消");
-        verify(events).done();
+        verify(events).done(anyInt(), anyLong(), anyInt(), anyInt());
     }
 
     @Test
@@ -238,7 +240,7 @@ class AgentRunnerTest {
         runner().run("s1", "随便查查", events, staff);
 
         verify(events).error(contains("最大推理步数"));
-        verify(events).done();
+        verify(events).done(anyInt(), anyLong(), anyInt(), anyInt());
         verify(toolGateway, times(3)).callTool(anyString(), anyString(), any());
     }
 }

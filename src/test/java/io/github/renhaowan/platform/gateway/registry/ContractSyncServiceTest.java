@@ -67,7 +67,7 @@ class ContractSyncServiceTest {
     private ContractSyncService service() {
         return new ContractSyncServiceImpl(sourceRegistry, agentProperties,
                 new OpenApiImportServiceImpl(), registryService, sourceMapper, fetcher, events,
-                new SimpleMeterRegistry());
+                new SimpleMeterRegistry(), new com.fasterxml.jackson.databind.ObjectMapper());
     }
 
     private ToolSource source(String id, String url) {

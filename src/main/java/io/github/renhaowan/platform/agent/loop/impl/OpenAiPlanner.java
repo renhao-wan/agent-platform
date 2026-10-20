@@ -34,6 +34,11 @@ public class OpenAiPlanner implements Planner {
         this.modelName = environment.getProperty("spring.ai.openai.chat.options.model", "");
     }
 
+    @Override
+    public String modelName() {
+        return modelName == null || modelName.isBlank() ? "unknown" : modelName;
+    }
+
     /**
      * 单轮决策：把整段对话历史 + 工具清单发给大模型，只取回"这一步怎么走"，不执行任何工具。
      *

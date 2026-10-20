@@ -1,5 +1,6 @@
 package io.github.renhaowan.platform.gateway.web;
 
+import io.github.renhaowan.platform.agent.AgentProperties;
 import io.github.renhaowan.platform.common.ApiResponse;
 import io.github.renhaowan.platform.gateway.registry.ToolCatalogChangedEvent;
 import io.github.renhaowan.platform.gateway.registry.ToolRegistryService;
@@ -45,11 +46,16 @@ public class ProtocolAdminController {
 
     private final ToolRegistryService registryService;
     private final ApplicationEventPublisher events;
+    private final AgentProperties agentProperties;
 
-    /** 管理端视图包含已下线/已禁用的工具，便于观察对账结果。 */
+    /** gatewayId 可选：管理台只有一个运行时网关，缺省取当前配置。 */
     @GetMapping("/tools")
-    public ApiResponse<List<ToolView>> listTools(@RequestParam String gatewayId) {
-        return ApiResponse.ok(registryService.listAll(gatewayId)
+    public ApiResponse<List<ToolView>> listTools(
+            @RequestParam(required = false) String gatewayId) {
+        String scope = gatewayId == null || gatewayId.isBlank()
+                ? agentProperties.getGatewayId()
+                : gatewayId;
+        return ApiResponse.ok(registryService.listAll(scope)
                 .stream().map(ToolView::of).toList());
     }
 

@@ -44,9 +44,17 @@ public class KnowledgeSearchService {
     }
 
     public List<SearchHit> search(long userId, String query, int requestedTopK, String role) {
+        return searchDetailed(userId, query, requestedTopK, role).hits();
+    }
+
+    /**
+     * 与 {@link #search} 相同的检索路径，额外返回实际使用的模式与耗时，
+     * 供管理端调试面板解释"为什么这次是空结果/关键词兜底"。
+     */
+    public SearchOutcome searchDetailed(long userId, String query, int requestedTopK, String role) {
         String normalized = query == null ? "" : query.strip();
         if (normalized.isEmpty()) {
-            return List.of();
+            return new SearchOutcome(List.of(), "empty", 0);
         }
         if (normalized.length() > MAX_QUERY_CHARS) {
             normalized = normalized.substring(0, MAX_QUERY_CHARS);
@@ -67,7 +75,7 @@ public class KnowledgeSearchService {
                     }
                 }
             }
-            return hits;
+            return new SearchOutcome(List.copyOf(hits), mode, (System.nanoTime() - started) / 1_000_000);
         } catch (RuntimeException e) {
             mode = "error";
             throw e;
@@ -181,5 +189,9 @@ public class KnowledgeSearchService {
     }
 
     public record SearchHit(String title, String section, String text, double score) {
+    }
+
+    /** hits + 实际检索模式（vector/keyword/empty）+ 耗时，调试面板的返回形状。 */
+    public record SearchOutcome(List<SearchHit> hits, String mode, long elapsedMs) {
     }
 }

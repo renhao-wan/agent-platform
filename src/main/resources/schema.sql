@@ -54,6 +54,18 @@ SET @ddl = IF(@idx_exists = 0,
   'ALTER TABLE tool_definition ADD INDEX idx_tool_source (gateway_id, source_key)', 'SELECT 1');
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_source' AND COLUMN_NAME='last_stale_tools');
+SET @ddl = IF(@col_exists = 0,
+  'ALTER TABLE tool_source ADD COLUMN last_stale_tools TEXT NULL AFTER last_stale', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_source' AND COLUMN_NAME='last_breaking_changes');
+SET @ddl = IF(@col_exists = 0,
+  'ALTER TABLE tool_source ADD COLUMN last_breaking_changes TEXT NULL AFTER last_breaking', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 -- 每个契约来源的最近一次对账结果（last-known-good 与失败原因都落库，重启不丢）
 CREATE TABLE IF NOT EXISTS tool_source (
     source_key      VARCHAR(128) NOT NULL PRIMARY KEY,
@@ -65,7 +77,9 @@ CREATE TABLE IF NOT EXISTS tool_source (
     last_added      INT          NOT NULL DEFAULT 0,
     last_updated    INT          NOT NULL DEFAULT 0,
     last_stale      INT          NOT NULL DEFAULT 0,
+    last_stale_tools TEXT        NULL,
     last_breaking   INT          NOT NULL DEFAULT 0,
+    last_breaking_changes TEXT   NULL,
     last_attempt_at DATETIME     NULL,
     last_success_at DATETIME     NULL,
     last_error      VARCHAR(512) NULL

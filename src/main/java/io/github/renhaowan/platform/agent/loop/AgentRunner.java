@@ -93,18 +93,29 @@ public class AgentRunner {
             tools.add(knowledgeSearch.callback());
         }
 
+        long startedAt = System.nanoTime();
+        int steps = 0;
+        int promptTokens = 0;
+        int completionTokens = 0;
+        String model = planner.modelName();
+        if (model == null || model.isBlank()) {
+            model = "unknown";
+        }
+
         for (int step = 0; step < properties.getMaxSteps(); step++) {
             ChatResponse response = planner.decide(history, tools);
+            steps++;
             var usage = response.getMetadata() == null ? null : response.getMetadata().getUsage();
-            tokenRecorder.record(sessionKey, "decide",
-                    response.getMetadata() == null ? "unknown" : "openai-compatible",
-                    usage == null ? 0 : usage.getPromptTokens(),
-                    usage == null ? 0 : usage.getCompletionTokens());
+            int prompt = usage == null ? 0 : usage.getPromptTokens();
+            int completion = usage == null ? 0 : usage.getCompletionTokens();
+            promptTokens += prompt;
+            completionTokens += completion;
+            tokenRecorder.record(sessionKey, "decide", model, prompt, completion);
 
             AssistantMessage output = response.getResult() == null ? null : response.getResult().getOutput();
             if (output == null) {
                 events.error("model returned empty response");
-                events.done();
+                events.done(steps, elapsedMs(startedAt), promptTokens, completionTokens);
                 return;
             }
 
@@ -112,7 +123,7 @@ public class AgentRunner {
                 String answer = output.getText() == null ? "" : output.getText();
                 events.answer(answer);
                 sessionService.appendMessage(sessionKey, ChatMessage.ROLE_ASSISTANT, answer, null);
-                events.done();
+                events.done(steps, elapsedMs(startedAt), promptTokens, completionTokens);
                 return;
             }
 
@@ -167,7 +178,11 @@ public class AgentRunner {
         }
 
         events.error("已达最大推理步数 " + properties.getMaxSteps() + "，对话终止");
-        events.done();
+        events.done(steps, elapsedMs(startedAt), promptTokens, completionTokens);
+    }
+
+    private static long elapsedMs(long startedAt) {
+        return (System.nanoTime() - startedAt) / 1_000_000;
     }
 
     private String resolveSystemPrompt() {

@@ -7,7 +7,9 @@ import io.github.renhaowan.platform.agent.memory.mapper.ChatMessageMapper;
 import io.github.renhaowan.platform.agent.memory.entity.ChatSession;
 import io.github.renhaowan.platform.agent.memory.mapper.ChatSessionMapper;
 import io.github.renhaowan.platform.agent.memory.entity.Checkpoint;
+import io.github.renhaowan.platform.agent.memory.entity.LlmUsage;
 import io.github.renhaowan.platform.agent.memory.mapper.CheckpointMapper;
+import io.github.renhaowan.platform.agent.memory.mapper.LlmUsageMapper;
 import jakarta.annotation.PreDestroy;
 import java.util.HashMap;
 import java.util.List;
@@ -25,6 +27,7 @@ public class AgentSessionServiceImpl implements AgentSessionService {
     private final ChatSessionMapper sessionMapper;
     private final ChatMessageMapper messageMapper;
     private final CheckpointMapper checkpointMapper;
+    private final LlmUsageMapper usageMapper;
 
     @Override
     public String createSession(Long userId) {
@@ -50,6 +53,19 @@ public class AgentSessionServiceImpl implements AgentSessionService {
     public List<ChatMessage> loadHistory(String sessionKey) {
         return messageMapper.selectList(new QueryWrapper<ChatMessage>()
                 .eq("session_key", sessionKey).orderByAsc("id").last("LIMIT 200"));
+    }
+
+    @Override
+    public UsageSummary usageOf(String sessionKey) {
+        List<LlmUsage> rows = usageMapper.selectList(new QueryWrapper<LlmUsage>()
+                .eq("session_key", sessionKey));
+        int prompt = 0;
+        int completion = 0;
+        for (LlmUsage row : rows) {
+            prompt += row.getPromptTokens() == null ? 0 : row.getPromptTokens();
+            completion += row.getCompletionTokens() == null ? 0 : row.getCompletionTokens();
+        }
+        return new UsageSummary(prompt, completion, prompt + completion, rows.size());
     }
 
     @Override

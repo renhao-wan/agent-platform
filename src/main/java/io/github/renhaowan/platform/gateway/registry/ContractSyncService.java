@@ -35,8 +35,13 @@ public interface ContractSyncService {
     record SourceView(String sourceKey, String gatewayId, String contractUrl, String baseUrl,
                       String origin, boolean enabled, boolean serviceKeyConfigured, String status,
                       String contractHash, int toolCount, int lastAdded, int lastUpdated,
-                      int lastStale, int lastBreaking, LocalDateTime lastAttemptAt,
+                      int lastStale, int lastBreaking,
+                      List<String> staleTools, List<ToolRegistryService.BreakingChange> breakingChanges,
+                      LocalDateTime lastAttemptAt,
                       LocalDateTime lastSuccessAt, String lastError) {
+
+        private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
+                new com.fasterxml.jackson.databind.ObjectMapper();
 
         public static SourceView of(ToolSource source) {
             return new SourceView(source.getSourceKey(), source.getGatewayId(), source.getContractUrl(),
@@ -45,12 +50,26 @@ public interface ContractSyncService {
                     source.getServiceKeyValue() != null && !source.getServiceKeyValue().isBlank(),
                     source.getStatus(), source.getContractHash(), intOf(source.getToolCount()),
                     intOf(source.getLastAdded()), intOf(source.getLastUpdated()), intOf(source.getLastStale()),
-                    intOf(source.getLastBreaking()), source.getLastAttemptAt(), source.getLastSuccessAt(),
-                    source.getLastError());
+                    intOf(source.getLastBreaking()),
+                    parseList(source.getLastStaleTools(), String.class),
+                    parseList(source.getLastBreakingChanges(), ToolRegistryService.BreakingChange.class),
+                    source.getLastAttemptAt(), source.getLastSuccessAt(), source.getLastError());
         }
 
         private static int intOf(Integer value) {
             return value == null ? 0 : value;
+        }
+
+        /** 明细列是观测信息：解析失败按"无明细"处理，不能让来源列表整个 500。 */
+        private static <T> List<T> parseList(String json, Class<T> type) {
+            if (json == null || json.isBlank()) {
+                return List.of();
+            }
+            try {
+                return JSON.readValue(json, JSON.getTypeFactory().constructCollectionType(List.class, type));
+            } catch (Exception e) {
+                return List.of();
+            }
         }
     }
 

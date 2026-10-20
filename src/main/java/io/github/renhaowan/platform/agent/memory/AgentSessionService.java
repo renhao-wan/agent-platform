@@ -15,6 +15,10 @@ public interface AgentSessionService {
     record SessionSummary(String sessionKey, String title, LocalDateTime createdAt) {
     }
 
+    /** 会话累计 token 用量；totalTokens 含 prompt 与 completion。 */
+    record UsageSummary(int promptTokens, int completionTokens, int totalTokens, int calls) {
+    }
+
     /** 创建会话并绑定归属用户（user_id 决定续聊时的归属校验）。 */
     String createSession(Long userId);
 
@@ -24,6 +28,9 @@ public interface AgentSessionService {
     void appendMessage(String sessionKey, String role, String content, String toolName);
 
     List<ChatMessage> loadHistory(String sessionKey);
+
+    /** 汇总该会话的 LLM 用量。会话不存在时返回全 0，不产生额外查询口径。 */
+    UsageSummary usageOf(String sessionKey);
 
     void saveCheckpoint(String sessionKey, String summary);
 

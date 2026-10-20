@@ -8,10 +8,12 @@ import static org.mockito.Mockito.when;
 
 import io.github.renhaowan.platform.agent.memory.entity.ChatMessage;
 import io.github.renhaowan.platform.agent.memory.entity.ChatSession;
+import io.github.renhaowan.platform.agent.memory.entity.LlmUsage;
 import io.github.renhaowan.platform.agent.memory.impl.AgentSessionServiceImpl;
 import io.github.renhaowan.platform.agent.memory.mapper.ChatMessageMapper;
 import io.github.renhaowan.platform.agent.memory.mapper.ChatSessionMapper;
 import io.github.renhaowan.platform.agent.memory.mapper.CheckpointMapper;
+import io.github.renhaowan.platform.agent.memory.mapper.LlmUsageMapper;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -31,6 +33,8 @@ class AgentSessionServiceImplTest {
     private ChatMessageMapper messageMapper;
     @Mock
     private CheckpointMapper checkpointMapper;
+    @Mock
+    private LlmUsageMapper usageMapper;
 
     @InjectMocks
     private AgentSessionServiceImpl service;
@@ -131,6 +135,34 @@ class AgentSessionServiceImplTest {
 
         assertThat(service.deleteSession("sk-missing", 7L)).isFalse();
         verifyNoInteractions(messageMapper, checkpointMapper);
+    }
+
+    @Test
+    void usageOfSumsPromptAndCompletionTokens() {
+        when(usageMapper.selectList(any())).thenReturn(List.of(
+                usage(120, 30), usage(200, 80)));
+
+        AgentSessionService.UsageSummary usage = service.usageOf("sk-mine");
+
+        assertThat(usage.promptTokens()).isEqualTo(320);
+        assertThat(usage.completionTokens()).isEqualTo(110);
+        assertThat(usage.totalTokens()).isEqualTo(430);
+        assertThat(usage.calls()).isEqualTo(2);
+    }
+
+    @Test
+    void usageOfEmptySessionReturnsZeros() {
+        when(usageMapper.selectList(any())).thenReturn(List.of());
+
+        assertThat(service.usageOf("sk-empty"))
+                .isEqualTo(new AgentSessionService.UsageSummary(0, 0, 0, 0));
+    }
+
+    private LlmUsage usage(int prompt, int completion) {
+        LlmUsage usage = new LlmUsage();
+        usage.setPromptTokens(prompt);
+        usage.setCompletionTokens(completion);
+        return usage;
     }
 
     private ChatSession session(String key, Long userId, LocalDateTime createdAt) {
