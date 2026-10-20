@@ -203,6 +203,28 @@ class AgentRunnerTest {
     }
 
     @Test
+    void roleDenialSkipsConfirmAndNeverExecutes() {
+        when(sessionService.loadHistory("s1")).thenReturn(List.of());
+        when(planner.decide(anyList(), any()))
+                .thenReturn(toolCallResponse("c1", "cancel_booking", "{\"id\":42}"),
+                        answerResponse("这个操作需要管理员权限"));
+        when(toolRegistry.requireConfirm(eq("cancel_booking"))).thenReturn(true);
+        when(toolRegistry.callbacks()).thenReturn(List.of());
+        when(toolGateway.denial(eq("cancel_booking"), any()))
+                .thenReturn(java.util.Optional.of("tool error: 权限不足：需要 ADMIN 角色"));
+
+        runner().run("s1", "取消刚才那个预订", events, staff);
+
+        // 无权限时不该让用户点一次注定失败的确认，也不该真的执行
+        verify(events, never()).confirmRequest(anyString(), anyString());
+        verify(toolGateway, never()).callTool(anyString(), anyString(), any());
+        verify(events).toolResult(eq("cancel_booking"), contains("权限不足"));
+        verify(sessionService).appendMessage(eq("s1"), eq(ChatMessage.ROLE_TOOL),
+                contains("权限不足"), eq("cancel_booking"));
+        verify(events).answer("这个操作需要管理员权限");
+    }
+
+    @Test
     void exceedsMaxStepsTerminatesWithError() {
         properties.setMaxSteps(3);
         when(sessionService.loadHistory("s1")).thenReturn(List.of());

@@ -125,14 +125,24 @@ public class AgentRunner {
             List<ToolResponseMessage.ToolResponse> responses = new ArrayList<>();
             for (AssistantMessage.ToolCall call : calls) {
                 boolean approved = true;
+                String denial = null;
                 if (toolRegistry.requireConfirm(call.name())) {
-                    String token = confirmManager.request(sessionKey, call.name(), call.arguments());
-                    events.confirmRequest(token, "即将执行敏感操作：" + call.name() + "，请确认");
-                    approved = Boolean.TRUE.equals(confirmManager.await(token, properties.getConfirmTimeoutSeconds()));
+                    // 先做只读角色预判：无权限用户不该先点一次注定失败的确认。
+                    // 预判只决定"是否弹确认"，真正的边界仍是执行点的闸门 2。
+                    denial = toolGateway.denial(call.name(), principal).orElse(null);
+                    if (denial == null) {
+                        String token = confirmManager.request(sessionKey, call.name(), call.arguments());
+                        events.confirmRequest(token, "即将执行敏感操作：" + call.name() + "，请确认");
+                        approved = Boolean.TRUE.equals(confirmManager.await(token, properties.getConfirmTimeoutSeconds()));
+                    }
                 }
 
                 String resultText;
-                if (!approved) {
+                if (denial != null) {
+                    events.toolCall(call.name(), call.arguments() == null ? "{}" : call.arguments());
+                    events.toolResult(call.name(), summarize(denial));
+                    resultText = denial;
+                } else if (!approved) {
                     resultText = "用户拒绝了该操作";
                 } else if (historyRecallTool.handles(call.name())) {
                     // 平台内部工具本地执行：不进网关、无确认/角色闸门（只读当前会话自己的历史）

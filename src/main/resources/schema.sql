@@ -71,6 +71,38 @@ CREATE TABLE IF NOT EXISTS tool_source (
     last_error      VARCHAR(512) NULL
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '契约来源与最近一次对账状态';
 
+-- 来源注册表（ADR-009 演进第一步）：配置只做首次种子，管理端可在运行时增删改。
+-- origin 决定所有权：CONFIG 由启动种子刷新，管理员编辑后提升为 ADMIN，配置不再覆盖。
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_source' AND COLUMN_NAME='origin');
+SET @ddl = IF(@col_exists = 0,
+  'ALTER TABLE tool_source ADD COLUMN origin VARCHAR(16) NOT NULL DEFAULT ''CONFIG'' AFTER contract_url', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_source' AND COLUMN_NAME='enabled');
+SET @ddl = IF(@col_exists = 0,
+  'ALTER TABLE tool_source ADD COLUMN enabled TINYINT NOT NULL DEFAULT 1 AFTER origin', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_source' AND COLUMN_NAME='base_url');
+SET @ddl = IF(@col_exists = 0,
+  'ALTER TABLE tool_source ADD COLUMN base_url VARCHAR(512) NULL AFTER contract_url', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_source' AND COLUMN_NAME='service_key_name');
+SET @ddl = IF(@col_exists = 0,
+  'ALTER TABLE tool_source ADD COLUMN service_key_name VARCHAR(64) NULL AFTER base_url', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_source' AND COLUMN_NAME='service_key_value');
+SET @ddl = IF(@col_exists = 0,
+  'ALTER TABLE tool_source ADD COLUMN service_key_value VARCHAR(256) NULL AFTER service_key_name', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_definition' AND COLUMN_NAME='tenant_id');
 SET @ddl = IF(@col_exists > 0, 'ALTER TABLE tool_definition DROP COLUMN tenant_id', 'SELECT 1');

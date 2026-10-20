@@ -6,11 +6,11 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * 工具层的接入来源（application.yml 的 platform.gateway.sources）。
+ * 工具层的接入来源种子（application.yml 的 platform.gateway.sources）。
  * <p>
- * 每个来源是一个 OpenAPI 契约地址。平台启动时逐个拉取、解析并注册成工具，于是
- * "业务系统的契约可访问" 就等于 "它的工具可用"，不必人工逐次导入。列表留空则跳过
- * 自动注册，完全依赖 {@code POST /admin/protocols/import} 手工导入。
+ * 每项是一个 OpenAPI 契约地址。启动时写入来源注册表（tool_source）：已存在的 CONFIG 来源按
+ * 配置刷新，从配置移除的 CONFIG 来源软下线。管理员可在运行时通过 /admin/sources 增删改，
+ * 编辑过的来源归管理端所有，配置不再覆盖。
  */
 @Data
 @ConfigurationProperties(prefix = "platform.gateway")

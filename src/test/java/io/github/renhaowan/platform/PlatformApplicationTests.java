@@ -5,7 +5,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest(properties = {
         "spring.sql.init.mode=never",
-        "platform.gateway.sync-on-startup=false"
+        "platform.gateway.sync-on-startup=false",
+        "platform.gateway.seed-on-startup=false"
 })
 class PlatformApplicationTests {
 

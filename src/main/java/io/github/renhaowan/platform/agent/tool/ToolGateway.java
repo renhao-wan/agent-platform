@@ -3,6 +3,7 @@ package io.github.renhaowan.platform.agent.tool;
 import io.github.renhaowan.platform.agent.auth.UserPrincipal;
 import io.github.renhaowan.platform.gateway.registry.entity.ToolDefinition;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Agent 访问工具层的唯一出口。
@@ -24,4 +25,13 @@ public interface ToolGateway {
      * 模型看到错误后自行决定重试/换路/放弃，这是 ReAct 循环容错的关键。
      */
     String callTool(String name, String argumentsJson, UserPrincipal user);
+
+    /**
+     * 只读授权预判：返回拒绝文本（含 tool error 前缀）表示执行必然失败，empty 表示可继续。
+     * <p>
+     * 循环只在<b>弹确认之前</b>调用它，用于跳过注定失败的确认；它不替代执行点鉴权。
+     */
+    default Optional<String> denial(String name, UserPrincipal user) {
+        return Optional.empty();
+    }
 }

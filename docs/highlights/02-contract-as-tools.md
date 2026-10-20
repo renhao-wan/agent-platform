@@ -19,7 +19,7 @@
 1. **契约即工具**：`operationId` 是工具名，`summary` 是工具描述，参数合成 `inputSchema`，`x-required-role` / `x-require-confirm` 是权限声明。
 2. **持续对账**：不是"导入一次"，而是每轮拿契约推导的期望状态与库内工具收敛（ADR-008）。
 3. **失败语义**：后端非 2xx / 超时 / 权限不足 / 用户拒绝，一律包装成 `isError` 文本观察回喂模型，循环不中断。
-4. **来源可运营**：`GET /admin/sources` 看每个来源最后一次成功与差异计数；`POST /admin/sources/sync` 立即触发。
+4. **来源可运营**：`GET /admin/sources` 看每个来源最后一次成功与差异计数；`POST/PUT/DELETE /admin/sources` 运行时增删改来源；`POST /admin/sources/sync` 立即触发。来源移除即软下线其工具（保留行，复活可恢复）。
 
 ## 2. 契约 → 工具：具体规则
 
@@ -80,7 +80,7 @@
 `{param}` 从 arguments 取值并 URL 编码；GET/DELETE 余参拼 query；POST/PUT/PATCH 余参作 JSON body；schema 声明了 `properties.body` 时自动解包。响应 8KB 截断，防止打爆模型上下文。
 
 **Q：新增一个业务系统要做什么？**
-当前：在 `platform.gateway.sources` 加一项 `id` + `url`，重启平台。要免重启就需要把来源定义搬进数据库并提供管理端 CRUD——这是已识别的缺口，见 ADR-009 的演进路径。
+两种方式，都不用改平台代码、不用重启：① 在 `platform.gateway.sources` 加一项（`id` + `url`），下次启动种子进注册表；② 运行时 `POST /admin/sources` 登记来源（契约地址 + 可选调用基地址 + 服务凭证），保存即对账。之后由契约推导工具，管理员无需也不应手工编辑工具定义。
 
 ## 5. 实测证据
 
@@ -92,7 +92,7 @@
 
 ## 6. 已知边界
 
-- 新增来源需改配置并重启；来源移除后工具不会自动下线（需要生命周期收敛）；
+- 配置只是来源种子；删除 CONFIG 来源需改配置重启，管理员来源可运行时下线；
 - 默认 5 分钟最终一致；
 - 破坏性变更只识别四类且只告警，没有通知渠道；
 - 手工导入（不带 `sourceKey`）产生的工具没有 `source_key`，不在对账范围内，可能成为幽灵工具；

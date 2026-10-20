@@ -119,6 +119,32 @@ class ToolAccessServiceTest {
         verify(forwarder).forward(any(ToolDefinition.class), any(), eq(42L));
     }
 
+    // ---------- 弹确认前的只读预判（不能替代闸门 2） ----------
+
+    @Test
+    void precheckTellsTheLoopToSkipConfirmForWrongRole() {
+        when(registryService.find(GATEWAY, "cancel_booking"))
+                .thenReturn(Optional.of(tool("cancel_booking", "ADMIN")));
+
+        Optional<String> denial = service().denial(GATEWAY, "STAFF", "cancel_booking");
+
+        assertThat(denial).isPresent();
+        assertThat(denial.get()).contains("权限不足").contains("ADMIN");
+        verify(forwarder, never()).forward(any(), any(), any());
+    }
+
+    @Test
+    void precheckPassesForMatchingRoleAndUnknownToolsAreDenied() {
+        when(registryService.find(GATEWAY, "cancel_booking"))
+                .thenReturn(Optional.of(tool("cancel_booking", "ADMIN")));
+        when(registryService.find(GATEWAY, "ghost"))
+                .thenReturn(Optional.empty());
+
+        assertThat(service().denial(GATEWAY, "ADMIN", "cancel_booking")).isEmpty();
+        assertThat(service().denial(GATEWAY, "ADMIN", "ghost")).hasValueSatisfying(
+                reason -> assertThat(reason).contains("unknown tool"));
+    }
+
     // ---------- 失败一律回喂文本，不抛异常 ----------
 
     @Test

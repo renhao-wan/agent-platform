@@ -37,6 +37,29 @@ public class ToolAccessService {
     }
 
     /**
+     * 只读授权预判：返回拒绝文本表示"执行必然失败"，empty 表示可以继续。
+     * <p>
+     * 供 ReAct 循环在<b>弹确认之前</b>使用：无权限用户不该先点一次注定失败的确认。
+     * 预判只能跳过确认，不能替代 {@link #invoke} 里的执行点鉴权——模型幻觉或被注入后
+     * 仍可能绕过预判直接调工具，真正的安全边界永远在执行点。
+     */
+    public Optional<String> denial(String gatewayId, String userRole, String name) {
+        Optional<ToolDefinition> tool = registryService.find(gatewayId, name);
+        if (tool.isEmpty()) {
+            return Optional.of("unknown tool: " + name);
+        }
+        return roleDenial(tool.get(), userRole);
+    }
+
+    private static Optional<String> roleDenial(ToolDefinition tool, String userRole) {
+        String requiredRole = tool.getRequiredRole();
+        if (requiredRole != null && !requiredRole.equals(userRole)) {
+            return Optional.of("权限不足：需要 " + requiredRole + " 角色");
+        }
+        return Optional.empty();
+    }
+
+    /**
      * 闸门 2，通过后泛化转发。任何失败都包装成可读文本回喂模型。
      * <p>
      * {@code userId} 与 {@code userRole} 都取自会话绑定的身份：角色用于闸门 2 判定，
@@ -49,9 +72,9 @@ public class ToolAccessService {
             return new ToolCallResult(true, "unknown tool: " + name);
         }
 
-        String requiredRole = tool.get().getRequiredRole();
-        if (requiredRole != null && !requiredRole.equals(userRole)) {
-            return new ToolCallResult(true, "权限不足：需要 " + requiredRole + " 角色");
+        Optional<String> denial = roleDenial(tool.get(), userRole);
+        if (denial.isPresent()) {
+            return new ToolCallResult(true, denial.get());
         }
 
         JsonNode arguments;

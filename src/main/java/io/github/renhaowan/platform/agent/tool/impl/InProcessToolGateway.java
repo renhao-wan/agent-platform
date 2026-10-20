@@ -6,6 +6,7 @@ import io.github.renhaowan.platform.agent.tool.ToolGateway;
 import io.github.renhaowan.platform.gateway.registry.ToolAccessService;
 import io.github.renhaowan.platform.gateway.registry.entity.ToolDefinition;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -34,6 +35,12 @@ public class InProcessToolGateway implements ToolGateway {
         ToolAccessService.ToolCallResult result = toolAccessService.invoke(properties.getGatewayId(),
                 roleOf(user), user == null ? null : user.uid(), name, argumentsJson);
         return result.isError() ? ERROR_PREFIX + result.text() : result.text();
+    }
+
+    @Override
+    public Optional<String> denial(String name, UserPrincipal user) {
+        return toolAccessService.denial(properties.getGatewayId(), roleOf(user), name)
+                .map(reason -> ERROR_PREFIX + reason);
     }
 
     private static String roleOf(UserPrincipal user) {

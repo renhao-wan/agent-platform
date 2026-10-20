@@ -14,6 +14,6 @@ class OpenApiSourceRegistrarTest {
     void startupRunsAFullReconciliation() {
         new OpenApiSourceRegistrar(contractSyncService).run(null);
 
-        verify(contractSyncService).syncConfiguredSources();
+        verify(contractSyncService).syncAll();
     }
 }

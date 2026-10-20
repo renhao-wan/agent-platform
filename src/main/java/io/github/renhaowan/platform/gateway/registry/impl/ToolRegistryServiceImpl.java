@@ -187,6 +187,21 @@ public class ToolRegistryServiceImpl implements ToolRegistryService {
         return true;
     }
 
+    @Override
+    @Transactional
+    public int retireSource(String gatewayId, String sourceKey) {
+        List<ToolDefinition> tools = mapper.selectList(new QueryWrapper<ToolDefinition>()
+                .eq("gateway_id", gatewayId)
+                .eq("source_key", sourceKey)
+                .eq("present", 1));
+        for (ToolDefinition tool : tools) {
+            tool.setPresent(0);
+            tool.setUpdatedAt(LocalDateTime.now());
+            mapper.updateById(tool);
+        }
+        return tools.size();
+    }
+
     private static boolean differentEndpoint(String existingTemplate, String incomingTemplate) {
         return !hostOf(existingTemplate).equals(hostOf(incomingTemplate))
                 && !pathOf(existingTemplate).equals(pathOf(incomingTemplate));

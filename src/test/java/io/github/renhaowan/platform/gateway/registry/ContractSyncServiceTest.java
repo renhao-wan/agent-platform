@@ -9,21 +9,25 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.renhaowan.platform.agent.AgentProperties;
-import io.github.renhaowan.platform.gateway.GatewayProperties;
 import io.github.renhaowan.platform.gateway.registry.entity.ToolDefinition;
 import io.github.renhaowan.platform.gateway.registry.entity.ToolSource;
 import io.github.renhaowan.platform.gateway.registry.impl.ContractSyncServiceImpl;
 import io.github.renhaowan.platform.gateway.registry.impl.OpenApiImportServiceImpl;
 import io.github.renhaowan.platform.gateway.registry.mapper.ToolSourceMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
 
-/** 对账主流程：成功收敛、失败保留 last-known-good、冲突整份放弃。 */
+/** 对账主流程：成功收敛、失败保留 last-known-good、冲突整份放弃、并发触发返回 BUSY。 */
 class ContractSyncServiceTest {
 
     private static final String CONTRACT = """
@@ -48,8 +52,8 @@ class ContractSyncServiceTest {
     private final ToolRegistryService registryService = mock(ToolRegistryService.class);
     private final ToolSourceMapper sourceMapper = mock(ToolSourceMapper.class);
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
+    private final SourceRegistryService sourceRegistry = mock(SourceRegistryService.class);
     private final AgentProperties agentProperties = new AgentProperties();
-    private final GatewayProperties gatewayProperties = new GatewayProperties();
 
     private ContractFetcher fetcher;
 
@@ -57,19 +61,26 @@ class ContractSyncServiceTest {
     void setUp() {
         agentProperties.setGatewayId("gw1");
         fetcher = url -> CONTRACT;
+        when(sourceRegistry.listAll()).thenReturn(List.of());
     }
 
     private ContractSyncService service() {
-        return new ContractSyncServiceImpl(gatewayProperties, agentProperties,
-                new OpenApiImportServiceImpl(), registryService, sourceMapper, fetcher, events);
+        return new ContractSyncServiceImpl(sourceRegistry, agentProperties,
+                new OpenApiImportServiceImpl(), registryService, sourceMapper, fetcher, events,
+                new SimpleMeterRegistry());
     }
 
-    private GatewayProperties.Source source(String id, String url) {
-        GatewayProperties.Source source = new GatewayProperties.Source();
-        source.setId(id);
-        source.setUrl(url);
+    private ToolSource source(String id, String url) {
+        ToolSource source = new ToolSource();
+        source.setSourceKey(id);
+        source.setGatewayId("gw1");
+        source.setContractUrl(url);
+        source.setBaseUrl(null);
         source.setServiceKeyName("X-Service-Key");
         source.setServiceKeyValue("demo-key");
+        source.setOrigin(ToolSource.ORIGIN_CONFIG);
+        source.setEnabled(1);
+        source.setStatus(ToolSource.STATUS_OK);
         return source;
     }
 
@@ -129,6 +140,11 @@ class ContractSyncServiceTest {
         previous.setLastSuccessAt(LocalDateTime.of(2026, 10, 19, 10, 0));
         when(sourceMapper.selectOne(any())).thenReturn(previous);
         when(sourceMapper.selectById(any())).thenReturn(previous);
+        java.util.List<ToolSource> updates = new java.util.ArrayList<>();
+        when(sourceMapper.updateById(any(ToolSource.class))).thenAnswer(invocation -> {
+            updates.add(invocation.getArgument(0));
+            return 1;
+        });
         fetcher = url -> {
             throw new IllegalStateException("connection refused");
         };
@@ -138,9 +154,8 @@ class ContractSyncServiceTest {
 
         assertThat(report.status()).isEqualTo(ToolSource.STATUS_FAILED);
         verify(registryService, never()).applySnapshot(any(), any(), any());
-        ArgumentCaptor<ToolSource> captor = ArgumentCaptor.forClass(ToolSource.class);
-        verify(sourceMapper).updateById(captor.capture());
-        ToolSource written = captor.getValue();
+        assertThat(updates).hasSize(1);
+        ToolSource written = updates.get(0);
         assertThat(written.getStatus()).isEqualTo(ToolSource.STATUS_FAILED);
         assertThat(written.getContractHash()).isEqualTo("hash-of-last-good");
         assertThat(written.getToolCount()).isEqualTo(7);
@@ -189,40 +204,90 @@ class ContractSyncServiceTest {
     }
 
     @Test
-    void configuredSourcesAreReconciledAndKeyedById() {
-        gatewayProperties.setSources(List.of(
-                source("booking", "http://source.local/openapi.json"),
+    void syncAllReconcilesEveryActiveSourceFromRegistry() {
+        when(sourceRegistry.listActive()).thenReturn(List.of(
+                source("booking", "http://booking.local/openapi.json"),
                 source("expense", "http://expense.local/openapi.json")));
         when(sourceMapper.selectOne(any())).thenReturn(null);
         when(sourceMapper.selectById(any())).thenReturn(null);
         when(registryService.applySnapshot(any(), any(), any())).thenReturn(
                 new ToolRegistryService.SnapshotResult(0, 0, 1, 0, List.of(), List.of()));
 
-        List<ContractSyncService.SyncReport> reports = service().syncConfiguredSources();
+        List<ContractSyncService.SyncReport> reports = service().syncAll();
 
         assertThat(reports).extracting(ContractSyncService.SyncReport::sourceKey)
                 .containsExactly("booking", "expense");
     }
 
     @Test
-    void sourceWithoutIdFallsBackToAStableDerivedKey() {
-        gatewayProperties.setSources(List.of(source(null, "http://localhost:8090/v3/api-docs")));
+    void syncByKeyOnlyTouchesRegisteredActiveSources() {
+        when(sourceRegistry.find("booking"))
+                .thenReturn(Optional.of(source("booking", "http://booking.local/openapi.json")));
+        when(sourceRegistry.find("missing")).thenReturn(Optional.empty());
         when(sourceMapper.selectOne(any())).thenReturn(null);
         when(sourceMapper.selectById(any())).thenReturn(null);
         when(registryService.applySnapshot(any(), any(), any())).thenReturn(
                 new ToolRegistryService.SnapshotResult(0, 0, 1, 0, List.of(), List.of()));
 
-        assertThat(service().syncConfiguredSources())
-                .extracting(ContractSyncService.SyncReport::sourceKey)
-                .containsExactly("localhost-8090");
+        assertThat(service().syncByKey("booking")).isPresent();
+        assertThat(service().syncByKey("missing")).isEmpty();
     }
 
     @Test
-    void unknownSourceKeyIsNotSynced() {
-        gatewayProperties.setSources(List.of(source("booking", "http://source.local/openapi.json")));
+    void syncReleasesTheLockAfterCompletion() throws Exception {
+        firstSyncWritesNewSource();
+        ContractSyncService service = service();
+        ContractSyncService.SourceSpec spec = new ContractSyncService.SourceSpec(
+                "booking", "http://source.local/openapi.json", null, null, null);
 
-        Optional<ContractSyncService.SyncReport> report = service().syncByKey("missing");
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            ContractSyncService.SyncReport first = pool.submit(() -> service.sync(spec))
+                    .get(5, TimeUnit.SECONDS);
+            assertThat(first.status()).isEqualTo(ToolSource.STATUS_OK);
+        } finally {
+            pool.shutdownNow();
+        }
 
-        assertThat(report).isEmpty();
+        // 锁若在第一次对账后泄漏，主线程会拿到 BUSY
+        assertThat(service.sync(spec).status()).isEqualTo(ToolSource.STATUS_OK);
+    }
+
+    @Test
+    void concurrentSyncReturnsBusyInsteadOfRacingTheWriter() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        fetcher = url -> {
+            entered.countDown();
+            try {
+                release.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return CONTRACT;
+        };
+        when(sourceMapper.selectOne(any())).thenReturn(null);
+        when(sourceMapper.selectById(any())).thenReturn(null);
+        when(registryService.applySnapshot(any(), any(), any())).thenReturn(
+                new ToolRegistryService.SnapshotResult(0, 0, 1, 0, List.of(), List.of()));
+        when(sourceRegistry.find("booking"))
+                .thenReturn(Optional.of(source("booking", "http://booking.local/openapi.json")));
+        ContractSyncService service = service();
+        ContractSyncService.SourceSpec spec = new ContractSyncService.SourceSpec(
+                "booking", "http://booking.local/openapi.json", null, null, null);
+
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            pool.submit(() -> service.sync(spec));
+            assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+
+            ContractSyncService.SyncReport second = service.sync(spec);
+
+            assertThat(second.status()).isEqualTo(ContractSyncService.STATUS_BUSY);
+            assertThat(second.error()).contains("已有对账");
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
     }
 }

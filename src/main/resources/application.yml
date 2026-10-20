@@ -43,18 +43,24 @@ platform:
     # sync-on-startup 置 false 则只靠定时任务与手工触发（启动早于业务系统时用）。
     sync-enabled: ${GATEWAY_SYNC_ENABLED:true}
     sync-on-startup: ${GATEWAY_SYNC_ON_STARTUP:true}
+    # 启动时把配置里的来源种进注册表（只读写库，不访问业务系统）；测试环境可关闭
+    seed-on-startup: ${GATEWAY_SEED_ON_STARTUP:true}
     sync-interval-ms: ${GATEWAY_SYNC_INTERVAL_MS:300000}
-    # 启动时自动注册的工具来源：每项是业务系统暴露 OpenAPI 契约的地址（统一为 /v3/api-docs，
-    # WireMock 模拟的两个系统也用一条映射把自己的契约挂在同一路径上）。
-    # 契约可访问就等于工具可用，不必手工导入；改了业务系统的 @Operation 说明或
-    # x-required-role 声明，下一次对账即生效（默认 5 分钟，也可 POST /admin/sources/sync 立即触发）。
+    # 契约来源种子：启动时写入 tool_source（已存在则不重复插入），之后平台从数据库读取来源清单。
+    # 每项是业务系统暴露 OpenAPI 契约的地址（统一为 /v3/api-docs，WireMock 模拟的两个系统也用
+    # 一条映射把自己的契约挂在同一路径上）。契约可访问就等于工具可用，不必手工导入；改了业务
+    # 系统的 @Operation 说明或 x-required-role 声明，下一次对账即生效（默认 5 分钟，也可
+    # POST /admin/sources/sync 立即触发）。
     #
-    # id 是对账的归属键，必须稳定且唯一：同一来源在容器内外只是 host 不同，不能因此算成两份契约。
+    # id 是对账的归属键，必填且稳定唯一：同一来源在容器内外只是 host 不同，不能因此算成两份契约。
+    # 每次启动按本列表种子/刷新 CONFIG 来源；从本列表移除即软下线（工具 present=0，保留行）。
+    # 管理员可在运行时用 POST/PUT/DELETE /admin/sources 管理来源，编辑过的来源归管理端所有，
+    # 配置不再覆盖它；工具定义本身永远由契约推导，管理端只读（只能启停）。
     #
     # GATEWAY_BACKEND_HOST 是唯一的拓扑开关：平台跑在容器里时由 docker-compose 覆盖成
     # host.docker.internal——两个仓库各自一份 compose、各占一个 docker 网络，容器解析不到
     # 兄弟栈的服务名，只能经宿主机发布端口过去。
-    # 列表清空则跳过自动注册，改为 POST /admin/protocols/import 手工导入。
+    # 列表留空 = 配置来源全部视为已移除（软下线）；ADMIN 来源不受影响，仍参与对账。
     sources:
       - id: booking
         url: http://${GATEWAY_BACKEND_HOST:localhost}:8090/v3/api-docs

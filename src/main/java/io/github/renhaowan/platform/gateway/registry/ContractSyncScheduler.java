@@ -25,6 +25,6 @@ public class ContractSyncScheduler {
             initialDelayString = "${platform.gateway.sync-interval-ms:300000}")
     public void sync() {
         log.debug("定时契约对账开始");
-        contractSyncService.syncConfiguredSources();
+        contractSyncService.syncAll();
     }
 }

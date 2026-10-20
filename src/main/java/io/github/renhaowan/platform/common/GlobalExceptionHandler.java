@@ -41,6 +41,21 @@ public class GlobalExceptionHandler {
         return ApiResponse.error(401, e.getMessage());
     }
 
+    /** 来源注册表冲突（重复创建、下线配置管理的来源）：409。 */
+    @ExceptionHandler(io.github.renhaowan.platform.gateway.registry.SourceConflictException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiResponse<Void> handleSourceConflict(
+            io.github.renhaowan.platform.gateway.registry.SourceConflictException e) {
+        return ApiResponse.error(409, e.getMessage());
+    }
+
+    /** 请求语义不合法（如契约地址不是 http(s) URL）：400。 */
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleIllegalArgument(IllegalArgumentException e) {
+        return ApiResponse.error(400, e.getMessage());
+    }
+
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiResponse<Void> handleUnexpected(Exception e) {

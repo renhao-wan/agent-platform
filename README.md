@@ -57,6 +57,7 @@ docker compose up -d --build
 cd ../business-systems && docker compose up -d --build
 # 再以 ADMIN 身份登录——平台启动时会自动拉取三个系统的契约并注册，无需手工导入；
 # 之后默认每 5 分钟重新对账，接口新增/修改/删除会自动收敛（也可 POST /admin/sources/sync 立即触发）
+# 来源本身可在运行时增删改：POST/PUT/DELETE /admin/sources（yml 里的 sources 只是启动种子）
 ```
 
 ## 设计决策（ADR）
@@ -90,5 +91,5 @@ Java 17 · Spring Boot 3.4 · Spring AI 1.1（OpenAI 兼容协议）· MyBatis-P
 ## 测试
 
 ```bash
-mvn test    # 185 项：转发拼装与超时故障 / OpenAPI 解析与 $ref 展开 / 契约自动注册与快照对账 / 裁剪策略 / 循环三态（执行·同意·拒绝·超步数）/ 越权拦截 / 工具路由责任链 / 端到端自愈
+mvn test    # 198 项：转发拼装与超时故障 / OpenAPI 解析与 $ref 展开 / 契约自动注册、来源注册表与快照对账 / 裁剪策略 / 循环三态（执行·同意·拒绝·超步数）/ 越权拦截 / 工具路由责任链 / 端到端自愈
 ```
