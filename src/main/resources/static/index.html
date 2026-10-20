@@ -206,6 +206,16 @@ button{cursor:pointer;border:0;background:none}
 .sess[data-cur="1"]{background:var(--accent-wash);border-left-color:var(--accent);color:var(--t1)}
 .sess .t{font-size:13px;line-height:1.45;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sess .d{font-size:11px;color:var(--t4);font-family:var(--mono)}
+.sess-row{display:flex;align-items:center;gap:2px}
+.sess-row .sess{flex:1;min-width:0}
+.sess-del{
+  flex-shrink:0;width:22px;height:22px;border-radius:var(--r);
+  color:var(--t4);font-size:14px;line-height:1;opacity:0;
+  transition:opacity .15s,color .15s,background .15s;
+}
+.sess-row:hover .sess-del,.sess-del[data-armed="1"]{opacity:1}
+.sess-del:hover{background:var(--danger-wash);color:var(--danger)}
+.sess-del[data-armed="1"]{width:auto;padding:0 6px;font-size:11px;color:var(--danger);background:var(--danger-wash)}
 .sess-empty{font-size:12.5px;color:var(--t4);padding:3px 0}
 
 /* 身份 */
@@ -385,14 +395,6 @@ button{cursor:pointer;border:0;background:none}
   border:1px solid var(--line);border-radius:3px;padding:1px 5px;color:var(--t3);
 }
 
-.chips{max-width:var(--col);margin:10px auto 0;display:flex;flex-wrap:wrap;gap:8px}
-.chip{
-  font-size:13px;padding:7px 12px;background:var(--surface);
-  border:1px solid var(--line);border-radius:var(--r);color:var(--t2);
-  transition:border-color .15s,color .15s;text-align:left;
-}
-.chip:hover{border-color:var(--t3);color:var(--t1)}
-.chips-lead{font-size:12px;color:var(--t4);align-self:center;margin-right:2px}
 
 /* --- 确认层 --- */
 #confirm{position:fixed;inset:0;z-index:30;display:grid;place-items:end center}
@@ -711,10 +713,6 @@ button{cursor:pointer;border:0;background:none}
           <span><kbd>Enter</kbd> 发送</span>
           <span>工具调用前会经过闸门 2 鉴权</span>
           <span id="hint-session"></span>
-        </div>
-        <div class="chips" id="chips" hidden>
-          <span class="chips-lead">已接入工具</span>
-          <!-- 按钮由 loadToolExamples() 按当前用户可见的工具生成：示例跟着接入的系统走，平台里不留业务词汇 -->
         </div>
       </div>
     </div>
@@ -1044,7 +1042,6 @@ function showConsole() {
   renderGates();
   setComposerEnabled(!busy);
   $("message").focus();
-  loadToolExamples();
   loadSessions();
 }
 function logout() {
@@ -1104,6 +1101,9 @@ function renderSessions(list) {
     return;
   }
   list.forEach(item => {
+    const row = document.createElement("div");
+    row.className = "sess-row";
+
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "sess";
@@ -1116,7 +1116,20 @@ function renderSessions(list) {
     when.textContent = fmtWhen(item.createdAt);
     btn.append(title, when);
     btn.addEventListener("click", () => openSession(item.sessionKey));
-    box.appendChild(btn);
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "sess-del";
+    del.title = "删除会话";
+    del.setAttribute("aria-label", "删除会话");
+    del.textContent = "×";
+    del.addEventListener("click", e => {
+      e.stopPropagation();
+      deleteSession(item.sessionKey, del);
+    });
+
+    row.append(btn, del);
+    box.appendChild(row);
   });
 }
 
@@ -1129,6 +1142,42 @@ async function loadSessions() {
     renderSessions(sessionList);
   } catch (e) {
     // 列表拉取失败不影响对话本身，历史入口静默缺席
+  }
+}
+
+let deleteArmed = null;
+
+/** 删除会话需要点两次：第一次把 × 变成「确认」，8 秒内再点才发请求。 */
+async function deleteSession(key, btn) {
+  if (busy) return;
+  if (deleteArmed !== key) {
+    deleteArmed = key;
+    btn.dataset.armed = "1";
+    btn.textContent = "确认";
+    setTimeout(() => {
+      if (deleteArmed === key) {
+        deleteArmed = null;
+        btn.dataset.armed = "";
+        btn.textContent = "×";
+      }
+    }, 8000);
+    return;
+  }
+  deleteArmed = null;
+  btn.disabled = true;
+  try {
+    const resp = await fetch("/api/v1/sessions/" + encodeURIComponent(key),
+                             { method: "DELETE", headers: authHeaders() });
+    if (resp.status === 401) { expire(); return; }
+    if (resp.status === 403) { addError("无权删除该会话"); return; }
+    if (!resp.ok && resp.status !== 404) {
+      addError("删除会话失败（HTTP " + resp.status + "）");
+      return;
+    }
+    if (key === sessionKey) newChat();
+    await loadSessions();
+  } catch (e) {
+    addError("删除会话失败：" + e.message);
   }
 }
 
@@ -1467,47 +1516,6 @@ $("chat-form").addEventListener("submit", e => {
   e.preventDefault();
   send($("message").value.trim());
 });
-
-// 示例指令 chips：只填入输入框、不直接发送。chip 文案取自工具描述（OpenAPI summary），
-// 是"这个工具能做什么"，不是一句完整的请求——由用户补全细节后再按 Enter。
-$("chips").addEventListener("click", e => {
-  const chip = e.target.closest(".chip");
-  if (!chip || busy) return;
-  const box = $("message");
-  box.value = chip.textContent.trim();
-  $("send").disabled = false;
-  box.focus();
-  box.setSelectionRange(box.value.length, box.value.length);
-});
-
-/**
- * 示例指令取自"当前用户可见的工具"（闸门 1 已按角色过滤）。
- * 不写死业务词汇——写死等于平台绑定了某个业务系统，换个系统接入示例就成了错的。
- */
-async function loadToolExamples() {
-  const box = $("chips");
-  box.querySelectorAll(".chip").forEach(c => c.remove());
-  box.hidden = true;
-  try {
-    const resp = await fetch("/api/v1/tools", { headers: authHeaders() });
-    if (resp.status === 401) { expire(); return; }
-    if (!resp.ok) return;
-    const tools = await resp.json();
-    // OpenAPI summary 本就是动作句，直接当示例指令用
-    const picks = tools.filter(t => (t.description || "").trim()).slice(0, 2);
-    if (!picks.length) return;
-    picks.forEach(t => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "chip";
-      b.textContent = t.description.trim();
-      box.appendChild(b);
-    });
-    box.hidden = false;
-  } catch (e) {
-    // 拿不到工具清单只是没有示例，不影响对话
-  }
-}
 
 /* ---------------- 来源管理（ADMIN） ---------------- */
 

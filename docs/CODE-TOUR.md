@@ -86,7 +86,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 - **TokenRecorder（接口）+ impl/TokenRecorderImpl**【④】：usage 打点 best-effort（31.8% 实验的数据源）。
 - **ConfirmManager（接口）+ impl/ConfirmManagerImpl / ConfirmController**★【①】：token → CompletableFuture 挂起；`POST /api/v1/confirm` 恢复；超时 = 拒绝。单实例内存实现（重启丢确认项视为拒绝，语义安全）。
 - **AgentSessionService（接口）+ impl/AgentSessionServiceImpl** + 四实体四 Mapper：chat_session / chat_message / checkpoint / llm_usage（消息即写即落库，重启不丢对话）。
-- **SessionController.java**：历史会话入口。`GET /api/v1/sessions` 列当前用户最近 50 条（标题取各自首条 USER 消息，无则"新对话"）；`GET /api/v1/sessions/{key}/messages` 只回 USER/ASSISTANT 供回放，工具调用轨迹不进入历史。归属校验与续聊共用 `ownsSession`——`user_id` 为 NULL 的存量会话放行，他人的返回 403。
+- **SessionController.java**：历史会话入口。`GET /api/v1/sessions` 列当前用户最近 50 条（标题取各自首条 USER 消息，无则"新对话"）；`GET /api/v1/sessions/{key}/messages` 只回 USER/ASSISTANT 供回放，工具调用轨迹不进入历史；`DELETE /api/v1/sessions/{key}` 删除本人会话并级联清消息与 checkpoint。归属校验与续聊共用 `ownsSession`——`user_id` 为 NULL 的存量会话放行，他人的返回 403，不存在返回 404。
 - **HistoryRecallTool**【④ ADR-005】：平台自有内部工具 `recallHistory`——会话记忆"冷层"取回通道。模型自主判断何时按关键词检索当前会话的早期消息与里程碑（chat_message/checkpoint，MySQL LIKE，跨表按时间合并）；AgentRunner 本地执行，不进工具层、不参与路由/确认，角色无关。三层记忆 = 最近 6 条（热）+ checkpoint 摘要（温）+ 全量历史调回（冷），替代向量库 RAG。
 - **AgentProperties.java / AgentConfig.java**：`platform.agent.*` 配置与需要原始值参数的 Bean 装配。
 
@@ -121,7 +121,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
 - `knowledge/`：5 份制度语料（4 份 PUBLIC + 1 份 ADMIN）+ 评估题库；镜像内带一份，compose 另把宿主目录只读挂到 `/app/knowledge`，改文档后重启或 reindex 即生效，不必重建镜像。
 
-## 5. 测试（34 类，206 项）
+## 5. 测试（34 类，213 项）
 
 | 测试类 | 覆盖 |
 |---|---|
@@ -133,8 +133,8 @@ KnowledgeSearchService/KnowledgeSearchTool
 | WattAiToolSelectorTest (5) | 高置信单选、低置信 top-k、到点异常弃权 |
 | JwtServiceTest (5) | 签发/解析、过期、篡改签名 |
 | ChatAuthFilterTest (5) | 401 三态、放行、admin 范围（403） |
-| AgentSessionServiceImplTest (7) | 会话创建与复用、历史加载、消息落库、checkpoint 读取 |
-| SessionControllerTest (4) | 会话列表/历史端点：鉴权、归属校验、404 |
+| AgentSessionServiceImplTest (10) | 会话创建与复用、历史加载、消息落库、checkpoint 读取、删除本人会话级联清理、拒绝他人/不存在的会话 |
+| SessionControllerTest (8) | 会话列表/历史/删除端点：鉴权、归属校验、404、删除本人返回 204 |
 | AgentRunnerTest (6) | 循环三态：执行/同意/拒绝/超步数、recall 本地执行、角色不足时跳过确认且不执行 |
 | OpenApiSourceRegistrarTest (1) | 启动入口触发全量对账 |
 | ContractSyncServiceTest (11) | 成功对账与凭证绑定、baseUrl 覆盖、抓取/解析失败保留 last-known-good、冲突不发布事件且 `last_error` 含冲突工具与占用来源、监听器失败不影响成功状态、从注册表取来源、单来源对账、并发返回 BUSY、完成后释放锁 |
