@@ -26,6 +26,12 @@ public class ToolDefinition {
 
     private String name;
 
+    /** 契约来源标识；首次同步时绑定，手工导入的工具可为空 */
+    private String sourceKey;
+
+    /** 契约字段的指纹：同值表示这次同步无需重写该行 */
+    private String contractHash;
+
     @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String description;
 
@@ -43,6 +49,9 @@ public class ToolDefinition {
     private String requiredRole;
 
     private Integer enabled;
+
+    /** 契约中是否仍声明该工具：同步负责置 0/1，人工禁用用 enabled，两者互不覆盖 */
+    private Integer present;
 
     /** 转发时附带的服务凭证 header 名（如 X-Service-Key），导入时配置 */
     @TableField(updateStrategy = FieldStrategy.ALWAYS)

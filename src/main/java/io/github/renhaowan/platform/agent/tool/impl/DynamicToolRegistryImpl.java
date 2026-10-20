@@ -2,6 +2,7 @@ package io.github.renhaowan.platform.agent.tool.impl;
 
 import io.github.renhaowan.platform.agent.tool.DynamicToolRegistry;
 import io.github.renhaowan.platform.agent.tool.ToolGateway;
+import io.github.renhaowan.platform.gateway.registry.ToolCatalogChangedEvent;
 import io.github.renhaowan.platform.gateway.registry.entity.ToolDefinition;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,6 +39,13 @@ public class DynamicToolRegistryImpl implements DynamicToolRegistry {
     public boolean requireConfirm(String toolName) {
         // 只读已有缓存不触发刷新：AgentRunner 总是先 callbacks() 再进入循环，敏感标记与清单同源
         return bucket.confirmFlags().getOrDefault(toolName, false);
+    }
+
+    /** 契约对账完成后立即换清单，不必等 5 分钟缓存过期。 */
+    @org.springframework.context.event.EventListener
+    public void onCatalogChanged(ToolCatalogChangedEvent event) {
+        log.info("工具目录已由来源 {} 更新，立即刷新清单", event.sourceKey());
+        refresh();
     }
 
     /**

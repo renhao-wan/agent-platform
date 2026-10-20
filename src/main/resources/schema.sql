@@ -28,6 +28,49 @@ CREATE TABLE IF NOT EXISTS tool_definition (
     UNIQUE KEY uk_gw_name (gateway_id, name)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '工具定义';
 
+-- 契约对账：工具归属的来源、契约指纹，以及"契约是否仍声明"。
+-- present 由同步维护；enabled 是人工开关，同步永不覆盖——两者分开才能既收敛契约又保留人工禁用。
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_definition' AND COLUMN_NAME='source_key');
+SET @ddl = IF(@col_exists = 0,
+  'ALTER TABLE tool_definition ADD COLUMN source_key VARCHAR(128) NULL AFTER name', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_definition' AND COLUMN_NAME='contract_hash');
+SET @ddl = IF(@col_exists = 0,
+  'ALTER TABLE tool_definition ADD COLUMN contract_hash CHAR(64) NULL AFTER source_key', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_definition' AND COLUMN_NAME='present');
+SET @ddl = IF(@col_exists = 0,
+  'ALTER TABLE tool_definition ADD COLUMN present TINYINT NOT NULL DEFAULT 1 AFTER enabled', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @idx_exists = (SELECT COUNT(*) FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_definition' AND INDEX_NAME='idx_tool_source');
+SET @ddl = IF(@idx_exists = 0,
+  'ALTER TABLE tool_definition ADD INDEX idx_tool_source (gateway_id, source_key)', 'SELECT 1');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- 每个契约来源的最近一次对账结果（last-known-good 与失败原因都落库，重启不丢）
+CREATE TABLE IF NOT EXISTS tool_source (
+    source_key      VARCHAR(128) NOT NULL PRIMARY KEY,
+    gateway_id      VARCHAR(64)  NOT NULL,
+    contract_url    VARCHAR(512) NOT NULL,
+    status          VARCHAR(16)  NOT NULL DEFAULT 'PENDING',
+    contract_hash   CHAR(64)     NULL,
+    tool_count      INT          NOT NULL DEFAULT 0,
+    last_added      INT          NOT NULL DEFAULT 0,
+    last_updated    INT          NOT NULL DEFAULT 0,
+    last_stale      INT          NOT NULL DEFAULT 0,
+    last_breaking   INT          NOT NULL DEFAULT 0,
+    last_attempt_at DATETIME     NULL,
+    last_success_at DATETIME     NULL,
+    last_error      VARCHAR(512) NULL
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '契约来源与最近一次对账状态';
+
 SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA='agent_platform' AND TABLE_NAME='tool_definition' AND COLUMN_NAME='tenant_id');
 SET @ddl = IF(@col_exists > 0, 'ALTER TABLE tool_definition DROP COLUMN tenant_id', 'SELECT 1');

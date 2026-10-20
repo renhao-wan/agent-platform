@@ -21,6 +21,12 @@ public class GatewayProperties {
     @Data
     public static class Source {
 
+        /**
+         * 来源标识，对账时用于判定"哪些工具属于这份契约"。
+         * 必须跨部署拓扑保持稳定（不要用 host/端口推导，否则容器内外会被当成两个来源）。
+         */
+        private String id;
+
         /** 契约地址（OpenAPI JSON）。其 origin 同时用作该来源工具的调用基地址 */
         private String url;
 

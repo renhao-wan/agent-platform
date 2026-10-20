@@ -76,6 +76,7 @@ public class OpenApiImportServiceImpl implements OpenApiImportService {
                 || extensionFlag(operation, "x-require-confirm") ? 1 : 0);
         tool.setRequiredRole(extensionText(operation, "x-required-role"));
         tool.setEnabled(1);
+        tool.setPresent(1);
         tool.setInputSchema(buildInputSchema(operation, root).toString());
         tool.setCreatedAt(LocalDateTime.now());
         return tool;

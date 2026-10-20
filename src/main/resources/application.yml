@@ -38,23 +38,34 @@ platform:
       # 转发到业务系统的超时（毫秒）；测试用极短值验证超时路径
       connect-timeout-ms: 2000
       read-timeout-ms: 10000
+    # 契约对账（ADR-008）：启动时全量对账一次；之后按间隔重新拉取契约，
+    # 接口新增/修改/删除都会收敛，不必重启平台。sync-enabled 置 false 可只保留启动对账；
+    # sync-on-startup 置 false 则只靠定时任务与手工触发（启动早于业务系统时用）。
+    sync-enabled: ${GATEWAY_SYNC_ENABLED:true}
+    sync-on-startup: ${GATEWAY_SYNC_ON_STARTUP:true}
+    sync-interval-ms: ${GATEWAY_SYNC_INTERVAL_MS:300000}
     # 启动时自动注册的工具来源：每项是业务系统暴露 OpenAPI 契约的地址（统一为 /v3/api-docs，
     # WireMock 模拟的两个系统也用一条映射把自己的契约挂在同一路径上）。
-    # 平台启动时逐个拉取、解析、注册，于是"契约可访问"就等于"工具可用"，不必手工导入；
-    # 改了业务系统的 @Operation 说明或 x-required-role 声明，重启平台即生效。
+    # 契约可访问就等于工具可用，不必手工导入；改了业务系统的 @Operation 说明或
+    # x-required-role 声明，下一次对账即生效（默认 5 分钟，也可 POST /admin/sources/sync 立即触发）。
+    #
+    # id 是对账的归属键，必须稳定且唯一：同一来源在容器内外只是 host 不同，不能因此算成两份契约。
     #
     # GATEWAY_BACKEND_HOST 是唯一的拓扑开关：平台跑在容器里时由 docker-compose 覆盖成
     # host.docker.internal——两个仓库各自一份 compose、各占一个 docker 网络，容器解析不到
     # 兄弟栈的服务名，只能经宿主机发布端口过去。
     # 列表清空则跳过自动注册，改为 POST /admin/protocols/import 手工导入。
     sources:
-      - url: http://${GATEWAY_BACKEND_HOST:localhost}:8090/v3/api-docs
+      - id: booking
+        url: http://${GATEWAY_BACKEND_HOST:localhost}:8090/v3/api-docs
         service-key-name: X-Service-Key
         service-key-value: ${BOOKING_SERVICE_KEY:booking-service-key}
-      - url: http://${GATEWAY_BACKEND_HOST:localhost}:8091/v3/api-docs
+      - id: expense
+        url: http://${GATEWAY_BACKEND_HOST:localhost}:8091/v3/api-docs
         service-key-name: X-Service-Key
         service-key-value: ${STUB_SERVICE_KEY:stub-service-key}
-      - url: http://${GATEWAY_BACKEND_HOST:localhost}:8092/v3/api-docs
+      - id: repair
+        url: http://${GATEWAY_BACKEND_HOST:localhost}:8092/v3/api-docs
         service-key-name: X-Service-Key
         service-key-value: ${STUB_SERVICE_KEY:stub-service-key}
   agent:
