@@ -193,6 +193,21 @@ button{cursor:pointer;border:0;background:none}
   letter-spacing:.02em;margin-bottom:12px;
 }
 
+/* 历史会话：一行标题、一行时间；当前会话用琥珀左缘标记 */
+.sessions{display:flex;flex-direction:column;gap:2px;max-height:32vh;overflow-y:auto;margin:0 -9px}
+.sessions::-webkit-scrollbar{width:6px}
+.sessions::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+.sess{
+  display:flex;flex-direction:column;gap:1px;text-align:left;width:100%;
+  padding:7px 9px;border-radius:var(--r);border-left:2px solid transparent;
+  color:var(--t2);transition:background .15s,color .15s;
+}
+.sess:hover{background:var(--surface-2);color:var(--t1)}
+.sess[data-cur="1"]{background:var(--accent-wash);border-left-color:var(--accent);color:var(--t1)}
+.sess .t{font-size:13px;line-height:1.45;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sess .d{font-size:11px;color:var(--t4);font-family:var(--mono)}
+.sess-empty{font-size:12.5px;color:var(--t4);padding:3px 0}
+
 /* 身份 */
 .ident .row{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;gap:10px}
 .ident .k{font-size:12.5px;color:var(--t3)}
@@ -560,6 +575,11 @@ button{cursor:pointer;border:0;background:none}
 
   <div class="workspace">
     <aside class="rail">
+      <div class="rail-sec">
+        <h3>历史会话</h3>
+        <div class="sessions" id="session-list"></div>
+      </div>
+
       <div class="rail-sec ident">
         <h3>身份</h3>
         <div class="row"><span class="k">会话</span><span class="v" id="ident-session">—</span></div>
@@ -657,6 +677,7 @@ let myRole     = localStorage.getItem("myRole") || "";
 let pendingToken = null;
 let busy = false;
 let toolSteps = 0;     // 本轮工具调用次数——这才是「步数」
+let sessionList = [];  // 历史会话缓存：切换会话后只重绘高亮，不重新请求
 
 /* ---------------- 工具函数 ---------------- */
 
@@ -785,8 +806,8 @@ const KIND = {
   done:            { cls: "done",        label: "本轮完成" }
 };
 
-/** 在轨迹上追加一个节点，返回其内容容器 */
-function node(type) {
+/** 在轨迹上追加一个节点，返回其内容容器。when 用于回放历史消息时还原时间。 */
+function node(type, when) {
   const k = KIND[type] || { cls: "done", label: type };
   traceEl.classList.remove("empty");
   const hint = $("empty-hint");
@@ -797,7 +818,7 @@ function node(type) {
 
   const ts = document.createElement("span");
   ts.className = "ts";
-  ts.textContent = stamp();
+  ts.textContent = when || stamp();
 
   const body = document.createElement("div");
 
@@ -891,10 +912,23 @@ function showConsole() {
   setComposerEnabled(!busy);
   $("message").focus();
   loadToolExamples();
+  loadSessions();
 }
 function logout() {
   ["token", "sessionKey", "myName", "myRole"].forEach(k => localStorage.removeItem(k));
   location.reload();
+}
+
+/** 清空轨迹回到空态（新建对话与切换会话共用） */
+function resetTrace() {
+  [...traceEl.querySelectorAll(".node")].forEach(n => n.remove());
+  traceEl.classList.add("empty");
+  const hint = $("empty-hint");
+  if (hint) hint.hidden = false;
+  toolSteps = 0;
+  $("ident-steps").textContent = "0";
+  setBusy(false);
+  closeConfirm();
 }
 
 /** 新建对话：丢掉 sessionKey，清空轨迹，回到空态。
@@ -903,19 +937,95 @@ function newChat() {
   if (busy) return;
   sessionKey = null;
   localStorage.removeItem("sessionKey");
-  [...traceEl.querySelectorAll(".node")].forEach(n => n.remove());
-  traceEl.classList.add("empty");
-  const hint = $("empty-hint");
-  if (hint) hint.hidden = false;
-  toolSteps = 0;
-  $("ident-steps").textContent = "0";
+  resetTrace();
   $("ident-session").textContent = "待建立";
   $("hint-session").textContent = "";
   setStatus("idle", "空闲");
-  closeConfirm();
   $("message").value = "";
   setComposerEnabled(true);
+  renderSessions(sessionList);
   $("message").focus();
+}
+
+/* ---------------- 历史会话 ---------------- */
+
+/** 服务端 LocalDateTime 序列化为 ISO 字符串；DB 与容器时区是 UTC，补 Z 后按浏览器本地时区显示。
+ *  只取「月-日 时:分」。 */
+function fmtWhen(iso) {
+  if (!iso) return "";
+  const s = String(iso);
+  const d = new Date(s.endsWith("Z") ? s : s + "Z");
+  if (Number.isNaN(d.getTime())) return s.slice(5, 16).replace("T", " ");
+  const p = n => String(n).padStart(2, "0");
+  return p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+}
+
+function renderSessions(list) {
+  const box = $("session-list");
+  box.textContent = "";
+  if (!list.length) {
+    const empty = document.createElement("p");
+    empty.className = "sess-empty";
+    empty.textContent = "暂无历史会话";
+    box.appendChild(empty);
+    return;
+  }
+  list.forEach(item => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "sess";
+    if (item.sessionKey === sessionKey) btn.dataset.cur = "1";
+    const title = document.createElement("span");
+    title.className = "t";
+    title.textContent = item.title || "新对话";
+    const when = document.createElement("span");
+    when.className = "d";
+    when.textContent = fmtWhen(item.createdAt);
+    btn.append(title, when);
+    btn.addEventListener("click", () => openSession(item.sessionKey));
+    box.appendChild(btn);
+  });
+}
+
+async function loadSessions() {
+  try {
+    const resp = await fetch("/api/v1/sessions", { headers: authHeaders() });
+    if (resp.status === 401) { expire(); return; }
+    if (!resp.ok) return;
+    sessionList = await resp.json();
+    renderSessions(sessionList);
+  } catch (e) {
+    // 列表拉取失败不影响对话本身，历史入口静默缺席
+  }
+}
+
+/** 打开一个历史会话：恢复消息并把它设为后续续聊的 sessionKey。
+ *  归属由后端按 user_id 校验——不属于当前用户时返回 403。 */
+async function openSession(key) {
+  if (busy || key === sessionKey) return;
+  try {
+    const resp = await fetch("/api/v1/sessions/" + encodeURIComponent(key) + "/messages",
+                             { headers: authHeaders() });
+    if (resp.status === 401) { expire(); return; }
+    if (!resp.ok) { addError("无法打开该会话（HTTP " + resp.status + "）"); return; }
+    const messages = await resp.json();
+
+    resetTrace();
+    sessionKey = key;
+    localStorage.setItem("sessionKey", key);
+    $("ident-session").textContent = key.slice(0, 8);
+    $("hint-session").textContent = "会话 " + key.slice(0, 8);
+    messages.forEach(m => {
+      if (m.role === "USER") addUserLine(m.content, fmtWhen(m.createdAt));
+      else if (m.role === "ASSISTANT") node("answer", fmtWhen(m.createdAt)).innerHTML = mdToHtml(m.content || "");
+    });
+    renderSessions(sessionList);
+    setStatus("idle", "空闲");
+    scrollDown();
+    $("message").focus();
+  } catch (e) {
+    addError("打开会话失败：" + e.message);
+  }
 }
 
 $("new-chat").addEventListener("click", newChat);
@@ -1007,8 +1117,8 @@ function expire() {
 
 /* ---------------- 轨迹渲染 ---------------- */
 
-function addUserLine(text) {
-  node("user").textContent = text;
+function addUserLine(text, when) {
+  node("user", when).textContent = text;
 }
 function addError(text) {
   node("error").textContent = text;
@@ -1111,6 +1221,7 @@ function handle(event, data) {
       localStorage.setItem("sessionKey", sessionKey);
       $("ident-session").textContent = sessionKey.slice(0, 8);
       $("hint-session").textContent = "会话 " + sessionKey.slice(0, 8);
+      loadSessions();     // 会话行已落库，历史列表立刻能看到（标题此时还是「新对话」）
       break;
 
     case "plan":
@@ -1214,6 +1325,7 @@ async function send(message) {
     // 挂起等确认时不改动状态灯——askConfirm 已把它置为等待确认
     if ($("confirm").hidden) setStatus("idle", "空闲");
     setComposerEnabled(true);
+    loadSessions();       // 首条用户消息已落库：刷新会话标题与排序
     $("message").focus();
   }
 }

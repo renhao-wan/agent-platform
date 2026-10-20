@@ -134,7 +134,7 @@ AI（提议者）："我想调 admin_delete_user"
 
 ### 4.3 现状：三道闸门均已实现
 
-- **接入鉴权**：用户 JWT 一套打天下——`/api/v1/chat`、`/api/v1/confirm` 校验 Bearer token，`/admin/**` 额外要求 `ADMIN` 角色（403 输出"需要 ADMIN 角色"）。没有第二套凭证体系。
+- **接入鉴权**：用户 JWT 一套打天下——`/api/v1/chat`、`/api/v1/confirm`、`/api/v1/tools`、`/api/v1/sessions/**` 校验 Bearer token，`/admin/**` 额外要求 `ADMIN` 角色（403 输出"需要 ADMIN 角色"）。没有第二套凭证体系。
 - **闸门 1 / 闸门 2**：都在 `gateway/registry/ToolAccessService`，被 `InProcessToolGateway` 调用，即 `AgentRunner` 调工具时的必经之路。
 - **闸门 3**：`ConfirmManager` 挂起 + `POST /api/v1/confirm` 恢复（同意/拒绝/超时三态均已实测）。
 - **角色要求从哪来**：业务系统在自己的 OpenAPI 里用扩展字段声明（`x-required-role` / `x-require-confirm`），平台导入时读取。平台不猜测接口语义——"哪个接口要管理员"是业务系统的契约，不是平台的业务知识。

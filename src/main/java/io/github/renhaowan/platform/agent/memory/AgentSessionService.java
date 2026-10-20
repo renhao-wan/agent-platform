@@ -1,5 +1,6 @@
 package io.github.renhaowan.platform.agent.memory;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import io.github.renhaowan.platform.agent.memory.entity.ChatMessage;
@@ -10,8 +11,15 @@ import io.github.renhaowan.platform.agent.memory.entity.ChatSession;
  */
 public interface AgentSessionService {
 
+    /** 会话列表项：标题取自首条用户消息，供控制台历史列表展示。 */
+    record SessionSummary(String sessionKey, String title, LocalDateTime createdAt) {
+    }
+
     /** 创建会话并绑定归属用户（user_id 决定续聊时的归属校验）。 */
     String createSession(Long userId);
+
+    /** 当前用户的会话，按创建时间倒序（最多 50 条）。 */
+    List<SessionSummary> listSessions(Long userId);
 
     void appendMessage(String sessionKey, String role, String content, String toolName);
 
@@ -21,6 +29,12 @@ public interface AgentSessionService {
 
     /** 按 sessionKey 查会话（归属校验用）；不存在返回 empty。 */
     Optional<ChatSession> findBySessionKey(String sessionKey);
+
+    /**
+     * 续聊/读取归属校验：会话存在且已绑定 user_id 时，仅归属者可访问；
+     * user_id 为 NULL 的历史遗留会话放行（不追溯封锁存量数据）。
+     */
+    boolean ownsSession(String sessionKey, Long userId);
 
     void shutdown();
 }

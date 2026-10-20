@@ -15,8 +15,6 @@ import io.github.renhaowan.platform.agent.auth.JwtService;
 import io.github.renhaowan.platform.agent.auth.UserPrincipal;
 import io.github.renhaowan.platform.agent.loop.AgentRunner;
 import io.github.renhaowan.platform.agent.memory.AgentSessionService;
-import io.github.renhaowan.platform.agent.memory.entity.ChatSession;
-import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -80,8 +78,7 @@ class ChatAuthFilterTest {
 
     @Test
     void chatContinuationOnForeignSessionRejectedWith403Event() throws Exception {
-        when(sessionService.findBySessionKey("sk-owned-by-other"))
-                .thenReturn(Optional.of(sessionWithOwner(999L)));
+        when(sessionService.ownsSession("sk-owned-by-other", 1L)).thenReturn(false);
 
         MvcResult result = mockMvc.perform(post("/api/v1/chat")
                         .header("Authorization", "Bearer " + jwtService.issue(new UserPrincipal(1L, "STAFF")))
@@ -100,8 +97,7 @@ class ChatAuthFilterTest {
 
     @Test
     void chatContinuationOnOwnSessionPassesOwnership() throws Exception {
-        when(sessionService.findBySessionKey("sk-mine"))
-                .thenReturn(Optional.of(sessionWithOwner(1L)));
+        when(sessionService.ownsSession("sk-mine", 1L)).thenReturn(true);
 
         MvcResult result = mockMvc.perform(post("/api/v1/chat")
                         .header("Authorization", "Bearer " + jwtService.issue(new UserPrincipal(1L, "STAFF")))
@@ -121,13 +117,5 @@ class ChatAuthFilterTest {
             return mockMvc.perform(asyncDispatch(result)).andExpect(status().isOk()).andReturn();
         }
         return result;
-    }
-
-    private ChatSession sessionWithOwner(Long userId) {
-        ChatSession session = new ChatSession();
-        session.setId(10L);
-        session.setSessionKey("sk");
-        session.setUserId(userId);
-        return session;
     }
 }

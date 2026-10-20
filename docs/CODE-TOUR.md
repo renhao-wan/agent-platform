@@ -65,7 +65,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 
 ### auth/ 用户身份
 - **JwtService.java + AuthController/AuthService/AuthServiceImpl**：`POST /api/v1/auth/login` 签发 JWT（claims: uid/role），解析失败抛 `JwtException`。`InvalidCredentialsException` 由全局异常处理转 401。
-- **JwtAuthFilter.java** ★：手写过滤器（不引入 Spring Security）。拦 `/api/v1/chat`、`/api/v1/confirm` 与 `/admin/**`，解出 `UserPrincipal` 写入 `UserContext`（请求结束清理），其余路径放行；`/admin/**` 额外要求 `ADMIN` 角色，403 输出"需要 ADMIN 角色"。401/403 在过滤器层直接写 JSON（尚未进 `@ControllerAdvice` 范围）。
+- **JwtAuthFilter.java** ★：手写过滤器（不引入 Spring Security）。拦 `/api/v1/chat`、`/api/v1/confirm`、`/api/v1/tools`、`/api/v1/sessions/**` 与 `/admin/**`，解出 `UserPrincipal` 写入 `UserContext`（请求结束清理），其余路径放行；`/admin/**` 额外要求 `ADMIN` 角色，403 输出"需要 ADMIN 角色"。401/403 在过滤器层直接写 JSON（尚未进 `@ControllerAdvice` 范围）。
 - **UserPrincipal.java / UserContext.java**：身份 record（uid + role）与请求级 ThreadLocal。
 - **entity/AppUser.java / mapper/AppUserMapper.java**：`app_user` 表（username / password_hash / role / status）。
 - **WebConfig.java**：只注册一个 `JwtAuthFilter`（order=1）。
@@ -75,6 +75,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 - **TokenRecorder（接口）+ impl/TokenRecorderImpl**【④】：usage 打点 best-effort（31.8% 实验的数据源）。
 - **ConfirmManager（接口）+ impl/ConfirmManagerImpl / ConfirmController**★【①】：token → CompletableFuture 挂起；`POST /api/v1/confirm` 恢复；超时 = 拒绝。单实例内存实现（重启丢确认项视为拒绝，语义安全）。
 - **AgentSessionService（接口）+ impl/AgentSessionServiceImpl** + 四实体四 Mapper：chat_session / chat_message / checkpoint / llm_usage（消息即写即落库，重启不丢对话）。
+- **SessionController.java**：历史会话入口。`GET /api/v1/sessions` 列当前用户最近 50 条（标题取各自首条 USER 消息，无则"新对话"）；`GET /api/v1/sessions/{key}/messages` 只回 USER/ASSISTANT 供回放，工具调用轨迹不进入历史。归属校验与续聊共用 `ownsSession`——`user_id` 为 NULL 的存量会话放行，他人的返回 403。
 - **HistoryRecallTool**【④ ADR-005】：平台自有内部工具 `recallHistory`——会话记忆"冷层"取回通道。模型自主判断何时按关键词检索当前会话的早期消息与里程碑（chat_message/checkpoint，MySQL LIKE，跨表按时间合并）；AgentRunner 本地执行，不进工具层、不参与路由/确认，角色无关。三层记忆 = 最近 6 条（热）+ checkpoint 摘要（温）+ 全量历史调回（冷），替代向量库 RAG。
 - **AgentProperties.java / AgentConfig.java**：`platform.agent.*` 配置与需要原始值参数的 Bean 装配。
 

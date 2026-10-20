@@ -5,7 +5,6 @@ import io.github.renhaowan.platform.agent.auth.UserContext;
 import io.github.renhaowan.platform.agent.auth.UserPrincipal;
 import io.github.renhaowan.platform.agent.loop.AgentRunner;
 import io.github.renhaowan.platform.agent.memory.AgentSessionService;
-import io.github.renhaowan.platform.agent.memory.entity.ChatSession;
 import jakarta.annotation.PreDestroy;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -96,7 +95,7 @@ public class ChatController {
             sessionKey = sessionService.createSession(principal.uid());
         } else {
             sessionKey = request.sessionKey();
-            if (!ownsSession(sessionKey, principal)) {
+            if (!sessionService.ownsSession(sessionKey, principal.uid())) {
                 // 归属校验失败：以 SSE 错误事件反馈，不启动对话循环（403 语义）
                 events.error("403 无权访问该会话：会话不属于当前用户");
                 events.done();
@@ -126,15 +125,5 @@ public class ChatController {
             emitter.complete();
         }
         return emitter;
-    }
-
-    /**
-     * 会话归属校验：会话存在且已绑定 user_id 时，仅归属者可续聊。
-     * user_id 为 NULL 的历史遗留会话放行（不追溯封锁存量数据）。
-     */
-    private boolean ownsSession(String sessionKey, UserPrincipal principal) {
-        return sessionService.findBySessionKey(sessionKey)
-                .map(session -> session.getUserId() == null || session.getUserId().equals(principal.uid()))
-                .orElse(true);
     }
 }
