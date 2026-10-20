@@ -14,6 +14,9 @@ import lombok.Data;
  * 可空字段一律标 {@code updateStrategy = ALWAYS}：这些列全由导入结果决定，
  * 而 MyBatis-Plus 默认跳过 null 字段，会让"业务系统删掉的声明"永远留在库里——
  * 例如接口不再要求 ADMIN 后重新导入，旧值不覆盖就等于声明改不动。
+ * <p>
+ * <b>不要用只含少数字段的临时实体调用 {@code updateById}：</b>ALWAYS 会把未赋值的
+ * 声明列一并写成 NULL。局部更新要么先 {@code selectById} 回写整行，要么显式指定列。
  */
 @Data
 @TableName("tool_definition")
