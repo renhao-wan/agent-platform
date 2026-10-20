@@ -17,6 +17,8 @@ public class AgentProperties {
     /** 上下文裁剪阈值（粗估 token 数） */
     private int contextThreshold = 6000;
     private int confirmTimeoutSeconds = 300;
+    /** SSE 空闲保活间隔；确认等待与长生成期间靠它避免代理按 idle timeout 断链。0 表示关闭。 */
+    private long sseHeartbeatIntervalMs = 15_000;
 
     /** 大模型连接超时：供应商不可达时尽快失败，而不是占住 loop 线程。 */
     private int llmConnectTimeoutMs = 5000;

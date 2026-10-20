@@ -64,7 +64,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 
 ### sse/ 用户入口
 - **ChatController.java** ★：`POST /api/v1/chat` → SseEmitter + 显式 `ThreadPoolExecutor`（核心 4/上限 8，有界队列 64，AbortPolicy 拒绝→友好报错，命名线程 `agent-loop-*`）异步跑循环——**长连接不占容器业务线程**。身份在 HTTP 线程用 `UserContext.get()` 取出后**显式传参**给线程池里的循环（ThreadLocal 不跨线程池）。
-- **AgentEventEmitter.java**：8 类事件（session/plan/tool_call/tool_result/confirm_request/answer/error/done）的类型化发射器，连接断开静默丢弃（循环照常落库）。`done` 携带本轮 `steps` / `elapsedMs` / `promptTokens` / `completionTokens` / `totalTokens`，前端据此显示"N 步 · X 秒 · Y tokens"。
+- **AgentEventEmitter.java**：8 类事件（session/plan/tool_call/tool_result/confirm_request/answer/error/done）的类型化发射器，连接断开静默丢弃（循环照常落库）。`done` 携带本轮 `steps` / `elapsedMs` / `promptTokens` / `completionTokens` / `totalTokens`，前端据此显示"N 步 · X 秒 · Y tokens"。空闲期每 `sse-heartbeat-interval-ms`（默认 15 秒）发一条 SSE comment 保活——确认等待最长 300 秒、单次生成最长 120 秒，没有它会被反代 idle timeout 断链；comment 不产生事件，前端无感。
 
 ### tool/ 工具接入
 - **ToolGateway.java + impl/InProcessToolGateway.java** ★【①②的缝合线】：Agent 访问工具层的**唯一出口**。
@@ -125,11 +125,11 @@ KnowledgeSearchService/KnowledgeSearchTool
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
 - `knowledge/`：5 份制度语料（4 份 `public` + 1 份 `admin:policy`）+ 评估题库；镜像内带一份，compose 另把宿主目录只读挂到 `/app/knowledge`，改文档后重启或 reindex 即生效，不必重建镜像。
 
-## 5. 测试（42 类，273 项）
+## 5. 测试（44 类，282 项）
 
 | 测试类 | 覆盖 |
 |---|---|
-| OpenApiImportServiceTest (13) | 三类参数解析、slug 兜底、baseUrl 覆盖、非法 JSON、扩展字段声明敏感/角色（裸值与 springdoc 嵌套两种形状）、`$ref` 内联与自引用截断 |
+| OpenApiImportServiceTest (15) | 三类参数解析、slug 兜底、baseUrl 覆盖、非法 JSON、扩展字段声明敏感/角色（裸值与 springdoc 嵌套两种形状）、`$ref` 内联与自引用截断、参数 enum/items/default 保真、`content` 形式参数 |
 | ToolAccessServiceTest (13) | 闸门 1 全量下发、权限要求随描述、闸门 2 拒绝/放行/`*` 通配、未知工具、非法 JSON、转发失败回喂、确认前权限预判（拒绝/放行/未知工具） |
 | GenericHttpForwarderTest (11) | query/body/path 填充、UTF-8、8KB 截断、后端 500、不可达 |
 | ToolSelectorChainTest (7) | 阈值休眠、逐环弃权传递、短路、全弃权回落、异常降级、argmax 越界 |
@@ -152,7 +152,9 @@ KnowledgeSearchService/KnowledgeSearchTool
 | ToolChangeAnalyzerTest (9) | 新增必填参数、可选转必填、必填类型变化、端点变化、权限收紧/变更/撤销、无变化、非法 schema |
 | GenericHttpForwarderTimeoutTest (4) | WireMock：读超时、连接中断、非 JSON 响应体、截断边界 |
 | DynamicToolRegistryTest (4) | 确认映射、空清单、刷新失败保留旧桶 |
-| ConfirmManagerTest (5) | 同意/拒绝/超时/未知 token/发起者绑定 |
+| ConfirmManagerTest (5) | 同意/拒绝/超时/未知 token/发起者绑定；返回前清理挂起项 |
+| AgentEventEmitterTest (4) | 心跳 comment、定时保活、关闭后停止、写失败标记断链 |
+| ChatRequestValidationTest (3) | 消息空白拒绝、8000 字边界、超长拒绝 |
 | SessionLockRegistryTest (3) | 同会话互斥、不同会话并行、释放未知 key 幂等 |
 | AuthControllerTest (6) | 登录成功/密码错/用户不存在/参数校验、旧 SHA-256 摘要登录后升级、连续失败限流 |
 | PasswordHasherTest (5) | PBKDF2 加盐往返、随机盐、旧摘要识别与兼容、非法格式/迭代上限拒绝 |

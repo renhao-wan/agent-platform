@@ -1,9 +1,13 @@
 server:
   port: 8000
+  # 滚动发布/停机时不立刻掐断在途请求（含正在收尾的对话）；SSE 仍受下面 30 秒上限约束。
+  shutdown: graceful
 
 spring:
   application:
     name: agent-platform
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
   ai:
     model:
       # embedding 不走 spring.ai.openai（那是 DeepSeek 的聊天端点，没有 embeddings 接口）：
@@ -79,6 +83,9 @@ platform:
     max-steps: 8
     context-threshold: 6000
     confirm-timeout-seconds: 300
+    # SSE 空闲保活：确认等待最长 300 秒、模型单次生成最长 120 秒，期间无业务事件；
+    # 不发 comment 时反向代理的 idle timeout（常见 60 秒）会断开连接。0 关闭。
+    sse-heartbeat-interval-ms: ${SSE_HEARTBEAT_INTERVAL_MS:15000}
     # 大模型 HTTP 超时：供应商挂起时快速失败，避免 loop 线程无限期占用。
     # 读超时覆盖一次完整生成，长回答场景不要调得过小。
     llm-connect-timeout-ms: ${LLM_CONNECT_TIMEOUT_MS:5000}

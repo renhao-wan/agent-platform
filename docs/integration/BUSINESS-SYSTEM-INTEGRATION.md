@@ -60,7 +60,7 @@
   - 好：`"查询指定时间段可用的会议室"`、`"取消指定预订"`
   - 差：`"会议室接口"`、`"BookingController.cancel"`
 - `summary` 就是工具描述，是模型选工具的主要依据。`description` 在 `summary` 缺失时兜底；两者都缺时退化为 `GET /api/v1/...`，能注册但基本选不准。
-- 参数与请求体字段的 `description` 也会进入工具 schema，**枚举值请写进 description**（平台只转述 `type` / `format` / `description`，见 §3.5）。
+- 参数与请求体字段的 `description` 也会进入工具 schema。`enum` / `items` / `default` 等约束会随 schema 原样下发，但仍建议在 `description` 里写清枚举含义——模型读自然语言比读 JSON Schema 更稳。
 
 ### 3.4 路径参数
 
@@ -76,7 +76,7 @@
 |---|---|
 | `parameters`（无论 `in` 是 path / query / header / cookie） | 全部进入 schema；**转发时非 body 方法的剩余参数一律拼进 query**。因此**不要用 header 参数作为业务输入** |
 | `requestBody` | 只读取 `application/json`；`multipart/form-data`、表单、文件上传**不支持** |
-| 参数类型 | 只拷贝 `type` / `format` / `description`；`enum`、`items`、`default`、`minimum` 等不传递——枚举请写进描述 |
+| 参数类型 | `schema` 整体保留（`type` / `format` / `description` / `enum` / `items` / `default` / 数值边界等）；也兼容 `content.application/json.schema` 形状 |
 | `$ref` | 文档内 `#/components/...` **就地展开**；自引用会截断成宽松 object，不会无限展开 |
 | 参数校验 | 平台**不校验**参数是否满足 schema 或 required；参数不全时仍会发起请求。业务系统必须自己校验并返回 4xx |
 
@@ -159,7 +159,7 @@ x-require-confirm: true
 | 建议 | 原因 |
 |---|---|
 | 为每个 operation 写清晰的 `summary` + 参数描述 | 直接决定模型选工具与造参数的准确率 |
-| 枚举值写进 `description` | 平台不传 `enum` 字段 |
+| 枚举值写进 `description` | schema 里的 `enum` 会原样下发，但自然语言描述更利于模型理解取值含义 |
 | 列表接口分页、响应精简 | 8KB 截断，且 token 成本随响应线性增长 |
 | 写操作幂等 | 模型重试是常态 |
 | 接口名与业务动作一一对应，不要一个接口塞多种操作 | 模型按工具粒度决策，复合接口会迫使它"多走一步" |

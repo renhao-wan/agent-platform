@@ -179,15 +179,11 @@ public class OpenApiImportServiceImpl implements OpenApiImportService {
             if (name.isBlank()) {
                 continue;
             }
-            ObjectNode property = properties.putObject(name);
-            JsonNode paramSchema = resolveRefs(parameter.path("schema"), root, Set.of());
-            property.put("type", paramSchema.path("type").asText("string"));
-            if (paramSchema.hasNonNull("format")) {
-                property.put("format", paramSchema.get("format").asText());
-            }
+            ObjectNode property = parameterSchema(parameter, root);
             if (parameter.hasNonNull("description")) {
                 property.put("description", parameter.get("description").asText());
             }
+            properties.set(name, property);
             if (parameter.path("required").asBoolean(false)) {
                 required.add(name);
             }
@@ -209,6 +205,27 @@ public class OpenApiImportServiceImpl implements OpenApiImportService {
             required.forEach(requiredNode::add);
         }
         return schema;
+    }
+
+    /**
+     * 参数 schema 整体保留：{@code enum} / {@code items} / {@code default} / {@code minimum}
+     * 等约束随契约一起下发给模型，否则模型只能靠后端 4xx 猜参数范围。
+     * 兼容两种参数形状：常规的 {@code schema}，以及少见的
+     * {@code content.application/json.schema}；缺失时兜底为 string。
+     */
+    private ObjectNode parameterSchema(JsonNode parameter, JsonNode root) {
+        JsonNode schema = parameter.path("schema");
+        if (schema.isMissingNode() || schema.isNull()) {
+            schema = parameter.path("content").path("application/json").path("schema");
+        }
+        JsonNode resolved = resolveRefs(schema, root, Set.of());
+        ObjectNode property = resolved.isObject()
+                ? (ObjectNode) resolved
+                : MAPPER.createObjectNode();
+        if (!property.hasNonNull("type")) {
+            property.put("type", "string");
+        }
+        return property;
     }
 
     private String join(String baseUrl, String path) {

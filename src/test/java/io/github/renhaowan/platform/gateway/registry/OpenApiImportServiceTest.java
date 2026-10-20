@@ -253,6 +253,42 @@ class OpenApiImportServiceTest {
         assertThat(pageSize.get("format").asText()).isEqualTo("int32");
     }
 
+    @Test
+    void parameterSchemaKeepsEnumItemsDefaultAndBounds() {
+        String openapi = """
+                {"openapi":"3.0.0","servers":[{"url":"http://h"}],
+                 "paths":{"/api/v1/bookings":{"get":{"operationId":"list","summary":"查询预订",
+                   "parameters":[
+                     {"name":"status","in":"query","description":"预订状态","schema":{
+                        "type":"string","enum":["BOOKED","CANCELLED"],"default":"BOOKED"}},
+                     {"name":"roomIds","in":"query","schema":{"type":"array","items":{"type":"integer"}}},
+                     {"name":"page","in":"query","schema":{"type":"integer","minimum":1,"default":1}}]}}}}
+                """;
+        JsonNode props = json(service.parse("gw1", openapi, null).get(0).getInputSchema()).get("properties");
+
+        assertThat(props.get("status").get("enum").toString()).contains("BOOKED", "CANCELLED");
+        assertThat(props.get("status").get("default").asText()).isEqualTo("BOOKED");
+        assertThat(props.get("status").get("description").asText()).isEqualTo("预订状态");
+        assertThat(props.get("roomIds").get("items").get("type").asText()).isEqualTo("integer");
+        assertThat(props.get("page").get("minimum").asInt()).isEqualTo(1);
+    }
+
+    @Test
+    void parameterContentSchemaIsSupported() {
+        String openapi = """
+                {"openapi":"3.0.0","servers":[{"url":"http://h"}],
+                 "paths":{"/api/v1/bookings":{"get":{"operationId":"list","summary":"查询预订",
+                   "parameters":[{"name":"filter","in":"query",
+                     "content":{"application/json":{"schema":{"type":"object",
+                       "properties":{"roomId":{"type":"integer"}}}}}}]}}}}
+                """;
+        JsonNode filter = json(service.parse("gw1", openapi, null).get(0).getInputSchema())
+                .get("properties").get("filter");
+
+        assertThat(filter.get("type").asText()).isEqualTo("object");
+        assertThat(filter.get("properties").get("roomId").get("type").asText()).isEqualTo("integer");
+    }
+
     private JsonNode json(String raw) {
         try {
             return new com.fasterxml.jackson.databind.ObjectMapper().readTree(raw);

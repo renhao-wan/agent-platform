@@ -1,6 +1,7 @@
 package io.github.renhaowan.platform.agent.sse;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.renhaowan.platform.agent.AgentProperties;
 import io.github.renhaowan.platform.agent.auth.UserContext;
 import io.github.renhaowan.platform.agent.auth.UserPrincipal;
 import io.github.renhaowan.platform.agent.loop.AgentRunner;
@@ -23,8 +24,9 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * 对话入口：POST /api/v1/chat（SSE 流式返回）。
- * ReAct 循环在独立线程池执行（不占用容器工作线程）。确认等待期间没有数据下发，
- * 部署在反向代理之后时，代理的 idle timeout 必须大于确认超时，否则连接会在等待中被断开。
+ * ReAct 循环在独立线程池执行（不占用容器工作线程）。空闲期由
+ * {@link AgentEventEmitter} 每 15 秒发一条 comment 保活（见 {@code sse-heartbeat-interval-ms}），
+ * 确认等待与长生成期间不会因反向代理的 idle timeout 被断开。
  *
  * <p>【面试点：为什么禁用 Executors 工厂方法，显式 new ThreadPoolExecutor？】
  * <ul>
@@ -59,13 +61,16 @@ public class ChatController {
                     regexp = "^$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                     message = "sessionKey 必须是 UUID")
             String sessionKey,
-            @NotBlank String message) {
+            @NotBlank(message = "消息不能为空")
+            @jakarta.validation.constraints.Size(max = 8000, message = "消息不能超过 8000 字")
+            String message) {
     }
 
     private final AgentRunner agentRunner;
     private final AgentSessionService sessionService;
     private final ObjectMapper objectMapper;
     private final SessionLockRegistry sessionLocks;
+    private final AgentProperties properties;
 
     /** 循环执行线程池：带初始化的 final 字段，不参与 @RequiredArgsConstructor 生成的构造器。 */
     private final ThreadPoolExecutor executor = newLoopExecutor();
@@ -92,7 +97,8 @@ public class ChatController {
     @PostMapping(path = "/api/v1/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chat(@RequestBody @Valid ChatRequest request) {
         SseEmitter emitter = new SseEmitter(15 * 60_000L);
-        AgentEventEmitter events = new AgentEventEmitter(emitter, objectMapper);
+        AgentEventEmitter events = new AgentEventEmitter(
+                emitter, objectMapper, properties.getSseHeartbeatIntervalMs());
         emitter.onCompletion(events::close);
         emitter.onTimeout(events::close);
         emitter.onError(e -> events.close());

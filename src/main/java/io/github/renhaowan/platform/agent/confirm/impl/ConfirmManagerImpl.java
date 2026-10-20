@@ -43,11 +43,11 @@ public class ConfirmManagerImpl implements ConfirmManager {
         } catch (Exception e) {
             return false;
         } finally {
-            // 超时/中断/异常时清理；正常完成由 complete 负责，重复 remove 无副作用
-            if (!future.isDone()) {
-                pendings.remove(token);
-                futures.remove(token);
-            }
+            // 正常完成与超时/中断都在返回前清理：否则 await 已返回 true、
+            // 调用方立刻 pendingOf 仍可能读到尚未被 complete 线程移除的确认项。
+            // 与 complete 的移除幂等，重复 remove 无副作用。
+            pendings.remove(token);
+            futures.remove(token);
         }
     }
 

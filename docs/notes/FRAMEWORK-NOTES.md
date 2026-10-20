@@ -43,7 +43,7 @@
   data: {"tool":"createBooking","arguments":"{...}"}
   ```
   → `AgentEventEmitter`（类型化封装：session/plan/tool_call/tool_result/confirm_request/answer/error/done，事件名集中在 `EventType`）。
-- **心跳保活**：连接空闲太久会被 Nginx/反向代理掐掉，通用做法是周期发一行注释帧 `: keep-alive` 续命。本项目用户侧未单独实现心跳——`SseEmitter` 自带的 timeout 与浏览器 EventSource 的自动重连够用。
+- **心跳保活**：连接空闲太久会被 Nginx/反向代理掐掉，通用做法是周期发一行注释帧 `: keep-alive` 续命。本项目在 `AgentEventEmitter` 里做：共享守护调度器按 `sse-heartbeat-interval-ms`（默认 15 秒）发 comment，确认等待与长生成期间连接不会因 idle timeout 断开；comment 不产生事件，EventSource 自动忽略。部署时代理的 idle timeout 应大于心跳间隔。
 - 超时与清理：`new SseEmitter(timeoutMillis)`，`onCompletion/onTimeout/onError` 回调里做收尾。→ `ChatController.chat()`；连接断开后事件静默丢弃、循环照常落库。
 
 ## 5. MyBatis-Plus：只写业务 SQL，模板 CRUD 不写

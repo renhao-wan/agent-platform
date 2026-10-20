@@ -38,6 +38,7 @@ Spring AI 默认会自己执行工具。关掉之后，每轮只拿回模型的 
 - **线程池参数**：核心 4 / 上限 8 / 有界队列 64 / `AbortPolicy` / 命名 `agent-loop-N` / daemon。拒绝时返回友好错误而不是静默丢任务。
 - **身份显式跨线程**：`UserContext.get()` 在 HTTP 线程取值，作为参数传给 `AgentRunner.run(...)`。ThreadLocal 不跨线程池。
 - **事件发送串行化**：`AgentEventEmitter.send` 是 `synchronized`，避免多个工具结果并发写同一个 SSE 连接。
+- **空闲保活**：所有连接共享一个守护调度器，每 15 秒发一条 SSE comment；确认等待与长生成期间不会因代理 idle timeout 断链。发送失败即标记连接关闭，循环在下一步前停止。
 - **同一会话串行**：`SessionLockRegistry.tryAcquire(sessionKey)` 拒绝并发续聊，避免两条循环交错写历史；锁在循环结束（含异常/拒绝）时释放。
 
 ## 4. 深挖问题清单
@@ -61,7 +62,7 @@ ReAct 的典型链路是"查可用性 → 创建 → 回答"两三步；8 步给
 `ConfirmManager.request` 生成 token 并创建 `CompletableFuture`，循环 `await` 等待；`POST /api/v1/confirm` 用 token 恢复，且校验确认项属于当前用户。超时视为拒绝。单实例内存实现，重启丢挂起项即拒绝——语义安全。
 
 **Q：确认等待 5 分钟，SSE 连接不会被代理断开吗？**
-**当前没有心跳**。`SseEmitter` 本身 15 分钟超时，`confirm-timeout-seconds` 默认 300 秒；等待期间连接上没有任何数据。直连没问题，但经过 Nginx/网关时，空闲超时短于确认超时会被断开。生产应在等待期间周期性发送 SSE comment 心跳，并让代理 idle timeout 大于确认超时。这是当前实现一个明确的缺口。
+已处理。确认等待与长生成期间没有任何业务事件，`AgentEventEmitter` 每 `sse-heartbeat-interval-ms`（默认 15 秒）发一条 SSE comment 保活；comment 不产生事件，浏览器 EventSource 自动忽略。部署在 Nginx/网关后时，代理的 idle timeout 仍应大于心跳间隔（常见配置 60 秒即可）。当前**没有**断线续传（刷新页面只能看历史，不能恢复进行中的这一轮），那需要事件 id + `Last-Event-ID` + 短期事件表，属于另一个量级的投入。
 
 **Q：客户端断开后循环会停吗？**
 下一步开始前会检查 `events.isClosed()`；确认等待前若已断开，直接按拒绝处理，避免空等。但**当前步**如果已经拿到模型响应，仍会把工具执行完并落库。之后不再继续。没有断点续传。
@@ -108,7 +109,8 @@ ReAct 的典型链路是"查可用性 → 创建 → 回答"两三步；8 步给
 | 敏感确认挂起 / 超时拒绝 / 归属校验 | `ConfirmManagerImpl` + `ConfirmController`；`ConfirmManagerTest` | 单实例可用；多实例演示级 |
 | 会话级串行锁 | `SessionLockRegistry`；`SessionLockRegistryTest` | 单实例可用；多实例演示级 |
 | LLM 超时 | `llm-connect-timeout-ms` / `llm-read-timeout-ms` | 接近生产（仅超时，无熔断/转移） |
-| SSE 心跳与断线续传 | 未实现 | 演示级 |
+| SSE 心跳 | `AgentEventEmitter` 定时 comment；`AgentEventEmitterTest` | 接近生产 |
+| SSE 断线续传 | 未实现 | 演示级 |
 | 取消正在执行的对话 | 未实现 | 演示级 |
 | 分布式追踪 / 请求 ID | 未实现（日志靠 sessionKey） | 演示级 |
 
@@ -118,7 +120,6 @@ ReAct 的典型链路是"查可用性 → 创建 → 回答"两三步；8 步给
 
 | 拓展点 | 现在的问题 | 解决办法 | 触发条件 |
 |---|---|---|---|
-| SSE 心跳 | 确认等待 5 分钟期间无数据，代理可能断链 | 等待期间每 15–30 秒发 SSE comment；代理 idle timeout > 确认超时 | 部署在反向代理/网关后 |
 | 断线续传 | 刷新页面后只能看历史，不能恢复当前轮 | 事件带 `id`，支持 `Last-Event-ID`；把本轮事件写入短期事件表，重连时补发 | 前端要求强一致体验 |
 | 会话锁跨实例 | 多副本下同一会话可被两个实例同时处理 | Redis 分布式锁（带 TTL 与续租）或数据库行锁 | 部署副本数 > 1 |
 | 确认项跨实例 | 用户请求落到另一实例时无法恢复 | `pending_confirm` 共享表 + 状态 CAS；事件经消息总线通知发起实例 | 部署副本数 > 1 |

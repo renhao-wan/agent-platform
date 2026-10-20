@@ -911,7 +911,7 @@ button{cursor:pointer;border:0;background:none}
       <div class="composer">
         <form class="composer-in" id="chat-form">
           <div class="wrap">
-            <input id="message" placeholder="描述你的需求，Agent 会规划并调用已接入的工具…" autocomplete="off">
+            <input id="message" maxlength="8000" placeholder="描述你的需求，Agent 会规划并调用已接入的工具…" autocomplete="off">
           </div>
           <button class="send" id="send" type="submit" disabled>执行</button>
         </form>
