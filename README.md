@@ -29,7 +29,7 @@
 ## 核心特性
 
 1. **进程内工具调用**：Agent 与工具层同进程，越权校验、泛化转发、结果回喂都在一次方法调用内完成——没有协议层、没有网络跳转
-2. **零代码工具接入**：存量 OpenAPI 接口自动解析注册为标准化 Tool（path/query/body 参数 → inputSchema，文档内 `$ref` 就地对模型展开）；权限要求与敏感度由业务系统在契约里用扩展字段声明（`x-required-permission` / `x-require-confirm`），平台不猜测接口语义
+2. **零代码工具接入**：存量 OpenAPI 接口自动解析注册为标准化 Tool（path/query/body 参数 → inputSchema，文档内 `$ref` 就地对模型展开）；权限要求与敏感度由业务系统在契约里用扩展字段声明（`x-required-permission` / `x-require-confirm`），平台不猜测接口语义。业务后端需要满足的条件与"不满足时平台会怎样"见 [接入规范](docs/BUSINESS-SYSTEM-INTEGRATION.md)
 3. **ReAct 显式循环**：规划-执行-反思逐步驱动，SSE 分阶段推送（plan / tool_call / tool_result / confirm_request / answer）
 4. **上下文工程**：滑动窗口 + 工具轨迹摘要混合裁剪，Token usage 全链路打点
 5. **轻量 RBAC + 三道权限闸门**：JWT 只带身份（uid），角色与权限每次请求回库加载——停用/降权下一个请求即生效；管理端提供角色-权限矩阵。三道闸门分别为清单组装（把能力与权限要求一并下发给模型——裁掉会让模型把权限问题答成能力问题）· 执行点鉴权（★ 安全边界）· 敏感操作人工二次确认。校验依据是代码里的用户权限集合，不是模型说了什么
@@ -74,6 +74,8 @@ cd ../business-systems && docker compose up -d --build
 | [ADR-008](docs/adr/ADR-008-contract-reconciliation.md) | 工具契约按来源做快照对账 | 每轮用契约推导的期望状态与库内工具收敛：新增/更新/软下线；人工启停不被覆盖，抓取失败保留上一版 |
 | [ADR-009](docs/adr/ADR-009-source-discovery-and-polling.md) | 来源静态配置 + 主动轮询，不引入注册中心 | 变更源不在业务进程内，推模型要求业务改造；轮询天然自愈。演进路径（DB 注册表 → webhook → 服务发现）已写明但不提前实现 |
 | [ADR-010](docs/adr/ADR-010-identity-only-jwt-and-rbac.md) | JWT 只承载身份，角色与权限每请求回库 | 授权是可变的服务端状态；写进 token 意味着降权要等过期，补撤销机制又回到服务端状态 |
+
+业务系统接入需要满足的完整契约要求、失败语义、身份通道，以及"不满足规范时平台的实际行为"对照表，见 [docs/BUSINESS-SYSTEM-INTEGRATION.md](docs/BUSINESS-SYSTEM-INTEGRATION.md)。
 
 项目亮点按四个主题各自成文，含高频追问问答：[docs/highlights/](docs/highlights/README.md)。
 
