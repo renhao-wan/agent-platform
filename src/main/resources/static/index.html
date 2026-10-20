@@ -422,6 +422,78 @@ button{cursor:pointer;border:0;background:none}
 }
 .btn-no:hover{border-color:var(--danger);color:var(--danger)}
 
+/* --- 来源管理抽屉 --- */
+#sources{position:fixed;inset:0;z-index:25;display:flex;justify-content:flex-end}
+.drawer{
+  position:relative;width:min(620px,94vw);height:100%;
+  background:var(--bg);border-left:1px solid var(--line);
+  display:flex;flex-direction:column;box-shadow:var(--shadow-lg);
+  animation:slideleft .26s var(--ease);
+}
+@keyframes slideleft{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
+.drawer-h{
+  flex-shrink:0;display:flex;align-items:flex-start;gap:12px;
+  padding:18px 22px 14px;border-bottom:1px solid var(--line);
+}
+.drawer-h h2{font-size:15px;font-weight:600}
+.drawer-sub{font-size:12.5px;color:var(--t3);margin-top:3px;line-height:1.5}
+.drawer-x{
+  margin-left:auto;width:30px;height:30px;border-radius:var(--r);
+  color:var(--t3);font-size:20px;line-height:1;flex-shrink:0;
+}
+.drawer-x:hover{background:var(--surface-2);color:var(--t1)}
+.drawer-tools{
+  flex-shrink:0;display:flex;gap:8px;align-items:center;
+  padding:12px 22px;border-bottom:1px solid var(--line-soft);
+}
+.drawer-tools .spacer{flex:1}
+.drawer-body{flex:1;overflow:auto;padding:14px 22px 24px}
+.src-empty{font-size:13px;color:var(--t4);padding:18px 0}
+
+.src{
+  border:1px solid var(--line);border-radius:8px;background:var(--surface);
+  padding:13px 15px;margin-bottom:10px;
+}
+.src-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.src-key{font-size:13.5px;font-weight:600;font-family:var(--mono)}
+.src-origin{font-size:11px;padding:1px 6px;border:1px solid var(--line);border-radius:3px;color:var(--t3)}
+.src-origin[data-o="ADMIN"]{color:var(--accent-ink);border-color:var(--accent-line);background:var(--accent-wash)}
+.pill{font-size:11px;font-weight:600;padding:1px 7px;border-radius:9px;margin-left:auto}
+.pill[data-s="OK"]{color:var(--ok);background:var(--ok-wash)}
+.pill[data-s="FAILED"],.pill[data-s="CONFLICT"]{color:var(--danger);background:var(--danger-wash)}
+.pill[data-s="RETIRED"]{color:var(--t3);background:var(--surface-2)}
+.pill[data-s="PENDING"],.pill[data-s="BUSY"]{color:var(--accent-ink);background:var(--accent-wash)}
+.src-url{
+  font:12.5px/1.5 var(--mono);color:var(--t2);margin-top:7px;
+  word-break:break-all;
+}
+.src-meta{font-size:12px;color:var(--t3);margin-top:7px;display:flex;gap:14px;flex-wrap:wrap}
+.src-meta b{font-weight:600;color:var(--t2)}
+.src-err{
+  font-size:12px;color:var(--danger);margin-top:7px;line-height:1.5;
+  background:var(--danger-wash);border-radius:4px;padding:6px 8px;
+}
+.src-acts{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.src-acts .btn-ghost{padding:5px 10px;font-size:12.5px}
+.src-acts .danger:hover{border-color:var(--danger);color:var(--danger)}
+
+.src-form{
+  flex-shrink:0;border-top:1px solid var(--line);background:var(--surface-2);
+  padding:16px 22px 20px;display:flex;flex-direction:column;gap:11px;
+  max-height:62%;overflow:auto;
+}
+.src-form h3{font-size:13px;font-weight:600}
+.src-form .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.src-form .grid .field input{background:var(--surface)}
+.src-form .check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--t2)}
+.src-form .acts{display:flex;gap:10px;justify-content:flex-end;margin-top:2px}
+.src-form .acts .btn{padding:8px 18px;font-size:13px}
+.src-form .note{font-size:11.5px;color:var(--t4);line-height:1.45}
+
+@media (max-width:640px){
+  .src-form .grid{grid-template-columns:1fr}
+}
+
 /* 打字光标 */
 .caret{
   display:inline-block;width:2px;height:16px;background:var(--accent);
@@ -565,6 +637,7 @@ button{cursor:pointer;border:0;background:none}
       <span class="lamp"></span><span id="status-text">空闲</span>
     </div>
     <button class="btn-ghost" id="new-chat" type="button">新建对话</button>
+    <button class="btn-ghost" id="sources-open" type="button" hidden>来源管理</button>
     <div class="account">
       <span class="name" id="who-name"></span>
       <span class="rolebadge" id="who-role" data-r=""></span>
@@ -646,6 +719,64 @@ button{cursor:pointer;border:0;background:none}
       </div>
     </div>
   </div>
+</div>
+
+<!-- ============ 来源管理（ADMIN） ============ -->
+<div id="sources" hidden>
+  <div class="scrim" id="sources-scrim"></div>
+  <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="sources-title">
+    <header class="drawer-h">
+      <div>
+        <h2 id="sources-title">契约来源</h2>
+        <p class="drawer-sub">工具由来源契约推导，这里只管来源：新增、改地址、立即对账、下线。</p>
+      </div>
+      <button class="drawer-x" id="sources-close" type="button" aria-label="关闭">×</button>
+    </header>
+
+    <div class="drawer-tools">
+      <button class="btn-ghost" id="sources-refresh" type="button">刷新</button>
+      <button class="btn-ghost" id="sources-new" type="button">新增来源</button>
+      <span class="spacer"></span>
+      <span class="src-meta" id="sources-hint"></span>
+    </div>
+
+    <div class="drawer-body">
+      <div id="src-list"></div>
+    </div>
+
+    <form class="src-form" id="src-form" hidden>
+      <h3 id="src-form-title">新增来源</h3>
+      <div class="grid">
+        <div class="field">
+          <label for="src-key">sourceKey</label>
+          <input id="src-key" placeholder="booking" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="src-url">契约地址 contractUrl</label>
+          <input id="src-url" placeholder="http://host:port/v3/api-docs" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="src-base">转发基址 baseUrl（可选）</label>
+          <input id="src-base" placeholder="默认取契约地址的 origin" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="src-key-name">凭证 header 名（可选）</label>
+          <input id="src-key-name" placeholder="X-Service-Key" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="src-key-val">凭证值（编辑时留空保持原值）</label>
+          <input id="src-key-val" type="password" autocomplete="new-password" placeholder="留空则不配置服务凭证">
+        </div>
+      </div>
+      <label class="check"><input id="src-enabled" type="checkbox" checked> 启用该来源（停用后对账跳过，其工具不再下发）</label>
+      <p class="note">sourceKey 是工具归属与对账的唯一标识，创建后不可修改。凭证值只写不读。</p>
+      <div class="err" id="src-err" hidden></div>
+      <div class="acts">
+        <button class="btn-ghost" id="src-cancel" type="button">取消</button>
+        <button class="btn" id="src-save" type="submit">保存</button>
+      </div>
+    </form>
+  </aside>
 </div>
 
 <!-- ============ 确认层 ============ -->
@@ -896,6 +1027,7 @@ function showLogin() {
   $("login").hidden = false;
   $("console").hidden = true;
   $("confirm").hidden = true;
+  closeSources();
 }
 function showConsole() {
   $("login").hidden = true;
@@ -905,6 +1037,7 @@ function showConsole() {
   rb.textContent = myRole || "—";
   rb.dataset.r = myRole;
   $("ident-role").textContent = myRole || "—";
+  $("sources-open").hidden = myRole !== "ADMIN";
   $("ident-session").textContent = sessionKey ? sessionKey.slice(0, 8) : "待建立";
   $("hint-session").textContent = sessionKey ? "会话 " + sessionKey.slice(0, 8) : "";
   setStatus("idle", "空闲");
@@ -1375,6 +1508,261 @@ async function loadToolExamples() {
     // 拿不到工具清单只是没有示例，不影响对话
   }
 }
+
+/* ---------------- 来源管理（ADMIN） ---------------- */
+
+let srcList = [];
+let srcEditing = null;      // 正在编辑的 sourceKey；null 表示新增
+let srcRetireArmed = null;  // 已点过一次「下线」、等待二次确认的来源
+
+const SRC_STATUS = {
+  OK: "正常", FAILED: "失败", CONFLICT: "冲突",
+  BUSY: "对账中", PENDING: "待对账", RETIRED: "已下线"
+};
+
+function openSources() {
+  $("sources").hidden = false;
+  $("sources-hint").textContent = "";
+  closeSourceForm();
+  loadSources();
+}
+function closeSources() {
+  $("sources").hidden = true;
+  srcRetireArmed = null;
+  closeSourceForm();
+}
+function closeSourceForm() {
+  srcEditing = null;
+  $("src-form").hidden = true;
+  $("src-err").hidden = true;
+  $("src-key-val").value = "";
+}
+
+function srcHint(text, danger) {
+  const el = $("sources-hint");
+  el.textContent = text || "";
+  el.style.color = danger ? "var(--danger)" : "";
+}
+
+async function srcFetch(url, opts) {
+  const resp = await fetch(url, Object.assign({ headers: authHeaders() }, opts || {}));
+  if (resp.status === 401) { expire(); return null; }
+  const body = await resp.json().catch(() => null);
+  if (!resp.ok) {
+    const msg = (body && body.message) || "请求失败（HTTP " + resp.status + "）";
+    throw new Error(msg);
+  }
+  return body;
+}
+
+async function loadSources() {
+  try {
+    const body = await srcFetch("/admin/sources");
+    if (!body) return;
+    srcList = body.data || [];
+    renderSources();
+  } catch (e) {
+    srcHint(e.message, true);
+  }
+}
+
+function renderSources() {
+  const box = $("src-list");
+  box.textContent = "";
+  if (!srcList.length) {
+    const p = document.createElement("p");
+    p.className = "src-empty";
+    p.textContent = "还没有登记来源。新增一个来源，平台会拉取它的契约并在下一次对账后生成工具。";
+    box.appendChild(p);
+    return;
+  }
+  srcList.forEach(s => box.appendChild(sourceCard(s)));
+}
+
+function sourceCard(s) {
+  const card = document.createElement("div");
+  card.className = "src";
+
+  const top = document.createElement("div");
+  top.className = "src-top";
+  const key = document.createElement("span");
+  key.className = "src-key";
+  key.textContent = s.sourceKey;
+  const origin = document.createElement("span");
+  origin.className = "src-origin";
+  origin.dataset.o = s.origin;
+  origin.textContent = s.origin === "ADMIN" ? "管理端" : "配置文件";
+  const pill = document.createElement("span");
+  pill.className = "pill";
+  pill.dataset.s = s.status;
+  pill.textContent = SRC_STATUS[s.status] || s.status || "—";
+  top.append(key, origin, pill);
+
+  const url = document.createElement("div");
+  url.className = "src-url";
+  url.textContent = s.contractUrl;
+
+  const meta = document.createElement("div");
+  meta.className = "src-meta";
+  const add = (html) => {
+    const span = document.createElement("span");
+    span.innerHTML = html;
+    meta.appendChild(span);
+  };
+  add("工具 <b>" + s.toolCount + "</b>");
+  add("上次成功 <b>" + (fmtWhen(s.lastSuccessAt) || "—") + "</b>");
+  add("凭证 <b>" + (s.serviceKeyConfigured ? "已配置" : "未配置") + "</b>");
+  if (!s.enabled) add("<b>已停用</b>");
+
+  card.append(top, url, meta);
+
+  if (s.lastError) {
+    const err = document.createElement("div");
+    err.className = "src-err";
+    err.textContent = s.lastError.length > 180 ? s.lastError.slice(0, 180) + "…" : s.lastError;
+    err.title = s.lastError;
+    card.appendChild(err);
+  }
+
+  const acts = document.createElement("div");
+  acts.className = "src-acts";
+  if (s.status !== "RETIRED") {
+    const syncBtn = document.createElement("button");
+    syncBtn.type = "button";
+    syncBtn.className = "btn-ghost";
+    syncBtn.textContent = "立即对账";
+    syncBtn.addEventListener("click", () => syncSource(s.sourceKey, syncBtn));
+    acts.appendChild(syncBtn);
+
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = "btn-ghost";
+    editBtn.textContent = "编辑";
+    editBtn.addEventListener("click", () => openSourceForm(s));
+    acts.appendChild(editBtn);
+
+    if (s.origin === "ADMIN") {
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "btn-ghost danger";
+      delBtn.textContent = srcRetireArmed === s.sourceKey ? "确认下线" : "下线";
+      delBtn.addEventListener("click", () => retireSource(s.sourceKey, delBtn));
+      acts.appendChild(delBtn);
+    } else {
+      const note = document.createElement("span");
+      note.className = "src-meta";
+      note.textContent = "由配置文件管理，移除配置项即可下线";
+      acts.appendChild(note);
+    }
+  }
+  card.appendChild(acts);
+  return card;
+}
+
+async function syncSource(key, btn) {
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "对账中…";
+  srcHint("");
+  try {
+    const body = await srcFetch("/admin/sources/" + encodeURIComponent(key) + "/sync",
+                                 { method: "POST" });
+    if (!body) return;
+    const r = body.data || {};
+    const text = SRC_STATUS[r.status] || r.status;
+    srcHint(key + " 对账" + (r.status === "OK" ? "完成：" + text : "未成功：" + text) +
+            (r.error ? "　" + r.error : ""), r.status !== "OK");
+    await loadSources();
+  } catch (e) {
+    srcHint(e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
+async function retireSource(key, btn) {
+  if (srcRetireArmed !== key) {
+    srcRetireArmed = key;
+    btn.textContent = "确认下线";
+    setTimeout(() => {
+      if (srcRetireArmed === key) {
+        srcRetireArmed = null;
+        btn.textContent = "下线";
+      }
+    }, 8000);
+    return;
+  }
+  srcRetireArmed = null;
+  btn.disabled = true;
+  try {
+    await srcFetch("/admin/sources/" + encodeURIComponent(key), { method: "DELETE" });
+    srcHint(key + " 已下线，名下工具已软下线（不删行）");
+    await loadSources();
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = "下线";
+    srcHint(e.message, true);
+  }
+}
+
+function openSourceForm(s) {
+  srcEditing = s ? s.sourceKey : null;
+  $("src-form-title").textContent = s ? "编辑 " + s.sourceKey : "新增来源";
+  $("src-key").value = s ? s.sourceKey : "";
+  $("src-key").disabled = !!s;
+  $("src-url").value = s ? s.contractUrl : "";
+  $("src-base").value = (s && s.baseUrl) || "";
+  $("src-key-name").value = "";
+  $("src-key-val").value = "";
+  $("src-enabled").checked = s ? s.enabled : true;
+  $("src-err").hidden = true;
+  $("src-form").hidden = false;
+  if ($("src-key").disabled) $("src-url").focus();
+  else $("src-key").focus();
+}
+
+$("sources-open").addEventListener("click", openSources);
+$("sources-close").addEventListener("click", closeSources);
+$("sources-scrim").addEventListener("click", closeSources);
+$("sources-refresh").addEventListener("click", () => loadSources());
+$("sources-new").addEventListener("click", () => openSourceForm(null));
+$("src-cancel").addEventListener("click", closeSourceForm);
+
+$("src-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const payload = {
+    contractUrl: $("src-url").value.trim(),
+    baseUrl: $("src-base").value.trim() || null,
+    serviceKeyName: $("src-key-name").value.trim() || null,
+    enabled: $("src-enabled").checked
+  };
+  const secret = $("src-key-val").value;
+  if (secret) payload.serviceKeyValue = secret;   // 留空表示不传，编辑时保持原值
+  const editing = srcEditing;
+  let url = "/admin/sources", method = "POST";
+  if (editing) {
+    url += "/" + encodeURIComponent(editing);
+    method = "PUT";
+  } else {
+    payload.sourceKey = $("src-key").value.trim();
+  }
+  const errEl = $("src-err");
+  errEl.hidden = true;
+  try {
+    await srcFetch(url, { method, body: JSON.stringify(payload) });
+    srcHint(editing ? "已保存并重新对账" : "已新增并立即对账");
+    closeSourceForm();
+    await loadSources();
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.hidden = false;
+  }
+});
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && !$("sources").hidden) closeSources();
+});
 
 /* ---------------- 启动 ---------------- */
 

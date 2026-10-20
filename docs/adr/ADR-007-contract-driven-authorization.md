@@ -34,6 +34,7 @@ M5 之后平台的接入面已经收敛为"一份 OpenAPI 文档"，但权限这
 3. **工具来源在启动时自动拉取注册**：`platform.gateway.sources` 列出各业务系统的契约地址，`OpenApiSourceRegistrar` 逐个拉取、解析、注册；契约 URL 的 origin 直接作为该来源工具的调用基地址，所以契约本身不必写死主机名。
    - 单个来源失败只告警跳过，不阻断启动（一个后端没起来，不该让平台整个起不来）。
    - `sources` 清空则退回人工导入通道（`POST /admin/protocols/import` 保留）。
+   - 后续（2026-10-20）：来源清单已迁入数据库注册表（ADR-009），人工导入通道随之删除——它会产生没有来源归属、不参与对账的幽灵工具，见 `docs/RECONCILIATION-BACKLOG.md` 第 8 项。
 4. **用户身份透传**：转发时在服务级凭证（`X-Service-Key`）之外带上 `X-On-Behalf-Of-User: {uid}`，业务系统据此把数据记在最终用户名下——同一句话，`staff01` 与 `admin` 拿到各自的记录。业务系统仅在服务凭证校验通过时才采信该头。
 
 ## 后果

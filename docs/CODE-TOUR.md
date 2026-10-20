@@ -51,7 +51,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 - **ForwardProperties.java**：`platform.gateway.forward.connect-timeout-ms` / `read-timeout-ms`（默认 2000 / 10000，原先硬编码在类里）。
 
 ### web/ 管理端
-- **ProtocolAdminController.java** ★：`POST /admin/protocols/import`（gatewayId + openapi + baseUrl + 服务级 auth header；**角色与敏感度不在这里传**——它们是业务系统写在契约里的声明；带可选 `sourceKey` 时按快照对账，不带则沿用逐条 upsert）、`GET /admin/tools`（含已下线/已禁用工具，便于观察对账结果）、`PUT /admin/tools/{id}/enabled`（人工启停，对账不会覆盖）。整个 `/admin/**` 由 `JwtAuthFilter` 要求 ADMIN 角色——**没有第二套凭证体系**。
+- **ProtocolAdminController.java** ★：`GET /admin/tools`（含已下线/已禁用工具，便于观察对账结果）、`PUT /admin/tools/{id}/enabled`（人工启停，对账不会覆盖）。**没有手工导入入口**——工具定义只能由来源对账写入，否则会留下没有来源归属、不参与对账的幽灵工具；接入新接口请登记来源（`/admin/sources`）。整个 `/admin/**` 由 `JwtAuthFilter` 要求 ADMIN 角色——**没有第二套凭证体系**。
 - **ToolSourceAdminController.java**【ADR-008/009】：`GET /admin/sources`（各来源最后对账状态与计数）、`POST /admin/sources`（新建并立即对账）、`PUT /admin/sources/{sourceKey}`（编辑并立即对账）、`DELETE /admin/sources/{sourceKey}`（软下线并立即下线其工具）、`POST /admin/sources/sync`（全部立即对账）、`POST /admin/sources/{sourceKey}/sync`（单来源，未配置/已下线 404）。**只能管理来源，不能编辑工具**：契约地址、调用基地址、服务凭证、启停；工具定义永远由契约推导。凭证只入不出——查询只返回 `serviceKeyConfigured`。
 
 ---
@@ -121,7 +121,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
 - `knowledge/`：5 份制度语料（4 份 PUBLIC + 1 份 ADMIN）+ 评估题库；镜像内带一份，compose 另把宿主目录只读挂到 `/app/knowledge`，改文档后重启或 reindex 即生效，不必重建镜像。
 
-## 5. 测试（33 类，198 项）
+## 5. 测试（34 类，206 项）
 
 | 测试类 | 覆盖 |
 |---|---|
@@ -137,7 +137,8 @@ KnowledgeSearchService/KnowledgeSearchTool
 | SessionControllerTest (4) | 会话列表/历史端点：鉴权、归属校验、404 |
 | AgentRunnerTest (6) | 循环三态：执行/同意/拒绝/超步数、recall 本地执行、角色不足时跳过确认且不执行 |
 | OpenApiSourceRegistrarTest (1) | 启动入口触发全量对账 |
-| ContractSyncServiceTest (10) | 成功对账与凭证绑定、baseUrl 覆盖、抓取/解析失败保留 last-known-good、冲突不发布事件、监听器失败不影响成功状态、从注册表取来源、单来源对账、并发返回 BUSY、完成后释放锁 |
+| ContractSyncServiceTest (11) | 成功对账与凭证绑定、baseUrl 覆盖、抓取/解析失败保留 last-known-good、冲突不发布事件且 `last_error` 含冲突工具与占用来源、监听器失败不影响成功状态、从注册表取来源、单来源对账、并发返回 BUSY、完成后释放锁 |
+| ToolSourceAdminControllerTest (9) | HTTP 契约：400 参数校验、404 不存在、409 重复创建/下线配置来源、创建后立即对账、凭证只披露 `serviceKeyConfigured` |
 | SourceRegistryServiceTest (8) | 配置种子插入/刷新/不覆盖 ADMIN、配置移除软下线工具、id 缺失与重复 fail fast、重复创建 409、编辑提升 ADMIN 且凭证 null 保持、retire 拒绝 CONFIG / 软下线 ADMIN、查询不回显凭证 |
 | SourceConfigSeederTest (1) | 启动种子器调用注册表 |
 | ToolChangeAnalyzerTest (8) | 新增必填参数、可选转必填、必填类型变化、端点变化、角色收紧/变更、无变化、非法 schema |
@@ -147,7 +148,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 | AuthControllerTest (4) | 登录成功/密码错/用户不存在/参数校验 |
 | ToolCatalogControllerTest (3) | 工具目录端点：未登录 401、身份透传、服务凭证不外泄 |
 | ContextTrimmerTest (3) | 不裁剪/裁剪结构/摘要计数 |
-| ToolRegistryServiceTest (12) | upsert 插入/更新、快照新增/未变不重写/更新保留人工禁用/软下线/已下线不重复处理/跨来源冲突整份放弃/已下线可被接管/契约内重名、启停 |
+| ToolRegistryServiceTest (10) | 快照新增/未变不重写/更新保留人工禁用/软下线/已下线不重复处理/跨来源冲突整份放弃/已下线可被接管/契约内重名、启停 |
 | PlatformApplicationTests (1) | 上下文启动 |
 | AgentSelfHealingTest (1) | ★ 端到端：WireMock 业务系统首次 500、二次 200，ReAct 循环不中断、两次观察都回填落库 |
 | MarkdownChunkerTest (10) | 按 H2 切分、前缀、H3 降级、硬切重叠、小段合并、导语并入首节时保留小节名、代码块/表格、front-matter |
