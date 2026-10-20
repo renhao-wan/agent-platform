@@ -69,6 +69,9 @@ cd ../business-systems && docker compose up -d --build
 | [ADR-006](docs/adr/ADR-006-in-process-tool-invocation.md) | 进程内工具调用，删除 MCP 协议层与 HTTP 自环 | 自环的理由只有"预留拆分部署"一句且从未兑现，代价是每次调用多一跳网络、异常跨协议层 |
 | [ADR-007](docs/adr/ADR-007-contract-driven-authorization.md) | 权限要求与工具来源一律从业务契约读取 | 角色与敏感度由业务方在契约里声明、工具来源启动时自动拉取——平台不编码业务语义，"零改造接入"才成立 |
 | [ADR-008](docs/adr/ADR-008-contract-reconciliation.md) | 工具契约按来源做快照对账 | 每轮用契约推导的期望状态与库内工具收敛：新增/更新/软下线；人工启停不被覆盖，抓取失败保留上一版 |
+| [ADR-009](docs/adr/ADR-009-source-discovery-and-polling.md) | 来源静态配置 + 主动轮询，不引入注册中心 | 变更源不在业务进程内，推模型要求业务改造；轮询天然自愈。演进路径（DB 注册表 → webhook → 服务发现）已写明但不提前实现 |
+
+项目亮点按四个主题各自成文，含高频追问问答：[docs/highlights/](docs/highlights/README.md)。
 
 ## 性能数据
 
