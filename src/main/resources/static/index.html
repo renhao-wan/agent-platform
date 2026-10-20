@@ -424,40 +424,88 @@ button{cursor:pointer;border:0;background:none}
 }
 .btn-no:hover{border-color:var(--danger);color:var(--danger)}
 
-/* --- 来源管理抽屉 --- */
+/* --- 管理台（ADMIN） --- */
 #sources{position:fixed;inset:0;z-index:25;display:flex;justify-content:flex-end}
 .drawer{
-  position:relative;width:min(620px,94vw);height:100%;
+  position:relative;width:min(880px,96vw);height:100%;
   background:var(--bg);border-left:1px solid var(--line);
   display:flex;flex-direction:column;box-shadow:var(--shadow-lg);
-  animation:slideleft .26s var(--ease);
+  animation:slideleft .3s var(--ease);
 }
-@keyframes slideleft{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
+@keyframes slideleft{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:none}}
 .drawer-h{
   flex-shrink:0;display:flex;align-items:flex-start;gap:12px;
-  padding:18px 22px 14px;border-bottom:1px solid var(--line);
+  padding:20px 24px 0;
 }
-.drawer-h h2{font-size:15px;font-weight:600}
+.drawer-h h2{font-size:16px;font-weight:600;letter-spacing:-.01em}
 .drawer-sub{font-size:12.5px;color:var(--t3);margin-top:3px;line-height:1.5}
 .drawer-x{
   margin-left:auto;width:30px;height:30px;border-radius:var(--r);
   color:var(--t3);font-size:20px;line-height:1;flex-shrink:0;
 }
 .drawer-x:hover{background:var(--surface-2);color:var(--t1)}
-.drawer-tools{
-  flex-shrink:0;display:flex;gap:8px;align-items:center;
-  padding:12px 22px;border-bottom:1px solid var(--line-soft);
-}
-.drawer-tools .spacer{flex:1}
-.drawer-body{flex:1;overflow:auto;padding:14px 22px 24px}
-.src-empty{font-size:13px;color:var(--t4);padding:18px 0}
 
-.src{
-  border:1px solid var(--line);border-radius:8px;background:var(--surface);
-  padding:13px 15px;margin-bottom:10px;
+/* tab 贴着下边缘：选中项用琥珀下划线，其余靠字色区分 */
+.tabs{flex-shrink:0;display:flex;gap:4px;padding:14px 24px 0;border-bottom:1px solid var(--line)}
+.tab{
+  position:relative;padding:8px 14px 11px;font-size:13.5px;color:var(--t3);
+  border-bottom:2px solid transparent;margin-bottom:-1px;
+  transition:color .15s,border-color .15s;white-space:nowrap;
 }
+.tab:hover{color:var(--t1)}
+.tab[data-on="1"]{color:var(--t1);font-weight:600;border-bottom-color:var(--accent)}
+
+.pane{flex:1;min-height:0;display:flex;flex-direction:column}
+.pane-tools{
+  flex-shrink:0;display:flex;gap:8px;align-items:center;
+  padding:14px 24px 10px;flex-wrap:wrap;
+}
+.pane-body{flex:1;overflow:auto;padding:0 24px 28px}
+.pane-body::-webkit-scrollbar{width:9px}
+.pane-body::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px}
+.pane-empty{font-size:13px;color:var(--t4);line-height:1.7;padding:14px 0 6px;max-width:62ch}
+
+/* 统计条：数字在前、口径在后，扫一眼就知道规模 */
+.statbar{flex-shrink:0;display:flex;gap:8px;padding:2px 24px 10px;flex-wrap:wrap}
+.stat{
+  display:flex;align-items:baseline;gap:6px;padding:5px 11px;border-radius:5px;
+  background:var(--surface-2);font-size:12px;color:var(--t3);
+}
+.stat b{font-family:var(--mono);font-size:13px;color:var(--t1);font-weight:600}
+.stat[data-k="warn"] b{color:var(--accent-ink)}
+.stat[data-k="bad"] b{color:var(--danger)}
+.hintline{
+  flex-shrink:0;padding:0 24px 10px;font-size:12px;color:var(--t3);
+  line-height:1.5;min-height:0;
+}
+.hintline:empty{display:none}
+.hintline[data-bad="1"]{color:var(--danger)}
+
+.btn-sm{
+  padding:7px 14px;background:var(--accent);color:var(--on-accent);
+  font-weight:600;font-size:12.5px;border-radius:var(--r);
+  white-space:nowrap;transition:filter .15s;
+}
+.btn-sm:hover:not(:disabled){filter:brightness(1.08)}
+.btn-sm:disabled{opacity:.5;cursor:default}
+
+/* 来源卡片：左侧 3px 竖条承担状态语义，比整卡描边更安静 */
+.src{
+  position:relative;border:1px solid var(--line);border-radius:9px;
+  background:var(--surface);padding:15px 16px 13px 19px;
+  margin-bottom:10px;overflow:hidden;
+  transition:box-shadow .15s;
+  animation:rise .3s var(--ease) both;
+}
+.src::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--line)}
+.src[data-s="OK"]::before{background:var(--ok)}
+.src[data-s="FAILED"]::before,.src[data-s="CONFLICT"]::before{background:var(--danger)}
+.src[data-s="PENDING"]::before,.src[data-s="BUSY"]::before{background:var(--accent)}
+.src[data-s="RETIRED"]::before{background:var(--t4)}
+.src:hover{box-shadow:0 6px 18px rgba(28,29,33,.055)}
+
 .src-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.src-key{font-size:13.5px;font-weight:600;font-family:var(--mono)}
+.src-key{font-size:13.5px;font-weight:600;font-family:var(--mono);letter-spacing:-.01em}
 .src-origin{font-size:11px;padding:1px 6px;border:1px solid var(--line);border-radius:3px;color:var(--t3)}
 .src-origin[data-o="ADMIN"]{color:var(--accent-ink);border-color:var(--accent-line);background:var(--accent-wash)}
 .pill{font-size:11px;font-weight:600;padding:1px 7px;border-radius:9px;margin-left:auto}
@@ -465,35 +513,171 @@ button{cursor:pointer;border:0;background:none}
 .pill[data-s="FAILED"],.pill[data-s="CONFLICT"]{color:var(--danger);background:var(--danger-wash)}
 .pill[data-s="RETIRED"]{color:var(--t3);background:var(--surface-2)}
 .pill[data-s="PENDING"],.pill[data-s="BUSY"]{color:var(--accent-ink);background:var(--accent-wash)}
-.src-url{
-  font:12.5px/1.5 var(--mono);color:var(--t2);margin-top:7px;
-  word-break:break-all;
-}
+.src-url{font:12.5px/1.5 var(--mono);color:var(--t2);margin-top:7px;word-break:break-all}
 .src-meta{font-size:12px;color:var(--t3);margin-top:7px;display:flex;gap:14px;flex-wrap:wrap}
 .src-meta b{font-weight:600;color:var(--t2)}
 .src-err{
-  font-size:12px;color:var(--danger);margin-top:7px;line-height:1.5;
-  background:var(--danger-wash);border-radius:4px;padding:6px 8px;
+  font-size:12px;color:var(--danger);margin-top:8px;line-height:1.5;
+  background:var(--danger-wash);border-radius:4px;padding:6px 9px;
 }
-.src-acts{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.src-acts{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap;align-items:center}
 .src-acts .btn-ghost{padding:5px 10px;font-size:12.5px}
 .src-acts .danger:hover{border-color:var(--danger);color:var(--danger)}
 
-.src-form{
-  flex-shrink:0;border-top:1px solid var(--line);background:var(--surface-2);
-  padding:16px 22px 20px;display:flex;flex-direction:column;gap:11px;
-  max-height:62%;overflow:auto;
+/* 对账明细：默认收起，只让需要追查的人展开 */
+.src-detail{margin-top:10px;border-top:1px dashed var(--line-soft);padding-top:9px}
+.src-detail summary{
+  display:flex;align-items:center;gap:7px;font-size:12px;color:var(--t3);
+  cursor:pointer;list-style:none;user-select:none;
 }
-.src-form h3{font-size:13px;font-weight:600}
-.src-form .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.src-detail summary::-webkit-details-marker{display:none}
+.src-detail summary::before{
+  content:"▸";font-size:10px;color:var(--t4);transition:transform .15s var(--ease);
+}
+.src-detail[open] summary::before{transform:rotate(90deg)}
+.src-detail .items{display:flex;flex-direction:column;gap:5px;margin-top:9px}
+.src-detail .item{
+  font-size:12px;color:var(--t2);font-family:var(--mono);line-height:1.55;
+  padding-left:17px;position:relative;word-break:break-word;
+}
+.src-detail .item::before{content:"·";position:absolute;left:5px;color:var(--t4)}
+.src-detail .item b{color:var(--t1);font-weight:600}
+.src-detail .item .why{color:var(--t3);font-family:var(--sans)}
+
+/* 新增/编辑：内嵌在列表顶部，不再压在底部固定一条 */
+.src-form{
+  border:1px solid var(--accent-line);background:var(--accent-wash);
+  border-radius:9px;padding:16px 16px 14px;margin:2px 0 14px;
+  display:flex;flex-direction:column;gap:12px;
+  animation:rise .25s var(--ease) both;
+}
+.src-form h3{font-size:13px;font-weight:600;color:var(--t1)}
+.src-form .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .src-form .grid .field input{background:var(--surface)}
 .src-form .check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--t2)}
 .src-form .acts{display:flex;gap:10px;justify-content:flex-end;margin-top:2px}
-.src-form .acts .btn{padding:8px 18px;font-size:13px}
+.src-form .acts .btn-sm{padding:8px 18px;font-size:13px}
 .src-form .note{font-size:11.5px;color:var(--t4);line-height:1.45}
 
+/* 工具目录 */
+.search{
+  flex:1;min-width:170px;padding:8px 12px;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r);font-size:13px;
+  transition:border-color .15s;
+}
+.search:focus{outline:none;border-color:var(--accent)}
+.mini-select{
+  padding:8px 10px;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r);font-size:12.5px;color:var(--t2);cursor:pointer;
+}
+.mini-select:focus{outline:none;border-color:var(--accent)}
+
+.tool-group{margin-bottom:18px;animation:rise .3s var(--ease) both}
+.tool-group-h{
+  display:flex;align-items:center;gap:8px;padding:5px 0 8px;
+  border-bottom:1px solid var(--line-soft);font-size:12px;color:var(--t3);
+}
+.tool-group-h b{font-family:var(--mono);font-size:12.5px;color:var(--t2)}
+.tool-group-h .n{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--t4)}
+.tool{
+  display:flex;align-items:flex-start;gap:11px;padding:11px 8px 11px 2px;
+  border-bottom:1px solid var(--line-soft);
+  transition:background .15s,opacity .15s;
+}
+.tool:last-child{border-bottom:0}
+.tool:hover{background:var(--surface-2)}
+.tool[data-off="1"]{opacity:.5}
+.tool[data-off="1"]:hover{opacity:.8}
+.mth{
+  flex-shrink:0;width:46px;text-align:center;font-family:var(--mono);
+  font-size:10px;font-weight:700;letter-spacing:.03em;padding:3px 0;
+  border-radius:4px;margin-top:2px;background:var(--surface-2);color:var(--t3);
+}
+.mth[data-m="GET"]{color:var(--ok);background:var(--ok-wash)}
+.mth[data-m="POST"]{color:var(--accent-ink);background:var(--accent-wash)}
+.mth[data-m="PUT"],.mth[data-m="PATCH"]{color:#4a5f9e;background:rgba(74,95,158,.09)}
+.mth[data-m="DELETE"]{color:var(--danger);background:var(--danger-wash)}
+.tool-main{flex:1;min-width:0}
+.tool-name{
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  font-family:var(--mono);font-size:13px;font-weight:600;color:var(--t1);
+}
+.tool-desc{
+  font-size:12.5px;color:var(--t2);line-height:1.55;margin-top:3px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.tool-url{
+  font-family:var(--mono);font-size:11.5px;color:var(--t4);margin-top:4px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.tag{
+  font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:3px;
+  border:1px solid var(--line);color:var(--t3);white-space:nowrap;
+}
+.tag.admin{color:var(--accent-ink);border-color:var(--accent-line);background:var(--accent-wash)}
+.tag.confirm{color:var(--accent-ink);border-color:var(--accent-line)}
+.tag.stale{color:var(--danger);border-color:var(--danger-line);background:var(--danger-wash)}
+
+/* 启停开关 */
+.switch{position:relative;flex-shrink:0;width:34px;height:20px;margin-top:3px;cursor:pointer}
+.switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.switch .tr{position:absolute;inset:0;border-radius:10px;background:var(--line);transition:background .18s}
+.switch .tr::after{
+  content:"";position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;
+  background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.18);
+  transition:transform .18s var(--ease);
+}
+.switch input:checked + .tr{background:var(--accent)}
+.switch input:checked + .tr::after{transform:translateX(14px)}
+.switch input:disabled + .tr{opacity:.5}
+
+/* 知识检索沙盒 */
+.kb-form{flex-shrink:0;display:flex;gap:8px;padding:14px 24px 12px;flex-wrap:wrap}
+.kb-form .q{
+  flex:1;min-width:210px;padding:9px 12px;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r);font-size:13.5px;
+  transition:border-color .15s;
+}
+.kb-form .q:focus{outline:none;border-color:var(--accent)}
+.kb-form select,.kb-form input[type="number"]{
+  padding:9px 10px;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r);font-size:12.5px;color:var(--t2);
+}
+.kb-form input[type="number"]{width:66px;text-align:center}
+.kb-form select:focus,.kb-form input[type="number"]:focus{outline:none;border-color:var(--accent)}
+.kb-meta{
+  flex-shrink:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:0 24px 10px;font-size:12px;color:var(--t3);
+}
+.kb-mode{
+  font-family:var(--mono);font-size:11px;font-weight:600;padding:1px 7px;border-radius:3px;
+  color:var(--t2);background:var(--surface-2);
+}
+.kb-mode[data-m="vector"]{color:var(--ok);background:var(--ok-wash)}
+.kb-mode[data-m="keyword"]{color:var(--accent-ink);background:var(--accent-wash)}
+.kb-mode[data-m="empty"]{color:var(--t3);background:var(--surface-2)}
+.kb-hit{
+  border:1px solid var(--line);border-radius:8px;background:var(--surface);
+  padding:12px 14px;margin-bottom:9px;animation:rise .28s var(--ease) both;
+}
+.kb-hit-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.kb-hit-h .t{font-size:13px;font-weight:600;color:var(--t1)}
+.kb-hit-h .s{font-size:11.5px;color:var(--t3);font-family:var(--mono)}
+.kb-hit-h .score{
+  margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--accent-ink);
+  background:var(--accent-wash);border-radius:3px;padding:1px 6px;
+}
+.kb-hit p{
+  font-size:12.5px;color:var(--t2);line-height:1.65;margin-top:6px;
+  display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;
+}
+
 @media (max-width:640px){
+  .drawer{width:100%}
+  .drawer-h,.tabs,.pane-tools,.statbar,.hintline,.kb-form,.kb-meta{padding-left:16px;padding-right:16px}
+  .pane-body{padding-left:16px;padding-right:16px}
   .src-form .grid{grid-template-columns:1fr}
+  .tool-url{display:none}
 }
 
 /* 打字光标 */
@@ -639,7 +823,7 @@ button{cursor:pointer;border:0;background:none}
       <span class="lamp"></span><span id="status-text">空闲</span>
     </div>
     <button class="btn-ghost" id="new-chat" type="button">新建对话</button>
-    <button class="btn-ghost" id="sources-open" type="button" hidden>来源管理</button>
+    <button class="btn-ghost" id="sources-open" type="button" hidden>管理台</button>
     <div class="account">
       <span class="name" id="who-name"></span>
       <span class="rolebadge" id="who-role" data-r=""></span>
@@ -659,7 +843,8 @@ button{cursor:pointer;border:0;background:none}
         <h3>身份</h3>
         <div class="row"><span class="k">会话</span><span class="v" id="ident-session">—</span></div>
         <div class="row"><span class="k">角色</span><span class="v hl" id="ident-role">—</span></div>
-        <div class="row"><span class="k">本轮步数</span><span class="v" id="ident-steps">0</span></div>
+        <div class="row"><span class="k">工具调用</span><span class="v" id="ident-steps">0</span></div>
+        <div class="row"><span class="k">会话 tokens</span><span class="v" id="ident-tokens">—</span></div>
       </div>
 
       <div class="rail-sec">
@@ -719,61 +904,106 @@ button{cursor:pointer;border:0;background:none}
   </div>
 </div>
 
-<!-- ============ 来源管理（ADMIN） ============ -->
+<!-- ============ 管理台（ADMIN） ============ -->
 <div id="sources" hidden>
   <div class="scrim" id="sources-scrim"></div>
-  <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="sources-title">
+  <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="admin-title">
     <header class="drawer-h">
       <div>
-        <h2 id="sources-title">契约来源</h2>
-        <p class="drawer-sub">工具由来源契约推导，这里只管来源：新增、改地址、立即对账、下线。</p>
+        <h2 id="admin-title">管理台</h2>
+        <p class="drawer-sub">契约来源、工具目录与知识检索。仅管理员可见。</p>
       </div>
       <button class="drawer-x" id="sources-close" type="button" aria-label="关闭">×</button>
     </header>
 
-    <div class="drawer-tools">
-      <button class="btn-ghost" id="sources-refresh" type="button">刷新</button>
-      <button class="btn-ghost" id="sources-new" type="button">新增来源</button>
-      <span class="spacer"></span>
-      <span class="src-meta" id="sources-hint"></span>
-    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab" type="button" role="tab" data-tab="sources" data-on="1">契约来源</button>
+      <button class="tab" type="button" role="tab" data-tab="tools">工具目录</button>
+      <button class="tab" type="button" role="tab" data-tab="knowledge">知识检索</button>
+    </nav>
 
-    <div class="drawer-body">
-      <div id="src-list"></div>
-    </div>
+    <!-- 契约来源 -->
+    <section class="pane" id="pane-sources">
+      <div class="pane-tools">
+        <button class="btn-ghost" id="sources-refresh" type="button">刷新</button>
+        <button class="btn-ghost" id="sources-sync-all" type="button">全部对账</button>
+        <span class="spacer"></span>
+        <button class="btn-sm" id="sources-new" type="button">新增来源</button>
+      </div>
+      <div class="statbar" id="src-stats"></div>
+      <div class="hintline" id="sources-hint"></div>
+      <div class="pane-body">
+        <form class="src-form" id="src-form" hidden>
+          <h3 id="src-form-title">新增来源</h3>
+          <div class="grid">
+            <div class="field">
+              <label for="src-key">sourceKey</label>
+              <input id="src-key" placeholder="booking" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="src-url">契约地址 contractUrl</label>
+              <input id="src-url" placeholder="http://host:port/v3/api-docs" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="src-base">转发基址 baseUrl（可选）</label>
+              <input id="src-base" placeholder="默认取契约地址的 origin" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="src-key-name">凭证 header 名（可选）</label>
+              <input id="src-key-name" placeholder="X-Service-Key" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="src-key-val">凭证值（编辑时留空保持原值）</label>
+              <input id="src-key-val" type="password" autocomplete="new-password" placeholder="留空则不配置服务凭证">
+            </div>
+          </div>
+          <label class="check"><input id="src-enabled" type="checkbox" checked> 启用该来源（停用后对账跳过，其工具不再下发）</label>
+          <p class="note">sourceKey 是工具归属与对账的唯一标识，创建后不可修改。凭证值只写不读。</p>
+          <div class="err" id="src-err" hidden></div>
+          <div class="acts">
+            <button class="btn-ghost" id="src-cancel" type="button">取消</button>
+            <button class="btn-sm" id="src-save" type="submit">保存</button>
+          </div>
+        </form>
+        <div id="src-list"></div>
+      </div>
+    </section>
 
-    <form class="src-form" id="src-form" hidden>
-      <h3 id="src-form-title">新增来源</h3>
-      <div class="grid">
-        <div class="field">
-          <label for="src-key">sourceKey</label>
-          <input id="src-key" placeholder="booking" autocomplete="off">
-        </div>
-        <div class="field">
-          <label for="src-url">契约地址 contractUrl</label>
-          <input id="src-url" placeholder="http://host:port/v3/api-docs" autocomplete="off">
-        </div>
-        <div class="field">
-          <label for="src-base">转发基址 baseUrl（可选）</label>
-          <input id="src-base" placeholder="默认取契约地址的 origin" autocomplete="off">
-        </div>
-        <div class="field">
-          <label for="src-key-name">凭证 header 名（可选）</label>
-          <input id="src-key-name" placeholder="X-Service-Key" autocomplete="off">
-        </div>
-        <div class="field">
-          <label for="src-key-val">凭证值（编辑时留空保持原值）</label>
-          <input id="src-key-val" type="password" autocomplete="new-password" placeholder="留空则不配置服务凭证">
-        </div>
+    <!-- 工具目录 -->
+    <section class="pane" id="pane-tools" hidden>
+      <div class="pane-tools">
+        <input class="search" id="tool-search" placeholder="搜索工具名、描述或来源…" autocomplete="off">
+        <select class="mini-select" id="tool-filter">
+          <option value="all">全部</option>
+          <option value="enabled">已启用</option>
+          <option value="disabled">已停用</option>
+          <option value="stale">契约已移除</option>
+        </select>
       </div>
-      <label class="check"><input id="src-enabled" type="checkbox" checked> 启用该来源（停用后对账跳过，其工具不再下发）</label>
-      <p class="note">sourceKey 是工具归属与对账的唯一标识，创建后不可修改。凭证值只写不读。</p>
-      <div class="err" id="src-err" hidden></div>
-      <div class="acts">
-        <button class="btn-ghost" id="src-cancel" type="button">取消</button>
-        <button class="btn" id="src-save" type="submit">保存</button>
+      <div class="hintline" id="tools-hint"></div>
+      <div class="pane-body" id="tool-list"></div>
+    </section>
+
+    <!-- 知识检索 -->
+    <section class="pane" id="pane-knowledge" hidden>
+      <form class="kb-form" id="kb-form">
+        <input class="q" id="kb-query" placeholder="输入问题，例如：年假怎么计算" autocomplete="off">
+        <select id="kb-role" aria-label="检索角色">
+          <option value="STAFF">STAFF</option>
+          <option value="ADMIN">ADMIN</option>
+          <option value="">不过滤</option>
+        </select>
+        <input id="kb-topk" type="number" min="1" max="20" value="4" title="返回条数">
+        <button class="btn-sm" id="kb-run" type="submit">检索</button>
+      </form>
+      <div class="kb-meta" id="kb-meta"></div>
+      <div class="pane-body" id="kb-body">
+        <p class="pane-empty">
+          用指定角色跑一次真实检索：角色过滤发生在检索 SQL 内，无权文档不会进入候选集。
+          切到 STAFF 再查同一个问题，就能看到它与 ADMIN 的差别。
+        </p>
       </div>
-    </form>
+    </section>
   </aside>
 </div>
 
@@ -806,6 +1036,7 @@ let myRole     = localStorage.getItem("myRole") || "";
 let pendingToken = null;
 let busy = false;
 let toolSteps = 0;     // 本轮工具调用次数——这才是「步数」
+let pendingToolAt = null;   // 工具调用开始时间：结果到达时算耗时
 let sessionList = [];  // 历史会话缓存：切换会话后只重绘高亮，不重新请求
 
 /* ---------------- 工具函数 ---------------- */
@@ -991,7 +1222,7 @@ function renderGates() {
   const isAdmin = myRole === "ADMIN";
 
   $("gate-1-live").dataset.k = "pass";
-  $("gate-1-live").textContent = "按角色过滤已启用";
+  $("gate-1-live").textContent = "全部已启用工具 + 角色要求";
 
   const g2 = $("gate-2-live");
   if (isAdmin) {
@@ -1043,6 +1274,7 @@ function showConsole() {
   setComposerEnabled(!busy);
   $("message").focus();
   loadSessions();
+  refreshUsage();
 }
 function logout() {
   ["token", "sessionKey", "myName", "myRole"].forEach(k => localStorage.removeItem(k));
@@ -1056,7 +1288,9 @@ function resetTrace() {
   const hint = $("empty-hint");
   if (hint) hint.hidden = false;
   toolSteps = 0;
+  pendingToolAt = null;
   $("ident-steps").textContent = "0";
+  $("ident-tokens").textContent = "—";
   setBusy(false);
   closeConfirm();
 }
@@ -1145,6 +1379,24 @@ async function loadSessions() {
   }
 }
 
+/** 会话累计 token：与历史同一套归属校验，失败只让该格显示「—」，不打断对话。 */
+async function refreshUsage() {
+  if (!sessionKey) { $("ident-tokens").textContent = "—"; return; }
+  try {
+    const resp = await fetch("/api/v1/sessions/" + encodeURIComponent(sessionKey) + "/usage",
+                             { headers: authHeaders() });
+    if (resp.status === 401) { expire(); return; }
+    if (!resp.ok) { $("ident-tokens").textContent = "—"; return; }
+    const u = await resp.json();
+    const el = $("ident-tokens");
+    el.textContent = Number(u.totalTokens || 0).toLocaleString("zh-CN");
+    el.title = "prompt " + u.promptTokens + " · completion " + u.completionTokens +
+               " · " + u.calls + " 次调用";
+  } catch (e) {
+    $("ident-tokens").textContent = "—";
+  }
+}
+
 let deleteArmed = null;
 
 /** 删除会话需要点两次：第一次把 × 变成「确认」，8 秒内再点才发请求。 */
@@ -1205,6 +1457,7 @@ async function openSession(key) {
     setStatus("idle", "空闲");
     scrollDown();
     $("message").focus();
+    refreshUsage();
   } catch (e) {
     addError("打开会话失败：" + e.message);
   }
@@ -1367,7 +1620,12 @@ function renderToolResult(c) {
   box.className = "result";
   const name = document.createElement("span");
   name.className = "rt";
-  name.textContent = c.tool + " ";
+  let label = c.tool || "工具";
+  if (pendingToolAt !== null) {
+    label += " · " + Math.max(0, Math.round(performance.now() - pendingToolAt)) + " ms";
+    pendingToolAt = null;
+  }
+  name.textContent = label + " ";
 
   const raw = c.summary || "";
   // 先解析再截断：反过来做的话，超过截断长度的 JSON 永远解析失败，
@@ -1413,6 +1671,7 @@ function handle(event, data) {
 
     case "tool_call":
       $("ident-steps").textContent = ++toolSteps;
+      pendingToolAt = performance.now();
       setBusy(true, "调用 " + (data.tool || "工具") + "…");
       renderToolCall(data);
       break;
@@ -1443,12 +1702,20 @@ function handle(event, data) {
       addError(data.message || "未知错误");
       break;
 
-    case "done":
+    case "done": {
       setBusy(false);
       setStatus("idle", "空闲");
       closeConfirm();
-      node("done").textContent = "本轮执行结束";
+      const parts = [];
+      if (data.steps) parts.push(data.steps + " 步");
+      if (data.elapsedMs) parts.push((data.elapsedMs / 1000).toFixed(1) + " 秒");
+      if (data.totalTokens) {
+        parts.push(Number(data.totalTokens).toLocaleString("zh-CN") + " tokens");
+      }
+      node("done").textContent = parts.length ? "本轮完成 · " + parts.join(" · ") : "本轮执行结束";
+      refreshUsage();
       break;
+    }
   }
 }
 
@@ -1517,9 +1784,11 @@ $("chat-form").addEventListener("submit", e => {
   send($("message").value.trim());
 });
 
-/* ---------------- 来源管理（ADMIN） ---------------- */
+/* ---------------- 管理台（ADMIN） ---------------- */
 
+let adminTab = "sources";
 let srcList = [];
+let toolList = [];
 let srcEditing = null;      // 正在编辑的 sourceKey；null 表示新增
 let srcRetireArmed = null;  // 已点过一次「下线」、等待二次确认的来源
 
@@ -1527,11 +1796,25 @@ const SRC_STATUS = {
   OK: "正常", FAILED: "失败", CONFLICT: "冲突",
   BUSY: "对账中", PENDING: "待对账", RETIRED: "已下线"
 };
+const KB_MODE = {
+  vector: "向量检索", keyword: "关键词兜底", empty: "无命中", error: "失败"
+};
+
+function setAdminTab(name) {
+  adminTab = name;
+  document.querySelectorAll(".tab").forEach(t => {
+    t.dataset.on = t.dataset.tab === name ? "1" : "";
+  });
+  ["sources", "tools", "knowledge"].forEach(k => { $("pane-" + k).hidden = k !== name; });
+  if (name === "tools" && !toolList.length) loadTools();
+}
 
 function openSources() {
+  if (myRole !== "ADMIN") { addError("管理台仅管理员可用"); return; }
   $("sources").hidden = false;
-  $("sources-hint").textContent = "";
+  srcHint("");
   closeSourceForm();
+  setAdminTab("sources");
   loadSources();
 }
 function closeSources() {
@@ -1549,29 +1832,54 @@ function closeSourceForm() {
 function srcHint(text, danger) {
   const el = $("sources-hint");
   el.textContent = text || "";
-  el.style.color = danger ? "var(--danger)" : "";
+  el.dataset.bad = danger ? "1" : "";
 }
 
+/** 管理端统一请求：401 走登录过期，403 明说权限，业务错误码一并抛出。 */
 async function srcFetch(url, opts) {
   const resp = await fetch(url, Object.assign({ headers: authHeaders() }, opts || {}));
   if (resp.status === 401) { expire(); return null; }
+  if (resp.status === 403) throw new Error("需要管理员权限");
   const body = await resp.json().catch(() => null);
-  if (!resp.ok) {
-    const msg = (body && body.message) || "请求失败（HTTP " + resp.status + "）";
-    throw new Error(msg);
+  if (!resp.ok || (body && typeof body.code === "number" && body.code !== 0)) {
+    throw new Error((body && body.message) || "请求失败（HTTP " + resp.status + "）");
   }
   return body;
 }
+
+/* --- 契约来源 --- */
 
 async function loadSources() {
   try {
     const body = await srcFetch("/admin/sources");
     if (!body) return;
     srcList = body.data || [];
+    renderSourceStats();
     renderSources();
   } catch (e) {
     srcHint(e.message, true);
   }
+}
+
+function renderSourceStats() {
+  const box = $("src-stats");
+  box.textContent = "";
+  const ok = srcList.filter(s => s.status === "OK").length;
+  const bad = srcList.filter(s => s.status === "FAILED" || s.status === "CONFLICT").length;
+  const tools = srcList.reduce((n, s) => n + (s.toolCount || 0), 0);
+  const add = (value, label, kind) => {
+    const el = document.createElement("span");
+    el.className = "stat";
+    if (kind) el.dataset.k = kind;
+    const b = document.createElement("b");
+    b.textContent = String(value);
+    el.append(b, document.createTextNode(label));
+    box.appendChild(el);
+  };
+  add(srcList.length, "个来源");
+  add(ok, "正常");
+  if (bad) add(bad, "异常", "bad");
+  add(tools, "个工具");
 }
 
 function renderSources() {
@@ -1579,8 +1887,8 @@ function renderSources() {
   box.textContent = "";
   if (!srcList.length) {
     const p = document.createElement("p");
-    p.className = "src-empty";
-    p.textContent = "还没有登记来源。新增一个来源，平台会拉取它的契约并在下一次对账后生成工具。";
+    p.className = "pane-empty";
+    p.textContent = "还没有登记来源。新增一个来源，平台会拉取它的契约并在对账后生成工具。";
     box.appendChild(p);
     return;
   }
@@ -1590,6 +1898,7 @@ function renderSources() {
 function sourceCard(s) {
   const card = document.createElement("div");
   card.className = "src";
+  card.dataset.s = s.status || "";
 
   const top = document.createElement("div");
   top.className = "src-top";
@@ -1612,17 +1921,55 @@ function sourceCard(s) {
 
   const meta = document.createElement("div");
   meta.className = "src-meta";
-  const add = (html) => {
+  const addMeta = (label, value) => {
     const span = document.createElement("span");
-    span.innerHTML = html;
+    span.append(document.createTextNode(label + " "));
+    const b = document.createElement("b");
+    b.textContent = value;
+    span.appendChild(b);
     meta.appendChild(span);
   };
-  add("工具 <b>" + s.toolCount + "</b>");
-  add("上次成功 <b>" + (fmtWhen(s.lastSuccessAt) || "—") + "</b>");
-  add("凭证 <b>" + (s.serviceKeyConfigured ? "已配置" : "未配置") + "</b>");
-  if (!s.enabled) add("<b>已停用</b>");
+  addMeta("工具", String(s.toolCount == null ? "—" : s.toolCount));
+  addMeta("上次成功", fmtWhen(s.lastSuccessAt) || "—");
+  addMeta("凭证", s.serviceKeyConfigured ? "已配置" : "未配置");
+  if (!s.enabled) {
+    const off = document.createElement("span");
+    off.textContent = "已停用";
+    meta.appendChild(off);
+  }
 
   card.append(top, url, meta);
+
+  const stale = Array.isArray(s.staleTools) ? s.staleTools : [];
+  const breaking = Array.isArray(s.breakingChanges) ? s.breakingChanges : [];
+  if (stale.length || breaking.length) {
+    const det = document.createElement("details");
+    det.className = "src-detail";
+    const sum = document.createElement("summary");
+    sum.textContent = "上次对账明细：下线 " + stale.length + " 条 · 破坏性变更 " + breaking.length + " 条";
+    det.appendChild(sum);
+    const items = document.createElement("div");
+    items.className = "items";
+    stale.forEach(name => {
+      const d = document.createElement("div");
+      d.className = "item";
+      d.textContent = "下线 " + name;
+      items.appendChild(d);
+    });
+    breaking.forEach(b => {
+      const d = document.createElement("div");
+      d.className = "item";
+      const name = document.createElement("b");
+      name.textContent = b.toolName || "（未知工具）";
+      const why = document.createElement("span");
+      why.className = "why";
+      why.textContent = " · " + (b.type || "变更") + (b.detail ? "：" + b.detail : "");
+      d.append(name, why);
+      items.appendChild(d);
+    });
+    det.appendChild(items);
+    card.appendChild(det);
+  }
 
   if (s.lastError) {
     const err = document.createElement("div");
@@ -1667,6 +2014,12 @@ function sourceCard(s) {
   return card;
 }
 
+/** 来源变了，工具目录必然要重新拉——清掉缓存，当前在工具页就立即刷新。 */
+function invalidateTools() {
+  toolList = [];
+  if (adminTab === "tools") loadTools();
+}
+
 async function syncSource(key, btn) {
   const label = btn.textContent;
   btn.disabled = true;
@@ -1681,6 +2034,32 @@ async function syncSource(key, btn) {
     srcHint(key + " 对账" + (r.status === "OK" ? "完成：" + text : "未成功：" + text) +
             (r.error ? "　" + r.error : ""), r.status !== "OK");
     await loadSources();
+    invalidateTools();
+  } catch (e) {
+    srcHint(e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
+async function syncAllSources(btn) {
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "对账中…";
+  srcHint("正在对全部来源执行对账…");
+  try {
+    const body = await srcFetch("/admin/sources/sync", { method: "POST" });
+    if (!body) return;
+    const reports = body.data || [];
+    const bad = reports.filter(r => r.status !== "OK");
+    srcHint("对账完成：成功 " + (reports.length - bad.length) + " / " + reports.length +
+            (bad.length
+              ? "；未成功：" + bad.map(r => r.sourceKey + "（" + (SRC_STATUS[r.status] || r.status) + "）").join("、")
+              : ""),
+            bad.length > 0);
+    await loadSources();
+    invalidateTools();
   } catch (e) {
     srcHint(e.message, true);
   } finally {
@@ -1707,6 +2086,7 @@ async function retireSource(key, btn) {
     await srcFetch("/admin/sources/" + encodeURIComponent(key), { method: "DELETE" });
     srcHint(key + " 已下线，名下工具已软下线（不删行）");
     await loadSources();
+    invalidateTools();
   } catch (e) {
     btn.disabled = false;
     btn.textContent = "下线";
@@ -1726,16 +2106,250 @@ function openSourceForm(s) {
   $("src-enabled").checked = s ? s.enabled : true;
   $("src-err").hidden = true;
   $("src-form").hidden = false;
+  $("pane-sources").querySelector(".pane-body").scrollTop = 0;
   if ($("src-key").disabled) $("src-url").focus();
   else $("src-key").focus();
+}
+
+/* --- 工具目录 --- */
+
+async function loadTools() {
+  const hint = $("tools-hint");
+  hint.textContent = "加载中…";
+  hint.dataset.bad = "";
+  try {
+    const body = await srcFetch("/admin/tools");
+    if (!body) return;
+    toolList = body.data || [];
+    hint.textContent = "";
+    renderTools();
+  } catch (e) {
+    hint.textContent = e.message;
+    hint.dataset.bad = "1";
+  }
+}
+
+function renderTools() {
+  const box = $("tool-list");
+  box.textContent = "";
+  const q = $("tool-search").value.trim().toLowerCase();
+  const filter = $("tool-filter").value;
+
+  const filtered = toolList.filter(t => {
+    if (filter === "enabled" && !t.enabled) return false;
+    if (filter === "disabled" && t.enabled) return false;
+    if (filter === "stale" && t.present) return false;
+    if (!q) return true;
+    return [t.name, t.description, t.sourceKey, t.requiredRole]
+      .filter(Boolean).some(v => String(v).toLowerCase().includes(q));
+  });
+
+  if (!filtered.length) {
+    const p = document.createElement("p");
+    p.className = "pane-empty";
+    p.textContent = toolList.length
+      ? "没有匹配的工具，换个关键词或过滤条件。"
+      : "还没有工具。先登记契约来源，对账成功后即可在这里启停。";
+    box.appendChild(p);
+    return;
+  }
+
+  const groups = new Map();
+  filtered.forEach(t => {
+    const k = t.sourceKey || "（无来源）";
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(t);
+  });
+
+  for (const [src, items] of groups) {
+    const group = document.createElement("div");
+    group.className = "tool-group";
+    const head = document.createElement("div");
+    head.className = "tool-group-h";
+    const b = document.createElement("b");
+    b.textContent = src;
+    const n = document.createElement("span");
+    n.className = "n";
+    n.textContent = items.filter(t => t.enabled).length + " / " + items.length + " 启用";
+    head.append(b, n);
+    group.appendChild(head);
+    items.forEach(t => group.appendChild(toolRow(t)));
+    box.appendChild(group);
+  }
+}
+
+function toolRow(t) {
+  const row = document.createElement("div");
+  row.className = "tool";
+  if (!t.enabled) row.dataset.off = "1";
+
+  const m = document.createElement("span");
+  m.className = "mth";
+  m.dataset.m = t.httpMethod || "";
+  m.textContent = t.httpMethod || "HTTP";
+
+  const main = document.createElement("div");
+  main.className = "tool-main";
+
+  const nameLine = document.createElement("div");
+  nameLine.className = "tool-name";
+  const nm = document.createElement("span");
+  nm.textContent = t.name || "（未命名）";
+  nameLine.appendChild(nm);
+  if (t.requiredRole) {
+    const tag = document.createElement("span");
+    tag.className = "tag admin";
+    tag.textContent = "需 " + t.requiredRole;
+    nameLine.appendChild(tag);
+  }
+  if (t.requireConfirm) {
+    const tag = document.createElement("span");
+    tag.className = "tag confirm";
+    tag.textContent = "需确认";
+    nameLine.appendChild(tag);
+  }
+  if (!t.present) {
+    const tag = document.createElement("span");
+    tag.className = "tag stale";
+    tag.textContent = "契约已移除";
+    nameLine.appendChild(tag);
+  }
+
+  const desc = document.createElement("div");
+  desc.className = "tool-desc";
+  desc.textContent = t.description || "（契约未提供描述）";
+  desc.title = t.description || "";
+
+  const url = document.createElement("div");
+  url.className = "tool-url";
+  url.textContent = (t.httpMethod || "") + " " + (t.urlTemplate || "");
+  url.title = url.textContent;
+
+  main.append(nameLine, desc, url);
+
+  const sw = document.createElement("label");
+  sw.className = "switch";
+  sw.title = t.enabled ? "点击停用（对账不会覆盖人工启停）" : "点击启用";
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = !!t.enabled;
+  input.addEventListener("change", () => toggleTool(t, input));
+  const tr = document.createElement("span");
+  tr.className = "tr";
+  sw.append(input, tr);
+
+  row.append(m, main, sw);
+  return row;
+}
+
+async function toggleTool(tool, input) {
+  const next = input.checked;
+  input.disabled = true;
+  const hint = $("tools-hint");
+  hint.textContent = "";
+  hint.dataset.bad = "";
+  try {
+    await srcFetch("/admin/tools/" + tool.id + "/enabled?enabled=" + next, { method: "PUT" });
+    tool.enabled = next;
+    renderTools();
+  } catch (e) {
+    input.checked = !next;
+    input.disabled = false;
+    hint.textContent = (next ? "启用" : "停用") + "失败：" + e.message;
+    hint.dataset.bad = "1";
+  }
+}
+
+/* --- 知识检索沙盒 --- */
+
+async function runKnowledgeSearch(e) {
+  e.preventDefault();
+  const query = $("kb-query").value.trim();
+  if (!query) return;
+  const req = {
+    query,
+    role: $("kb-role").value || null,
+    topK: Number($("kb-topk").value) || 4
+  };
+  const btn = $("kb-run");
+  btn.disabled = true;
+  btn.textContent = "检索中…";
+  $("kb-meta").textContent = "";
+  $("kb-body").textContent = "";
+  try {
+    const body = await srcFetch("/admin/knowledge/search",
+                                 { method: "POST", body: JSON.stringify(req) });
+    if (!body) return;
+    renderKnowledgeResult(body.data || {}, req);
+  } catch (err) {
+    const p = document.createElement("p");
+    p.className = "pane-empty";
+    p.textContent = err.message;
+    $("kb-body").appendChild(p);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "检索";
+  }
+}
+
+function renderKnowledgeResult(r, req) {
+  const mode = r.mode || "empty";
+  const meta = $("kb-meta");
+  const chip = document.createElement("span");
+  chip.className = "kb-mode";
+  chip.dataset.m = mode;
+  chip.textContent = KB_MODE[mode] || mode;
+  const line = document.createElement("span");
+  line.textContent = (r.hits || []).length + " 条命中 · " + (r.elapsedMs || 0) + " ms · 角色 " +
+                     (req.role || "不过滤");
+  meta.append(chip, line);
+
+  const out = $("kb-body");
+  const hits = r.hits || [];
+  if (!hits.length) {
+    const p = document.createElement("p");
+    p.className = "pane-empty";
+    p.textContent = req.role
+      ? "没有命中。角色过滤写在检索 SQL 内，" + req.role + " 看不到的文档不会进入候选集。"
+      : "没有命中。";
+    out.appendChild(p);
+    return;
+  }
+  hits.forEach(h => {
+    const card = document.createElement("div");
+    card.className = "kb-hit";
+    const head = document.createElement("div");
+    head.className = "kb-hit-h";
+    const t = document.createElement("span");
+    t.className = "t";
+    t.textContent = h.title || "（无标题）";
+    const s = document.createElement("span");
+    s.className = "s";
+    s.textContent = h.section || "";
+    const score = document.createElement("span");
+    score.className = "score";
+    score.textContent = typeof h.score === "number" ? h.score.toFixed(3) : "—";
+    head.append(t, s, score);
+    const p = document.createElement("p");
+    p.textContent = h.text || "";
+    card.append(head, p);
+    out.appendChild(card);
+  });
 }
 
 $("sources-open").addEventListener("click", openSources);
 $("sources-close").addEventListener("click", closeSources);
 $("sources-scrim").addEventListener("click", closeSources);
-$("sources-refresh").addEventListener("click", () => loadSources());
+$("sources-refresh").addEventListener("click", () => { loadSources(); invalidateTools(); });
+$("sources-sync-all").addEventListener("click", e => syncAllSources(e.currentTarget));
 $("sources-new").addEventListener("click", () => openSourceForm(null));
 $("src-cancel").addEventListener("click", closeSourceForm);
+document.querySelectorAll(".tab").forEach(t => {
+  t.addEventListener("click", () => setAdminTab(t.dataset.tab));
+});
+$("tool-search").addEventListener("input", renderTools);
+$("tool-filter").addEventListener("change", renderTools);
+$("kb-form").addEventListener("submit", runKnowledgeSearch);
 
 $("src-form").addEventListener("submit", async e => {
   e.preventDefault();
@@ -1762,6 +2376,7 @@ $("src-form").addEventListener("submit", async e => {
     srcHint(editing ? "已保存并重新对账" : "已新增并立即对账");
     closeSourceForm();
     await loadSources();
+    invalidateTools();
   } catch (err) {
     errEl.textContent = err.message;
     errEl.hidden = false;

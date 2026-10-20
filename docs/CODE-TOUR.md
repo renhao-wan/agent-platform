@@ -1,7 +1,7 @@
 # 代码导览 — agent-platform 逐文件说明
 
 > 用途：给作者本人的复述地图（每个文件一句话 + 面试考点），也供读者按图索骥。
-> 共 79 个主文件 + 26 个测试类。标注：★ = 面试深挖高发区；【①②③④】= 对应简历亮点 1-4。
+> 共 79 个主文件 + 34 个测试类。标注：★ = 面试深挖高发区；【①②③④】= 对应简历亮点 1-4。
 
 ## 推荐通读顺序（约 40 分钟）
 
@@ -52,7 +52,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 
 ### web/ 管理端
 - **ProtocolAdminController.java** ★：`GET /admin/tools`（含已下线/已禁用工具，便于观察对账结果）、`PUT /admin/tools/{id}/enabled`（人工启停，对账不会覆盖）。**没有手工导入入口**——工具定义只能由来源对账写入，否则会留下没有来源归属、不参与对账的幽灵工具；接入新接口请登记来源（`/admin/sources`）。整个 `/admin/**` 由 `JwtAuthFilter` 要求 ADMIN 角色——**没有第二套凭证体系**。
-- **ToolSourceAdminController.java**【ADR-008/009】：`GET /admin/sources`（各来源最后对账状态与计数）、`POST /admin/sources`（新建并立即对账）、`PUT /admin/sources/{sourceKey}`（编辑并立即对账）、`DELETE /admin/sources/{sourceKey}`（软下线并立即下线其工具）、`POST /admin/sources/sync`（全部立即对账）、`POST /admin/sources/{sourceKey}/sync`（单来源，未配置/已下线 404）。**只能管理来源，不能编辑工具**：契约地址、调用基地址、服务凭证、启停；工具定义永远由契约推导。凭证只入不出——查询只返回 `serviceKeyConfigured`。
+- **ToolSourceAdminController.java**【ADR-008/009】：`GET /admin/sources`（各来源最后对账状态与计数）、`POST /admin/sources`（新建并立即对账）、`PUT /admin/sources/{sourceKey}`（编辑并立即对账）、`DELETE /admin/sources/{sourceKey}`（软下线并立即下线其工具）、`POST /admin/sources/sync`（全部立即对账）、`POST /admin/sources/{sourceKey}/sync`（单来源，未配置/已下线 404）。**只能管理来源，不能编辑工具**：契约地址、调用基地址、服务凭证、启停；工具定义永远由契约推导。凭证只入不出——查询只返回 `serviceKeyConfigured`。`SourceView` 另带 `staleTools` / `breakingChanges` 明细（由 `tool_source.last_stale_tools` / `last_breaking_changes` 的 JSON 还原），管理台据此展开"上次对账到底下线了哪几个工具、哪条接口发生破坏性变更"。
 
 ---
 
@@ -64,7 +64,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 
 ### sse/ 用户入口
 - **ChatController.java** ★：`POST /api/v1/chat` → SseEmitter + 显式 `ThreadPoolExecutor`（核心 4/上限 8，有界队列 64，AbortPolicy 拒绝→友好报错，命名线程 `agent-loop-*`）异步跑循环——**长连接不占容器业务线程**。身份在 HTTP 线程用 `UserContext.get()` 取出后**显式传参**给线程池里的循环（ThreadLocal 不跨线程池）。
-- **AgentEventEmitter.java**：8 类事件（session/plan/tool_call/tool_result/confirm_request/answer/error/done）的类型化发射器，连接断开静默丢弃（循环照常落库）。
+- **AgentEventEmitter.java**：8 类事件（session/plan/tool_call/tool_result/confirm_request/answer/error/done）的类型化发射器，连接断开静默丢弃（循环照常落库）。`done` 携带本轮 `steps` / `elapsedMs` / `promptTokens` / `completionTokens` / `totalTokens`，前端据此显示"N 步 · X 秒 · Y tokens"。
 
 ### tool/ 工具接入
 - **ToolGateway.java + impl/InProcessToolGateway.java** ★【①②的缝合线】：Agent 访问工具层的**唯一出口**。
@@ -86,7 +86,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 - **TokenRecorder（接口）+ impl/TokenRecorderImpl**【④】：usage 打点 best-effort（31.8% 实验的数据源）。
 - **ConfirmManager（接口）+ impl/ConfirmManagerImpl / ConfirmController**★【①】：token → CompletableFuture 挂起；`POST /api/v1/confirm` 恢复；超时 = 拒绝。单实例内存实现（重启丢确认项视为拒绝，语义安全）。
 - **AgentSessionService（接口）+ impl/AgentSessionServiceImpl** + 四实体四 Mapper：chat_session / chat_message / checkpoint / llm_usage（消息即写即落库，重启不丢对话）。
-- **SessionController.java**：历史会话入口。`GET /api/v1/sessions` 列当前用户最近 50 条（标题取各自首条 USER 消息，无则"新对话"）；`GET /api/v1/sessions/{key}/messages` 只回 USER/ASSISTANT 供回放，工具调用轨迹不进入历史；`DELETE /api/v1/sessions/{key}` 删除本人会话并级联清消息与 checkpoint。归属校验与续聊共用 `ownsSession`——`user_id` 为 NULL 的存量会话放行，他人的返回 403，不存在返回 404。
+- **SessionController.java**：历史会话入口。`GET /api/v1/sessions` 列当前用户最近 50 条（标题取各自首条 USER 消息，无则"新对话"）；`GET /api/v1/sessions/{key}/messages` 只回 USER/ASSISTANT 供回放，工具调用轨迹不进入历史；`GET /api/v1/sessions/{key}/usage` 汇总该会话 `llm_usage`（prompt/completion/total tokens 与调用次数）；`DELETE /api/v1/sessions/{key}` 删除本人会话并级联清消息与 checkpoint。归属校验与续聊共用 `ownsSession`——`user_id` 为 NULL 的存量会话放行，他人的返回 403，不存在返回 404。
 - **HistoryRecallTool**【④ ADR-005】：平台自有内部工具 `recallHistory`——会话记忆"冷层"取回通道。模型自主判断何时按关键词检索当前会话的早期消息与里程碑（chat_message/checkpoint，MySQL LIKE，跨表按时间合并）；AgentRunner 本地执行，不进工具层、不参与路由/确认，角色无关。三层记忆 = 最近 6 条（热）+ checkpoint 摘要（温）+ 全量历史调回（冷），替代向量库 RAG。
 - **AgentProperties.java / AgentConfig.java**：`platform.agent.*` 配置与需要原始值参数的 Bean 装配。
 
@@ -109,6 +109,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 - **search/KnowledgeSearchAuditRepository.java**：`knowledge_search_audit`，记 query/角色/命中来源/耗时，不记正文；启动时按留存期清理。
 - **embedding/UsageRecordingEmbeddingModel.java**：装饰 `EmbeddingModel.call`，把 prompt tokens 与文档数记入 `knowledge_usage`，让"知识库每月花多少钱"可查。
 - **eval/KnowledgeEvalService.java**：读 `knowledge/eval/questions.jsonl`，跑 Recall@K / MRR / 空结果率，供 `POST /admin/knowledge/eval` 使用——切块与阈值调整有了可比较的数字。
+- **KnowledgeAdminController.java**：知识库运维端点（整个 `/admin/**` 仅 ADMIN）。索引重建/任务查询/评估之外，`POST /admin/knowledge/search` 接受 `{query, role, topK}` 走与 Agent 相同的检索路径并返回 `SearchOutcome`（命中块、分数、检索模式 vector/keyword、耗时）——管理台据此直观验证 `visible_role` 权限过滤是否生效，而不必去猜"为什么 STAFF 查不到某份制度"。
 - **KnowledgeHealthIndicator.java**：`/actuator/health` 中的知识库探针（`SELECT 1`）；`/actuator/prometheus` 暴露检索指标。
 
 ## 4. common/ web/ resources/
@@ -116,12 +117,12 @@ KnowledgeSearchService/KnowledgeSearchTool
 - `common/ApiResponse.java`：统一响应包装 `{code, message, data}`。
 - `common/GlobalExceptionHandler.java`：参数校验 400、NoResourceFound 404（防吞）、其余 500。
 - `web/PingController.java`：健康探针。
-- `resources/static/index.html`：单页控制台（fetch 流解析 SSE，8 类事件渲染，确认按钮）。
-- `resources/schema.sql`：6 张表幂等建表（IF NOT EXISTS + information_schema 守卫的 ALTER）。
+- `resources/static/index.html`：单页控制台（fetch 流解析 SSE，8 类事件渲染，确认按钮，工具调用耗时与回合/会话 token 统计）。管理员登录后多出「管理台」入口（`/admin/**` 后端强制 ADMIN，STAFF 无入口且直连 403），抽屉内分三个 tab：**契约来源**（状态、对账明细、增删改与立即对账）、**工具目录**（按来源分组、搜索/过滤、人工启停）、**知识检索**（以指定角色跑真实检索，观察权限过滤与命中分数）。
+- `resources/schema.sql`：7 张表幂等建表（IF NOT EXISTS + information_schema 守卫的 ALTER）。
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
 - `knowledge/`：5 份制度语料（4 份 PUBLIC + 1 份 ADMIN）+ 评估题库；镜像内带一份，compose 另把宿主目录只读挂到 `/app/knowledge`，改文档后重启或 reindex 即生效，不必重建镜像。
 
-## 5. 测试（34 类，213 项）
+## 5. 测试（34 类，221 项）
 
 | 测试类 | 覆盖 |
 |---|---|
@@ -133,8 +134,8 @@ KnowledgeSearchService/KnowledgeSearchTool
 | WattAiToolSelectorTest (5) | 高置信单选、低置信 top-k、到点异常弃权 |
 | JwtServiceTest (5) | 签发/解析、过期、篡改签名 |
 | ChatAuthFilterTest (5) | 401 三态、放行、admin 范围（403） |
-| AgentSessionServiceImplTest (10) | 会话创建与复用、历史加载、消息落库、checkpoint 读取、删除本人会话级联清理、拒绝他人/不存在的会话 |
-| SessionControllerTest (8) | 会话列表/历史/删除端点：鉴权、归属校验、404、删除本人返回 204 |
+| AgentSessionServiceImplTest (12) | 会话创建与复用、历史加载、消息落库、checkpoint 读取、用量汇总、删除本人会话级联清理、拒绝他人/不存在的会话 |
+| SessionControllerTest (11) | 会话列表/历史/用量/删除端点：鉴权、归属校验、404、删除本人返回 204 |
 | AgentRunnerTest (6) | 循环三态：执行/同意/拒绝/超步数、recall 本地执行、角色不足时跳过确认且不执行 |
 | OpenApiSourceRegistrarTest (1) | 启动入口触发全量对账 |
 | ContractSyncServiceTest (11) | 成功对账与凭证绑定、baseUrl 覆盖、抓取/解析失败保留 last-known-good、冲突不发布事件且 `last_error` 含冲突工具与占用来源、监听器失败不影响成功状态、从注册表取来源、单来源对账、并发返回 BUSY、完成后释放锁 |
@@ -156,7 +157,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 | KnowledgeIndexJobRepositoryTest (3) | 全部失败标 FAILED（避免任务"成功"但检索全空）、部分失败仍 SUCCEEDED、全跳过仍 SUCCEEDED |
 | KnowledgeSearchServiceTest (9) | 角色过滤表达式、ADMIN 不过滤、topK 上限、空 query、结果与分数映射、关键词兜底与 LIKE 转义、审计写入、审计失败不影响检索 |
 | KnowledgeSearchToolTest (7) | 空/非法参数、空结果、来源与注入边界、默认 topK、失败降级、callback 广告位 |
-| KnowledgeAdminControllerTest (7) | 未启用 503、异步提交返回 jobId、任务占用 409、任务查询与 404、评估报告与题库缺失 400 |
+| KnowledgeAdminControllerTest (10) | 未启用 503、异步提交返回 jobId、任务占用 409、任务查询与 404、评估报告与题库缺失 400、检索沙盒（空 query 400、按请求角色返回命中与模式） |
 | KnowledgeEvalServiceTest (4) | Recall@K / MRR / 空结果率、逐题排名、按题目声明角色检索、题库缺失 |
 | UsageRecordingEmbeddingModelTest (3) | tokens 与文档数记录、无 usage 记 0、打点失败不影响 embedding |
 
