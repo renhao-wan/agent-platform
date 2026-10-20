@@ -65,16 +65,7 @@ cd ../business-systems && docker compose up -d --build
 
 ## 设计决策记录
 
-| 编号 | 决策 | 一句话理由 |
-|---|---|---|
-| [决策 03](docs/decisions/03-上下文裁剪.md) | 滑动窗口 + 计数压缩标记 | 纯滑窗丢关键事实，纯 LLM 摘要成本高且慢；保留最近上下文，早期内容只留规模标记，细节靠 `recallHistory` 调回，Token 开销实测见下 |
-| [决策 04](docs/decisions/04-工具前置路由.md) | 工具前置路由：接口先行，默认休眠 | 工具数未达阈值时整链休眠、全量直通——规模化前不为主流程添一分开销 |
-| [决策 05](docs/decisions/05-会话记忆调回.md) | 会话记忆用内部工具调回，不用 RAG | 对话消息短碎、上下文依赖强，嵌入质量天然差；把 RAG 推迟到数据规模证明它必要的时刻 |
-| [决策 06](docs/decisions/06-进程内工具调用.md) | 进程内工具调用，删除 MCP 协议层与 HTTP 自环 | 自环的理由只有"预留拆分部署"一句且从未兑现，代价是每次调用多一跳网络、异常跨协议层 |
-| [决策 07](docs/decisions/07-契约驱动授权.md) | 权限要求与工具来源一律从业务契约读取 | 权限码与敏感度由业务方在契约里声明、工具来源启动时自动拉取——平台不编码业务语义，"零改造接入"才成立 |
-| [决策 08](docs/decisions/08-契约快照对账.md) | 工具契约按来源做快照对账 | 每轮用契约推导的期望状态与库内工具收敛：新增/更新/软下线；人工启停不被覆盖，抓取失败保留上一版 |
-| [决策 09](docs/decisions/09-来源发现与轮询.md) | 来源静态配置 + 主动轮询，不引入注册中心 | 变更源不在业务进程内，推模型要求业务改造；轮询天然自愈。演进路径（DB 注册表 → webhook → 服务发现）已写明但不提前实现 |
-| [决策 10](docs/decisions/10-身份型JWT与RBAC.md) | JWT 只承载身份，角色与权限每请求回库 | 授权是可变的服务端状态；写进 token 意味着降权要等过期，补撤销机制又回到服务端状态 |
+关键取舍（裁剪、路由、记忆、进程内调用、契约授权与对账、来源轮询、身份型 JWT）的一句话索引在 [ARCHITECTURE.md §6](docs/architecture/ARCHITECTURE.md#6-关键设计决策详见-docsdecisions)；完整背景与备选方案见 [docs/decisions/](docs/decisions/)。
 
 业务系统接入需要满足的完整契约要求、失败语义、身份通道，以及"不满足规范时平台的实际行为"对照表，见 [docs/integration/BUSINESS-SYSTEM-INTEGRATION.md](docs/integration/BUSINESS-SYSTEM-INTEGRATION.md)。
 
