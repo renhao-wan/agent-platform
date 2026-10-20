@@ -1064,13 +1064,13 @@ const $ = id => document.getElementById(id);
 const traceEl = $("trace"), stageEl = $("stage");
 const ZWSP = String.fromCharCode(0x200b);   // 零宽空格：给长 JSON 造可折行点
 
-let sessionKey = localStorage.getItem("sessionKey") || null;
-let token      = localStorage.getItem("token") || null;
-let myName     = localStorage.getItem("myName") || "";
-let myRole     = localStorage.getItem("myRole") || "";
+let sessionKey = sessionStorage.getItem("sessionKey") || null;
+let token      = sessionStorage.getItem("token") || null;
+let myName     = sessionStorage.getItem("myName") || "";
+let myRole     = sessionStorage.getItem("myRole") || "";
 let myPermissions = [];
 try {
-  const saved = JSON.parse(localStorage.getItem("myPermissions") || "[]");
+  const saved = JSON.parse(sessionStorage.getItem("myPermissions") || "[]");
   myPermissions = Array.isArray(saved) ? saved : [];
 } catch (_) { myPermissions = []; }
 
@@ -1328,7 +1328,7 @@ function showConsole() {
   refreshUsage();
 }
 function logout() {
-  ["token", "sessionKey", "myName", "myRole", "myPermissions"].forEach(k => localStorage.removeItem(k));
+  ["token", "sessionKey", "myName", "myRole", "myPermissions"].forEach(k => sessionStorage.removeItem(k));
   location.reload();
 }
 
@@ -1351,7 +1351,7 @@ function resetTrace() {
 function newChat() {
   if (busy) return;
   sessionKey = null;
-  localStorage.removeItem("sessionKey");
+  sessionStorage.removeItem("sessionKey");
   resetTrace();
   $("ident-session").textContent = "待建立";
   $("hint-session").textContent = "";
@@ -1497,7 +1497,7 @@ async function openSession(key) {
 
     resetTrace();
     sessionKey = key;
-    localStorage.setItem("sessionKey", key);
+    sessionStorage.setItem("sessionKey", key);
     $("ident-session").textContent = key.slice(0, 8);
     $("hint-session").textContent = "会话 " + key.slice(0, 8);
     messages.forEach(m => {
@@ -1537,10 +1537,10 @@ $("login-form").addEventListener("submit", async e => {
     myName = $("login-user").value.trim();
     myRole = j.role || "";
     myPermissions = Array.isArray(j.permissions) ? j.permissions : [];
-    localStorage.setItem("token", token);
-    localStorage.setItem("myName", myName);
-    localStorage.setItem("myRole", myRole);
-    localStorage.setItem("myPermissions", JSON.stringify(myPermissions));
+    sessionStorage.setItem("token", token);
+    sessionStorage.setItem("myName", myName);
+    sessionStorage.setItem("myRole", myRole);
+    sessionStorage.setItem("myPermissions", JSON.stringify(myPermissions));
     showConsole();
   } catch (ex) {
     err.textContent = "网络异常：" + ex.message;
@@ -1597,7 +1597,7 @@ $("btn-ok").addEventListener("click", () => confirmAction(true));
 $("btn-no").addEventListener("click", () => confirmAction(false));
 
 function expire() {
-  ["token", "sessionKey", "myName", "myRole", "myPermissions"].forEach(k => localStorage.removeItem(k));
+  ["token", "sessionKey", "myName", "myRole", "myPermissions"].forEach(k => sessionStorage.removeItem(k));
   token = null; sessionKey = null;
   showLogin();
   $("login-err").textContent = "登录已过期，请重新登录";
@@ -1711,7 +1711,7 @@ function handle(event, data) {
   switch (event) {
     case "session":
       sessionKey = data.sessionKey;
-      localStorage.setItem("sessionKey", sessionKey);
+      sessionStorage.setItem("sessionKey", sessionKey);
       $("ident-session").textContent = sessionKey.slice(0, 8);
       $("hint-session").textContent = "会话 " + sessionKey.slice(0, 8);
       loadSessions();     // 会话行已落库，历史列表立刻能看到（标题此时还是「新对话」）

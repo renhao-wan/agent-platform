@@ -8,7 +8,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 用户登录入口：POST /api/v1/auth/login {username,password} → {token, role, permissions}。
- * 登录端点本身不拦 JWT（JwtAuthFilter 只覆盖 /api/v1/chat 与 /api/v1/confirm）。
+ * <p>登录、静态页与 Actuator 之外，其余端点都要求 Bearer JWT：{@code /api/v1/chat}、
+ * {@code /api/v1/confirm}、{@code /api/v1/tools}、{@code /api/v1/sessions/**} 与
+ * {@code /admin/**}（见 {@link JwtAuthFilter#requiresAuth}）。
  */
 @RestController
 public class AuthController {

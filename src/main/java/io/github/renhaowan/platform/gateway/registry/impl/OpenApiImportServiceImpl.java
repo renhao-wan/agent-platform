@@ -71,7 +71,9 @@ public class OpenApiImportServiceImpl implements OpenApiImportService {
                 method.toUpperCase() + " " + path));
         tool.setHttpMethod(method.toUpperCase());
         tool.setUrlTemplate(join(baseUrl, path));
-        // 敏感与权限要求一律由业务系统在契约里声明，平台不猜测接口语义（业务词不落平台代码）。
+        // 权限要求一律由业务系统在契约里声明，平台不按接口语义猜测（业务词不落平台代码）。
+        // DELETE 默认需要确认是平台的安全默认值，不是业务语义判断，显式传
+        // x-require-confirm=false 可以覆盖；其它方法只认契约声明。
         tool.setRequireConfirm("DELETE".equalsIgnoreCase(tool.getHttpMethod())
                 || extensionFlag(operation, "x-require-confirm") ? 1 : 0);
         tool.setRequiredPermission(extensionText(operation, "x-required-permission"));

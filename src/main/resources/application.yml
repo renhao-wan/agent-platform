@@ -125,10 +125,14 @@ platform:
     eval-file: ${KNOWLEDGE_EVAL_FILE:knowledge/eval/questions.jsonl}
 
 management:
+  # Actuator 不与业务共用 8000：管理端口默认只监听容器内网，compose 不发布它。
+  # 需要抓取 prometheus 时由监控侧经内网访问，或另行加认证后再对外。
+  server:
+    port: ${MANAGEMENT_PORT:8081}
   endpoints:
     web:
       exposure:
-        # prometheus 生产环境需在网络层隔离：指标里含接口路径与调用量
+        # prometheus 指标里含接口路径与调用量，只在管理端口可达
         include: health,prometheus
   endpoint:
     health:
