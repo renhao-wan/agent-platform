@@ -171,7 +171,7 @@ AI（提议者）："我想调 admin_delete_user"
 
 - **接入鉴权**：用户 JWT 一套打天下——`/api/v1/chat`、`/api/v1/confirm`、`/api/v1/tools`、`/api/v1/sessions/**` 校验 Bearer token；`/admin/**` 再按 URI 映射权限码：`/admin/rbac` → `admin:rbac`、`/admin/knowledge` → `admin:knowledge`、`/admin/sources` → `admin:source`、`/admin/tools` → `admin:tool`，其余 → `admin:console`（403 输出"需要 X 权限"）。没有第二套凭证体系。
 - **闸门 1 / 闸门 2**：都在 `gateway/registry/ToolAccessService`，被 `InProcessToolGateway` 调用，即 `AgentRunner` 调工具时的必经之路。
-- **闸门 3**：`ConfirmManager` 挂起 + `POST /api/v1/confirm` 恢复（同意/拒绝/超时三态均已实测）。
+- **闸门 3**：`ConfirmManager` 挂起 + `POST /api/v1/confirm` 恢复（同意/拒绝/超时三态均已实测）。挂起状态与同会话串行化（`SessionLockRegistry`）都是**单实例内存实现**：多实例部署时确认可能落到 A、批准落到 B，只能等超时；需要多实例时换成共享存储 + 幂等键。
 - **权限要求从哪来**：业务系统在自己的 OpenAPI 里用扩展字段声明（`x-required-permission` / `x-require-confirm`），平台导入时读取。平台不猜测接口语义——"哪个接口要什么权限"是业务系统的契约，不是平台的业务知识。
 - **角色权限从哪来**：`app_role_permission`，管理端 `GET/PUT /admin/rbac/**` 维护；登录响应与每次鉴权都按当前映射解析。
 - **业务调用身份**：转发时按来源附服务级凭证 `X-Service-Key`，并带上 `X-On-Behalf-Of-User: {uid}` 声明"代表哪个最终用户"，业务系统据此把数据记在本人名下（仅在服务凭证校验通过时才采信该头）。
@@ -245,7 +245,7 @@ if (required != null && !required.isBlank() && !user.hasPermission(required)) {
 |---|---|
 | SSE 并发 | 40 并发 200/200，P50 1.03s / P99 1.35s |
 | Token 裁剪 | 30 轮长会话总量降 31.8%；单次调用 prompt 降 78.6% |
-| 自动化测试 | 252 项（转发拼装与超时故障/裁剪策略/循环三态/越权拦截/RBAC 身份加载与权限映射/契约导入·来源注册表·快照对账/路由责任链/端到端自愈/切块与知识检索/索引任务与评估） |
+| 自动化测试 | 273 项（转发拼装与超时故障/裁剪策略/循环三态/越权拦截/RBAC 身份加载与权限映射/密码哈希与登录限流/契约导入·来源注册表·快照对账/路由责任链/端到端自愈/切块与知识检索/索引任务与评估/会话并发） |
 
 ## 8. 非目标：为什么不做成生产级通用网关
 

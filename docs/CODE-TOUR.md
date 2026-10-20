@@ -125,23 +125,23 @@ KnowledgeSearchService/KnowledgeSearchTool
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
 - `knowledge/`：5 份制度语料（4 份 `public` + 1 份 `admin:policy`）+ 评估题库；镜像内带一份，compose 另把宿主目录只读挂到 `/app/knowledge`，改文档后重启或 reindex 即生效，不必重建镜像。
 
-## 5. 测试（38 类，252 项）
+## 5. 测试（42 类，273 项）
 
 | 测试类 | 覆盖 |
 |---|---|
 | OpenApiImportServiceTest (13) | 三类参数解析、slug 兜底、baseUrl 覆盖、非法 JSON、扩展字段声明敏感/角色（裸值与 springdoc 嵌套两种形状）、`$ref` 内联与自引用截断 |
-| ToolAccessServiceTest (14) | 闸门 1 全量下发、权限要求随描述、闸门 2 拒绝/放行/`*` 通配、未知工具、非法 JSON、转发失败回喂、确认前权限预判（拒绝/放行/未知工具） |
-| GenericHttpForwarderTest (10) | query/body/path 填充、UTF-8、8KB 截断、后端 500、不可达 |
+| ToolAccessServiceTest (13) | 闸门 1 全量下发、权限要求随描述、闸门 2 拒绝/放行/`*` 通配、未知工具、非法 JSON、转发失败回喂、确认前权限预判（拒绝/放行/未知工具） |
+| GenericHttpForwarderTest (11) | query/body/path 填充、UTF-8、8KB 截断、后端 500、不可达 |
 | ToolSelectorChainTest (7) | 阈值休眠、逐环弃权传递、短路、全弃权回落、异常降级、argmax 越界 |
 | HistoryRecallToolTest (7) | 关键词检索、跨表合并、条数/长度上限、未命中如实回喂 |
-| WattAiToolSelectorTest (5) | 高置信单选、低置信 top-k、到点异常弃权 |
-| JwtServiceTest (5) | 签发/解析 uid、过期、篡改签名、token 不含角色 claim |
-| JwtAuthFilterTest (7) | 拦截范围、`/admin/**` URI → 权限码、登录直通、缺 token 401、停用账号 401、无权 403、`*` 放行且链内可见身份、请求结束清理 |
+| WattAiToolSelectorTest (6) | 高置信单选、低置信 top-k、到点异常弃权、读超时弃权 |
+| JwtServiceTest (6) | 签发/解析 uid、过期、篡改签名、token 不含角色 claim、缺失/过短密钥拒绝启动 |
+| JwtAuthFilterTest (8) | 拦截范围、`/admin/**` URI → 权限码、登录直通、缺 token 401、停用账号 401、无权 403、`*` 放行且链内可见身份、请求结束清理 |
 | RbacServiceImplTest (7) | 身份加载（正常/停用/不存在/空角色）、权限映射、覆盖式替换、未知角色拒绝、可选权限合并、角色列表组装 |
 | RbacSeederTest (3) | 缺失角色补种、已种过不覆盖人工配置、未种过补默认 |
 | RbacAdminControllerTest (4) | 角色/权限查询、覆盖保存、未知角色 404 |
-| ChatAuthFilterTest (5) | 401 三态、放行、admin 范围（403） |
-| AgentSessionServiceImplTest (13) | 会话创建与复用、历史加载、消息落库（含工具名与调用参数）、checkpoint 读取、用量汇总、删除本人会话级联清理、拒绝他人/不存在的会话 |
+| ChatAuthFilterTest (6) | 401 三态、放行、admin 范围（403）、同会话并发拒绝 |
+| AgentSessionServiceImplTest (14) | 会话创建与复用、历史加载（最近 200 条按时间正序）、消息落库（含工具名与调用参数）、checkpoint 读取、用量汇总、删除本人会话级联清理、拒绝他人/不存在的会话 |
 | SessionControllerTest (11) | 会话列表/历史/用量/删除端点：鉴权、归属校验、404、删除本人返回 204 |
 | AgentRunnerTest (6) | 循环三态：执行/同意/拒绝/超步数、recall 本地执行、权限不足时跳过确认且不执行 |
 | OpenApiSourceRegistrarTest (1) | 启动入口触发全量对账 |
@@ -152,12 +152,16 @@ KnowledgeSearchService/KnowledgeSearchTool
 | ToolChangeAnalyzerTest (9) | 新增必填参数、可选转必填、必填类型变化、端点变化、权限收紧/变更/撤销、无变化、非法 schema |
 | GenericHttpForwarderTimeoutTest (4) | WireMock：读超时、连接中断、非 JSON 响应体、截断边界 |
 | DynamicToolRegistryTest (4) | 确认映射、空清单、刷新失败保留旧桶 |
-| ConfirmManagerTest (4) | 同意/拒绝/超时/未知 token |
-| AuthControllerTest (4) | 登录成功/密码错/用户不存在/参数校验 |
+| ConfirmManagerTest (5) | 同意/拒绝/超时/未知 token/发起者绑定 |
+| SessionLockRegistryTest (3) | 同会话互斥、不同会话并行、释放未知 key 幂等 |
+| AuthControllerTest (6) | 登录成功/密码错/用户不存在/参数校验、旧 SHA-256 摘要登录后升级、连续失败限流 |
+| PasswordHasherTest (5) | PBKDF2 加盐往返、随机盐、旧摘要识别与兼容、非法格式/迭代上限拒绝 |
 | ToolCatalogControllerTest (3) | 工具目录端点：未登录 401、身份透传、服务凭证不外泄 |
 | ContextTrimmerTest (3) | 不裁剪/裁剪结构/摘要计数 |
 | ToolRegistryServiceTest (13) | 快照新增/未变不重写/更新保留人工禁用/软下线/已下线不重复处理/跨来源冲突整份放弃/已下线可被接管/契约内重名、保留名拒绝、新增写操作缺声明告警、启停 |
 | PlatformApplicationTests (1) | 上下文启动 |
+| AgentConfigTest (1) | LLM RestClient 连接/读超时配置 |
+| LoginThrottleTest (4) | 窗口内失败计数、成功清零、窗口滑出解锁、用户名大小写归一 |
 | AgentSelfHealingTest (1) | ★ 端到端：WireMock 业务系统首次 500、二次 200，ReAct 循环不中断、两次观察都回填落库 |
 | MarkdownChunkerTest (10) | 按 H2 切分、前缀、H3 降级、硬切重叠、小段合并、导语并入首节时保留小节名、代码块/表格、front-matter |
 | KnowledgeIndexServiceTest (10) | 首次索引与元数据、hash 未变跳过、force 重建、FAILED 重试、切块参数变化重建、删除清理、失败标记、版本化写入顺序、任务完成/占用 |

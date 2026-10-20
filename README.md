@@ -80,6 +80,10 @@ cd ../business-systems && docker compose up -d --build
 
 项目亮点按四个主题各自成文，含高频追问问答：[docs/highlights/](docs/highlights/README.md)。
 
+## 部署边界
+
+当前只支持**单实例**。敏感确认的挂起状态（`ConfirmManager`）与同会话串行化（`SessionLockRegistry`）都在进程内存里：多实例部署时确认请求可能落到 A、用户的批准落到 B，A 上的循环只能等到超时（视为拒绝）；同一会话的并发请求也可能被不同实例同时放行。需要多实例时，把两者换成共享存储 + 幂等键（确认 token 落库、按会话做分布式锁），并同步调整 `docs/adr/ADR-008` 已写明的定时对账互斥假设。
+
 ## 性能数据
 
 | 指标 | 数值 | 方法 |
@@ -97,5 +101,5 @@ Java 17 · Spring Boot 3.4 · Spring AI 1.1（OpenAI 兼容协议）· MyBatis-P
 ## 测试
 
 ```bash
-mvn test    # 252 项：转发拼装与超时故障 / OpenAPI 解析与 $ref 展开 / 契约自动注册、来源注册表与快照对账 / RBAC（身份加载·权限映射·/admin URI 判定）/ 裁剪策略 / 循环三态（执行·同意·拒绝·超步数）/ 越权拦截 / 工具路由责任链 / 端到端自愈
+mvn test    # 273 项：转发拼装与超时故障 / OpenAPI 解析与 $ref 展开 / 契约自动注册、来源注册表与快照对账 / RBAC（身份加载·权限映射·/admin URI 判定）/ 密码哈希与登录限流 / 裁剪策略 / 循环三态（执行·同意·拒绝·超步数）/ 越权拦截 / 工具路由责任链 / 端到端自愈 / 会话锁与知识检索
 ```
