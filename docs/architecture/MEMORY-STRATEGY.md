@@ -98,3 +98,160 @@ LIKE（现状） → MySQL 全文索引（仍零新增依赖） → 嵌入 + 向
 
 每一步都是上一段的直接替换，调用方与模型侧零改动。**这就是本决策的核心：不是"拒绝 RAG"，
 而是把 RAG 推迟到数据规模证明它必要的时刻，并用工具抽象把迁移成本隔离在一个类里。**
+
+## 8. 向量记忆方案（未实现，仅在触发信号出现后实施）
+
+> 本节是迁移到第三步的设计草案，**当前代码没有实现**。面试或文档中引用时必须明确这一点。
+> 触发条件见 §6；不做跨会话用户级记忆、自动摘要、每轮强制召回。
+
+### 8.1 数据流
+
+```text
+裁剪发生
+  → 计算本次滑出区间 (cursor, keepFrom 之前最后一条消息 id]
+  → 同事务写 memory_index_job 并推进 cursor（唯一键幂等）
+  → 独立线程池领取 PENDING 任务
+  → 按"完整工具回合"聚成片段
+  → 批量 embedding
+  → 写 memory_chunk（session_key + chunk_key 唯一）
+  → 任务置 DONE；失败按策略重试
+```
+
+对话主路径不等待嵌入完成。新片段尚未索引时，关键词通道仍然可用。
+
+### 8.2 表结构
+
+MySQL 侧只放任务与水位线；向量放 Postgres，与知识库共用同一个 pgvector 实例和私有连接池（不注册为 `DataSource` bean，否则 MyBatis 的单候选条件会失效）。
+
+```sql
+-- MySQL：索引任务，与 knowledge_index_job 同模式
+CREATE TABLE memory_index_job (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    session_key     CHAR(36)     NOT NULL,
+    from_message_id BIGINT       NOT NULL,
+    to_message_id   BIGINT       NOT NULL,
+    status          VARCHAR(16)  NOT NULL DEFAULT 'PENDING', -- PENDING/RUNNING/DONE/FAILED
+    attempts        INT          NOT NULL DEFAULT 0,
+    last_error      VARCHAR(512) NULL,
+    created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME     NULL,
+    UNIQUE KEY uk_memory_job_range (session_key, from_message_id, to_message_id),
+    KEY idx_memory_job_status (status, id)
+);
+
+-- MySQL：已索引到哪条消息
+CREATE TABLE session_memory_cursor (
+    session_key              CHAR(36) NOT NULL PRIMARY KEY,
+    indexed_until_message_id BIGINT   NOT NULL,
+    chunk_config_hash        CHAR(64) NULL,
+    updated_at               DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+```sql
+-- Postgres/pgvector：片段与向量
+CREATE TABLE memory_chunk (
+    id              UUID         PRIMARY KEY,
+    session_key     CHAR(36)     NOT NULL,
+    chunk_key       VARCHAR(128) NOT NULL,
+    from_message_id BIGINT       NOT NULL,
+    to_message_id   BIGINT       NOT NULL,
+    content         TEXT         NOT NULL,
+    content_hash    CHAR(64)     NOT NULL,
+    embedding       vector(1024) NOT NULL,  -- bge-m3
+    created_at      TIMESTAMP    NOT NULL DEFAULT now(),
+    UNIQUE (session_key, chunk_key)
+);
+
+CREATE INDEX idx_memory_chunk_session ON memory_chunk (session_key);
+CREATE INDEX idx_memory_chunk_embedding
+    ON memory_chunk USING hnsw (embedding vector_cosine_ops);
+```
+
+### 8.3 切块
+
+- 最小单元是完整工具回合：一条 user/assistant 消息加它触发的全部 tool call 与 tool result。不要把 tool call 和结果切到两个块里。
+- 合并到 600～800 字符或 6 条消息封顶，先到先切。
+- 块前缀保留时间、角色、工具名：`[10-21 14:03][USER]`、`[TOOL → create_booking]`。
+- 只有硬切时才留 100 字符重叠；按回合切不留重叠。
+- `content_hash` 跳过重复内容；`chunk_key` 用 `sessionKey:fromId-toId` 或 hash，保证同一区间只写一次。
+
+### 8.4 水位线与幂等
+
+用消息 id，不用条数。消息只追加、id 单调，不会因为新增消息产生偏移。
+
+1. 读 `session_memory_cursor.indexed_until_message_id`，没有则取 0；
+2. 本次滑出区间是 `(cursor, keepFrom 前一条消息 id]`；
+3. 同事务写 `memory_index_job`（唯一键去重）并推进 cursor；
+4. cursor 只在 job 落库成功后推进，避免消息在两步之间丢失。
+
+失败时 cursor 不前进，下一轮重新覆盖同一区间，唯一键保证不会重复入队。
+
+### 8.5 异步执行与重试
+
+- 对话路径只入队，不等待 embedding——裁剪本身已是同步开销，不能再叠加一次外部调用。
+- 独立线程池或定时扫描领取 PENDING：MySQL 8 用 `SELECT ... FOR UPDATE SKIP LOCKED`，一次取一批。
+- 批量嵌入，减少请求次数。
+- 重试：指数退避，最多 3 次；4xx（鉴权、配额、参数）不重试——重试不会让它成功，只会放大故障时间。
+- `RUNNING` 超时（如 10 分钟）按 `updated_at` 回收为 `FAILED` 或重新 `PENDING`，避免进程崩溃后任务永久卡住。
+
+### 8.6 检索：双通道
+
+工具契约不变，仍接收 `keyword` 和 `limit`，只改 `execute` 内部：
+
+1. **向量通道**：把 `keyword` 当查询文本嵌入，SQL 内按 `session_key` 过滤：
+
+   ```sql
+   SELECT ... FROM memory_chunk
+   WHERE session_key = ?
+   ORDER BY embedding <=> ?::vector
+   LIMIT ?
+   ```
+
+   过滤必须在 `WHERE` 里，不能先 top-k 再在内存中筛会话，否则会串味且浪费候选。
+
+2. **关键词通道**：保留现有 `LIKE` 查询作为基线兜底。
+
+3. **融合**：用 RRF（reciprocal rank fusion）合并两路结果，按消息 id 去重，保留时间排序。不要直接比较余弦分数和 LIKE 命中数，量纲不同。
+
+4. **输出**：每块带来源消息区间与时间，总字符上限约 2000，避免一次调回打爆上下文。
+
+### 8.7 降级
+
+| 故障 | 行为 |
+|---|---|
+| embedding 服务不可用 | 跳过向量通道，只走关键词，结果说明"语义检索暂不可用" |
+| 索引任务失败 | 对话不受影响，任务保持 FAILED/PENDING，下次重试 |
+| 检索超时 | 返回软提示，不抛异常，循环继续 |
+| 新片段尚未索引 | 关键词通道仍能查到原文，不依赖索引完成 |
+| pgvector 不可达 | 退化为关键词；知识库侧按既有策略 fail fast |
+
+### 8.8 评估与可观测
+
+- 构造 20～50 个真实形态的会话片段，标注每个问题应召回哪条消息；
+- 指标：Recall@5、MRR、空结果率、平均检索延迟、每次检索的 embedding 成本；
+- 基线：纯 LIKE；对照组：纯向量；候选：RRF 融合；
+- 上线门槛：Recall@5 不低于关键词基线，否则保留关键词；
+- 评估脚本随仓库提交，保证可复跑。一次性脚本测出的数字不写进简历；
+- 指标：`memory_index_job_total{status}`、`memory_index_duration`、`memory_recall_total{channel,hit}`、`memory_recall_latency`、embedding token 用量；
+- 审计表 `memory_recall_audit(session_key, keyword, channel, hit_count, latency_ms, created_at)`，不记正文；日志记任务 id、消息区间、失败原因，不记消息内容。
+
+### 8.9 清理、重建与多实例
+
+- 删除会话时级联删除 `memory_chunk`、`memory_index_job` 与 cursor；现有 `deleteSession` 按 `session_key` 删消息与 checkpoint，需要同步扩到这三处。
+- 嵌入模型或切块参数变更时，`chunk_config_hash` 不匹配，cursor 重置并按会话重建。
+- 按业务要求设保留期，过期片段与向量一起删。
+- 任务领取用 `FOR UPDATE SKIP LOCKED` 或状态 CAS；cursor 更新用条件更新 `WHERE indexed_until_message_id < ?`；`(session_key, chunk_key)` 唯一键做最后一道幂等。
+- 项目当前是单实例，多实例时还需处理 `ConfirmManager` 与 `SessionLockRegistry` 的内存状态。
+
+### 8.10 实施顺序与验收
+
+| 阶段 | 内容 | 验收 |
+|---|---|---|
+| 1 | MySQL `FULLTEXT` + `ngram` 替换 LIKE | 中文分词生效，工具契约不变，单测覆盖空结果与降级 |
+| 2 | 片段向量化最小闭环：表、任务、cursor、双通道 | 水位线不漏不重、失败可续跑、会话隔离、embedding 故障退化为关键词 |
+| 3 | 评估与调优 | 固定评估集可复跑，Recall@5 不低于关键词基线 |
+| 4 | 清理与多实例互斥 | 删会话级联删除；并发领取不重复处理 |
+
+阶段 1 成本最低，做完即可称"检索增强"；阶段 2 起才值得写"长期记忆"。

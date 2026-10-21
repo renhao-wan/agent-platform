@@ -941,7 +941,7 @@ restClient.post().uri(uri)
 
 转发器用 `exchange()`，因为"上游 500"不是一个需要平台处理的异常，而是要原样转成工具结果交回模型。→ `GenericHttpForwarder`
 
-超时分两段：connect timeout（连不上）与 read timeout（连上了不回），都从 `ForwardProperties` 读。
+超时分两段：connect timeout（连不上）与 read timeout（连上了不回），都从 `ForwardProperties` 读。前者可确认请求未送达；后者请求可能已被业务系统执行，平台按"结果未知"回喂，写操作提示先查询确认（见 `integration/BUSINESS-SYSTEM-INTEGRATION.md §3.10`）。
 
 ### 12.2 SSE（Server-Sent Events）
 

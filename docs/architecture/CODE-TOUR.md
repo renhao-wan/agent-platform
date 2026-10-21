@@ -125,13 +125,13 @@ KnowledgeSearchService/KnowledgeSearchTool
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
 - `knowledge/`：5 份制度语料（4 份 `public` + 1 份 `admin:policy`）+ 评估题库；镜像内带一份，compose 另把宿主目录只读挂到 `/app/knowledge`，改文档后重启或 reindex 即生效，不必重建镜像。
 
-## 5. 测试（44 类，284 项）
+## 5. 测试（44 类，289 项）
 
 | 测试类 | 覆盖 |
 |---|---|
 | OpenApiImportServiceTest (15) | 三类参数解析、slug 兜底、baseUrl 覆盖、非法 JSON、扩展字段声明敏感/角色（裸值与 springdoc 嵌套两种形状）、`$ref` 内联与自引用截断、参数 enum/items/default 保真、`content` 形式参数 |
 | ToolAccessServiceTest (13) | 闸门 1 全量下发、权限要求随描述、闸门 2 拒绝/放行/`*` 通配、未知工具、非法 JSON、转发失败回喂、确认前权限预判（拒绝/放行/未知工具） |
-| GenericHttpForwarderTest (11) | query/body/path 填充、UTF-8、8KB 截断、后端 500、不可达 |
+| GenericHttpForwarderTest (13) | query/body/path 填充、UTF-8、8KB 截断（含代理对不切断）、后端 500（明确失败）、不可达（请求未送达）、本地构造失败（调用未发出，不误判为结果未知） |
 | ToolSelectorChainTest (7) | 阈值休眠、逐环弃权传递、短路、全弃权回落、异常降级、argmax 越界 |
 | HistoryRecallToolTest (7) | 关键词检索、跨表合并、条数/长度上限、未命中如实回喂 |
 | WattAiToolSelectorTest (6) | 高置信单选、低置信 top-k、到点异常弃权、读超时弃权 |
@@ -150,7 +150,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 | SourceRegistryServiceTest (10) | 配置种子插入/刷新/不覆盖 ADMIN、配置移除软下线工具、id 缺失与重复 fail fast、重复创建 409、编辑提升 ADMIN 且凭证 null 保持、编辑停用即下线其工具、重新启用回到 PENDING、retire 拒绝 CONFIG / 软下线 ADMIN、查询不回显凭证 |
 | SourceConfigSeederTest (1) | 启动种子器调用注册表 |
 | ToolChangeAnalyzerTest (9) | 新增必填参数、可选转必填、必填类型变化、端点变化、权限收紧/变更/撤销、无变化、非法 schema |
-| GenericHttpForwarderTimeoutTest (4) | WireMock：读超时、连接中断、非 JSON 响应体、截断边界 |
+| GenericHttpForwarderTimeoutTest (6) | WireMock：读超时（读操作可重试 / 写操作禁止直接重试）、连接中断、504、非 JSON 响应体、截断边界 |
 | DynamicToolRegistryTest (4) | 确认映射、空清单、刷新失败保留旧桶 |
 | ConfirmManagerTest (5) | 同意/拒绝/超时/未知 token/发起者绑定；返回前清理挂起项 |
 | AgentEventEmitterTest (4) | 心跳 comment、定时保活、关闭后停止、写失败标记断链 |

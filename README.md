@@ -63,6 +63,8 @@ cd ../business-systems && docker compose up -d --build
 # 来源本身可在运行时增删改：POST/PUT/DELETE /admin/sources（yml 里的 sources 只是启动种子）
 ```
 
+演示环境部署方案（当前未启用）：两个仓库各自由 Runner 构建镜像推 GHCR，服务器只拉镜像并同步配置，见 [deploy/README.md](deploy/README.md)。
+
 ## 设计决策记录
 
 关键取舍（裁剪、路由、记忆、进程内调用、契约授权与对账、来源轮询、身份型 JWT）的一句话索引在 [ARCHITECTURE.md §6](docs/architecture/ARCHITECTURE.md#6-关键设计决策详见-docsdecisions)；完整背景与备选方案见 [docs/decisions/](docs/decisions/)。
@@ -96,5 +98,5 @@ Java 17 · Spring Boot 3.4 · Spring AI 1.1（OpenAI 兼容协议）· MyBatis-P
 ## 测试
 
 ```bash
-mvn test    # 284 项：转发拼装与超时故障 / OpenAPI 解析、$ref 展开与参数约束保真 / 契约自动注册、来源注册表与快照对账 / RBAC（身份加载·权限映射·/admin URI 判定）/ 密码哈希与登录限流 / 裁剪策略 / 循环三态（执行·同意·拒绝·超步数）/ 越权拦截 / 工具路由责任链 / SSE 保活与消息校验 / 端到端自愈 / 会话锁与知识检索
+mvn test    # 289 项：转发拼装与网络三态（未送达 / 结果未知 / 调用未发出）/ OpenAPI 解析、$ref 展开与参数约束保真 / 契约自动注册、来源注册表与快照对账 / RBAC（身份加载·权限映射·/admin URI 判定）/ 密码哈希与登录限流 / 裁剪策略 / 循环三态（执行·同意·拒绝·超步数）/ 越权拦截 / 工具路由责任链 / SSE 保活与消息校验 / 端到端自愈 / 会话锁与知识检索
 ```
