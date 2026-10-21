@@ -11,7 +11,7 @@ services:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: agent_platform
     ports:
-      - "3307:3306"
+      - "${MYSQL_PORT_BINDING:-3307:3306}"
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
@@ -29,7 +29,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5433:5432"
+      - "${PGVECTOR_PORT_BINDING:-5433:5432}"
     volumes:
       - pgvector-data:/var/lib/postgresql/data
     healthcheck:
@@ -40,9 +40,11 @@ services:
 
   agent-platform:
     container_name: agent-platform-app
+    # 本地默认 build；生产由 CI 推送的镜像覆盖，服务器只 pull 不构建
+    image: ${APP_IMAGE:-agent-platform:local}
     build: .
     ports:
-      - "8000:8000"
+      - "${APP_PORT_BINDING:-8000:8000}"
     extra_hosts:
       # 让容器能经宿主机访问兄弟仓库发布出来的业务系统端口（Linux 需显式声明，Windows 自带）
       - "host.docker.internal:host-gateway"
@@ -74,6 +76,29 @@ services:
       pgvector:
         condition: service_healthy
 
+  # 仅演示/生产启用（docker compose --profile prod up -d）：自动 HTTPS + Basic Auth + SSE 直通。
+  # 本地开发不需要反向代理，直接访问 :8000。
+  caddy:
+    container_name: agent-platform-caddy
+    image: caddy:2-alpine
+    profiles: ["prod"]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      # 没有域名时用 :80 走 HTTP + Basic Auth；填域名后 Caddy 自动签发证书并启用 HTTPS
+      DEMO_DOMAIN: ${DEMO_DOMAIN:-:80}
+      BASIC_AUTH_USER: ${BASIC_AUTH_USER:-demo}
+      BASIC_AUTH_HASH: ${BASIC_AUTH_HASH:-}
+    depends_on:
+      - agent-platform
+
 volumes:
   mysql-data:
   pgvector-data:
+  caddy-data:
+  caddy-config:

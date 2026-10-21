@@ -1,0 +1,91 @@
+name: deploy
+
+# 手动触发（Actions → Run workflow）。启用自动发布时再加 push: branches: [main]。
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - run: mvn -B test
+
+  build-push:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/agent-platform:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/agent-platform:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync config and deploy
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          APP_IMAGE: ghcr.io/${{ github.repository_owner }}/agent-platform:${{ github.sha }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          SSH_OPTS="-i $HOME/.ssh/id_ed25519 -p $SSH_PORT"
+
+          # 服务器只保留运行所需文件，不 clone 平台仓库；.env 由人工维护，不覆盖
+          ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" \
+            "mkdir -p /opt/idtp/agent-platform/deploy /opt/idtp/agent-platform/knowledge"
+          rsync -az --delete -e "ssh $SSH_OPTS" knowledge/ \
+            "$SSH_USER@$SSH_HOST:/opt/idtp/agent-platform/knowledge/"
+          rsync -az -e "ssh $SSH_OPTS" docker-compose.yml \
+            "$SSH_USER@$SSH_HOST:/opt/idtp/agent-platform/"
+          rsync -az -e "ssh $SSH_OPTS" deploy/Caddyfile \
+            "$SSH_USER@$SSH_HOST:/opt/idtp/agent-platform/deploy/"
+
+          ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" "
+            set -e
+            cd /opt/idtp/agent-platform
+            export APP_IMAGE='$APP_IMAGE'
+            docker compose --profile prod pull agent-platform
+            docker compose --profile prod up -d --remove-orphans --no-build
+
+            for i in \$(seq 1 30); do
+              if curl -fsS http://127.0.0.1:8000/ >/dev/null; then
+                docker compose --profile prod exec -T caddy caddy reload --config /etc/caddy/Caddyfile
+                exit 0
+              fi
+              if [ \"\$i\" = 30 ]; then exit 1; fi
+              sleep 2
+            done
+          "

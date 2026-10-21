@@ -1,0 +1,12 @@
+# 演示环境入口：自动申请 HTTPS 证书 + Basic Auth + SSE 直通。
+# 由 `docker compose --profile prod` 启动；变量来自 agent-platform/.env。
+# SSE 必须关闭缓冲，否则事件会攒到连接结束才到浏览器。
+{$DEMO_DOMAIN} {
+	basic_auth {
+		{$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
+	}
+
+	reverse_proxy agent-platform:8000 {
+		flush_interval -1
+	}
+}
