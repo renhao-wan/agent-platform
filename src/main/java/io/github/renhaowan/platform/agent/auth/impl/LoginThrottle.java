@@ -16,7 +16,8 @@ public class LoginThrottle {
 
     static final int MAX_FAILURES = 5;
     static final Duration WINDOW = Duration.ofMinutes(5);
-    private static final int MAX_TRACKED_USERS = 10_000;
+    /** 跟踪表硬上限：随机用户名撞库时也不能让内存无界增长。 */
+    static final int MAX_TRACKED_USERS = 10_000;
 
     private record Attempts(long windowStartMs, int count) {
     }
@@ -42,11 +43,21 @@ public class LoginThrottle {
                 : new Attempts(old.windowStartMs(), old.count() + 1));
         if (attempts.size() > MAX_TRACKED_USERS) {
             attempts.entrySet().removeIf(entry -> expired(entry.getValue(), now));
+            // 全部未过期（大量随机用户名撞库）：淘汰任意一条保证内存有界。
+            // 被淘汰用户的失败计数会清零——限流本来就是尽力而为的防线，有界优先。
+            if (attempts.size() > MAX_TRACKED_USERS) {
+                attempts.keySet().stream().findAny().ifPresent(attempts::remove);
+            }
         }
     }
 
     public void onSuccess(String username) {
         attempts.remove(key(username));
+    }
+
+    /** 仅用于测试：当前跟踪的用户数。 */
+    int trackedUsers() {
+        return attempts.size();
     }
 
     private static boolean expired(Attempts attempts, long now) {

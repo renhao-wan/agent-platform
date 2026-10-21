@@ -47,4 +47,13 @@ class LoginThrottleTest {
 
         assertThat(throttle.isBlocked("erin")).isFalse();
     }
+
+    @Test
+    void trackedUsersStayBoundedUnderUsernameSpray() {
+        for (int i = 0; i < LoginThrottle.MAX_TRACKED_USERS + 100; i++) {
+            throttle.onFailure("spray-" + i);
+        }
+
+        assertThat(throttle.trackedUsers()).isLessThanOrEqualTo(LoginThrottle.MAX_TRACKED_USERS);
+    }
 }
