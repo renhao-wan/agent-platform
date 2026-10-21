@@ -37,6 +37,8 @@ public class AgentProperties {
 
     public static class Wattai {
         private String baseUrl = "https://api.wattai.dev";
+        /** 决策模型凭证；为空表示未配置，路由节点不装配。 */
+        private String apiKey = "";
         /** 工具数低于该值时不路由（省一次网络跳） */
         private int minTools = 4;
         private double confidenceThreshold = 0.6;
@@ -47,6 +49,8 @@ public class AgentProperties {
 
         public String getBaseUrl() { return baseUrl; }
         public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
+        public String getApiKey() { return apiKey; }
+        public void setApiKey(String apiKey) { this.apiKey = apiKey; }
         public int getMinTools() { return minTools; }
         public void setMinTools(int minTools) { this.minTools = minTools; }
         public double getConfidenceThreshold() { return confidenceThreshold; }

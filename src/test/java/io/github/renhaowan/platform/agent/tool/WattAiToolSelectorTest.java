@@ -24,6 +24,7 @@ class WattAiToolSelectorTest {
     private HttpServer server;
     private int port;
     private final AtomicInteger requests = new AtomicInteger();
+    private volatile int responseStatus = 200;
     private volatile String responseBody = "{\"results\":[{\"argmax\":\"searchAvailable\","
             + "\"confidence\":0.9,\"options\":[\"searchAvailable\",\"create\"],"
             + "\"probs\":[0.9,0.1]}]}";
@@ -39,7 +40,7 @@ class WattAiToolSelectorTest {
         server.createContext("/v1/systemone", exchange -> {
             requests.incrementAndGet();
             byte[] body = responseBody.getBytes(StandardCharsets.UTF_8);
-            exchange.sendResponseHeaders(200, body.length);
+            exchange.sendResponseHeaders(responseStatus, body.length);
             exchange.getResponseBody().write(body);
             exchange.close();
         });
@@ -67,7 +68,8 @@ class WattAiToolSelectorTest {
     }
 
     private WattAiToolSelector selector(int minTools, double threshold) {
-        return new WattAiToolSelector("http://localhost:" + port, null, minTools, threshold, 2, 1000, 3000);
+        return new WattAiToolSelector("http://localhost:" + port, "test-key",
+                minTools, threshold, 2, 1000, 3000);
     }
 
     @Test
@@ -96,7 +98,7 @@ class WattAiToolSelectorTest {
     void decisionApiFailureAbstainsToNextHandler() {
         // 指向不可达端口，避免污染共享 HttpServer（其他用例还要用）
         WattAiToolSelector deadSelector =
-                new WattAiToolSelector("http://localhost:1", null, 3, 0.6, 2, 1000, 3000);
+                new WattAiToolSelector("http://localhost:1", "test-key", 3, 0.6, 2, 1000, 3000);
 
         var picked = deadSelector.select("帮我订会议室", List.of(search, create, cancel));
 
@@ -119,7 +121,7 @@ class WattAiToolSelectorTest {
         slow.start();
         try {
             WattAiToolSelector slowSelector = new WattAiToolSelector(
-                    "http://localhost:" + slow.getAddress().getPort(), null, 3, 0.6, 2, 500, 200);
+                    "http://localhost:" + slow.getAddress().getPort(), "test-key", 3, 0.6, 2, 500, 200);
             long startedAt = System.nanoTime();
 
             var picked = slowSelector.select("帮我订会议室", List.of(search, create, cancel));
@@ -150,5 +152,27 @@ class WattAiToolSelectorTest {
         var picked = selector(3, 0.6).select("帮我订会议室", List.of(search, create, cancel));
 
         assertThat(picked).isEmpty();
+    }
+
+    @Test
+    void missingApiKeyMakesNodeUnavailableWithoutCallingApi() {
+        WattAiToolSelector noKey = new WattAiToolSelector(
+                "http://localhost:" + port, "  ", 3, 0.6, 2, 1000, 3000);
+
+        var picked = noKey.select("帮我订会议室", List.of(search, create, cancel));
+
+        assertThat(picked).isEmpty();
+        assertThat(requests.get()).isZero();
+    }
+
+    @Test
+    void authFailureDisablesNodeAfterSingleCall() {
+        // 401 属于不可恢复错误：停用节点，后续对话不再重复发送注定失败的请求
+        responseStatus = 401;
+        WattAiToolSelector selector = selector(3, 0.6);
+
+        assertThat(selector.select("帮我订会议室", List.of(search, create, cancel))).isEmpty();
+        assertThat(selector.select("再试一次", List.of(search, create, cancel))).isEmpty();
+        assertThat(requests.get()).isEqualTo(1);
     }
 }

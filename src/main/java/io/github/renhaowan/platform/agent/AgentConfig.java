@@ -7,12 +7,14 @@ import io.github.renhaowan.platform.agent.tool.impl.ToolSelectorChain;
 import io.github.renhaowan.platform.agent.tool.impl.WattAiToolSelector;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
  * Agent 模块装配：需要原始值参数的组件在此显式构造。
  */
+@Slf4j
 @Configuration
 public class AgentConfig {
 
@@ -34,14 +36,27 @@ public class AgentConfig {
                 continue;
             }
             switch (name) {
-                case "wattai" -> handlers.add(new WattAiToolSelector(
-                        properties.getWattai().getBaseUrl(),
-                        System.getenv("WATTAI_API_KEY"),
-                        properties.getWattai().getMinTools(),
-                        properties.getWattai().getConfidenceThreshold(),
-                        properties.getWattai().getTopK(),
-                        properties.getWattai().getConnectTimeoutMs(),
-                        properties.getWattai().getReadTimeoutMs()));
+                case "wattai" -> {
+                    String apiKey = properties.getWattai().getApiKey();
+                    String baseUrl = properties.getWattai().getBaseUrl();
+                    if (apiKey == null || apiKey.isBlank()) {
+                        // 未配置凭证视为节点不可用：不装配，避免每轮对话都发一次注定失败的请求
+                        log.warn("wattai 路由未装配：platform.agent.wattai.api-key 为空");
+                        continue;
+                    }
+                    if (baseUrl == null || baseUrl.isBlank()) {
+                        log.warn("wattai 路由未装配：platform.agent.wattai.base-url 为空");
+                        continue;
+                    }
+                    handlers.add(new WattAiToolSelector(
+                            baseUrl,
+                            apiKey,
+                            properties.getWattai().getMinTools(),
+                            properties.getWattai().getConfidenceThreshold(),
+                            properties.getWattai().getTopK(),
+                            properties.getWattai().getConnectTimeoutMs(),
+                            properties.getWattai().getReadTimeoutMs()));
+                }
                 // 扩展位：jev（TypeSafe AI Jev 托管 API）/ 本地语义路由实现就绪后按优先级追加
                 default -> throw new IllegalStateException("未知工具路由节点: " + name + "（当前支持: wattai）");
             }

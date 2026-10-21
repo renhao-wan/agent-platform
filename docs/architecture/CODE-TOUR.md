@@ -72,7 +72,7 @@ KnowledgeSearchService/KnowledgeSearchTool
   进程内实现直接把调用转给 `ToolAccessService`，gatewayId 从 `AgentProperties` 取；失败文本加 `tool error: ` 前缀供模型识别。
   面试点：为什么留接口？——将来工具层若真拆成独立部署，换个实现即可，Agent 循环不用动。目前**没有第二实现**，"进程内"就是唯一形态。
 - **DynamicToolRegistry.java** ★：工具层返回的工具定义 → 手写 `GatewayToolCallback`（实现 Spring AI ToolCallback，**仅作 schema 广告位**——`call()` 留给 Spring AI 的隐式路径，本项目不走；真正执行在 `AgentRunner` 手动通道）；`require_confirm` 列映射为敏感标记；缓存 5 分钟（清单全量下发、与权限无关，无需按用户分桶）；刷新是"先构建后整体切换"，失败保留旧桶——注册失败不影响在跑对话。
-- **ToolSelector.java / impl/ToolSelectorChain.java / impl/WattAiToolSelector.java**【决策 04】：工具前置路由责任链。`AgentRunner` 进主模型前先过链：工具数未达 `routing-tool-count-threshold`（默认 20）整链休眠、全量直通；达到后按 `routing-handlers` 顺序逐环尝试，节点以 `Optional.empty` 弃权（前置不满足/异常）传下一环，任一环节点接管即短路，全部弃权回落全量——路由层任何故障不影响主流程。wattai 节点：调决策模型（state=用户话术，choices=工具名），高置信单选、低置信 top-k 降级、argmax 落空/异常弃权。当前规模下链休眠（收益为负），扩展位预留 jev/本地语义路由。
+- **ToolSelector.java / impl/ToolSelectorChain.java / impl/WattAiToolSelector.java**【决策 04】：工具前置路由责任链。`AgentRunner` 进主模型前先过链：工具数未达 `routing-tool-count-threshold`（默认 20）整链休眠、全量直通；达到后按 `routing-handlers` 顺序逐环尝试，节点以 `Optional.empty` 弃权（前置不满足/异常）传下一环，任一环节点接管即短路，全部弃权回落全量——路由层任何故障不影响主流程。wattai 节点：调决策模型（state=用户话术，choices=工具名），高置信单选、低置信 top-k 降级、argmax 落空/异常弃权；凭证只在 `platform.agent.wattai.api-key`（由 `WATTAI_API_KEY` 注入）配置，为空时节点不装配，401/403/404 等不可恢复错误首次失败后自动停用，429/5xx/超时只弃权本次。当前规模下链休眠（收益为负），扩展位预留 jev/本地语义路由。
 
 ### auth/ 用户身份与 RBAC
 - **JwtService.java + AuthController/AuthService/AuthServiceImpl**：`POST /api/v1/auth/login` 校验密码后签发 JWT——**claims 只有 `uid`（+ iat/exp）**，角色与权限不写进 token。登录响应另带角色与权限列表，仅用于前端渲染入口。解析失败抛 `JwtException`。`InvalidCredentialsException` 由全局异常处理转 401。
@@ -125,7 +125,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
 - `knowledge/`：5 份制度语料（4 份 `public` + 1 份 `admin:policy`）+ 评估题库；镜像内带一份，compose 另把宿主目录只读挂到 `/app/knowledge`，改文档后重启或 reindex 即生效，不必重建镜像。
 
-## 5. 测试（44 类，282 项）
+## 5. 测试（44 类，284 项）
 
 | 测试类 | 覆盖 |
 |---|---|

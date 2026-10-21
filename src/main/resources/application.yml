@@ -95,6 +95,16 @@ platform:
     # 对主流程零开销；工具规模化后自动武装，无需改代码。本地想提前体验把阈值调到 4 以下即可。
     routing-handlers: wattai   # 逗号分隔按序尝试；当前支持 wattai（jev/本地语义路由为预留扩展位）；置空 = 不路由
     routing-tool-count-threshold: 20
+    # 工具路由决策模型（可选）。api-key 为空时该节点不装配，责任链直接回落全量工具；
+    # 鉴权/地址类 4xx 会停用节点，临时错误（超时、5xx、429）只弃权本次。
+    wattai:
+      base-url: ${WATTAI_BASE_URL:https://api.wattai.dev}
+      api-key: ${WATTAI_API_KEY:}
+      min-tools: 4
+      confidence-threshold: 0.6
+      top-k: 2
+      connect-timeout-ms: 2000
+      read-timeout-ms: 3000
   # 知识库 RAG（docs/architecture/KNOWLEDGE-RAG.md）：不配置 EMBEDDING_API_KEY 时整个模块不启动，
   # 工具不注册、不连 Postgres，平台其余功能与 mvn test 均不受影响。
   knowledge:

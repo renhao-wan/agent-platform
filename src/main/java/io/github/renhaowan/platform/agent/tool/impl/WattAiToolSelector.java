@@ -35,7 +35,9 @@ public class WattAiToolSelector implements ToolSelector {
             "Which tool should be invoked to handle the user request?";
 
     private final RestClient restClient;
-    private final String baseUrl;
+    private final boolean configured;
+    /** 鉴权/配置类错误不可恢复：置位后不再发请求，避免每轮对话重复失败。 */
+    private volatile boolean disabled;
     private final int minTools;
     private final double confidenceThreshold;
     private final int topK;
@@ -43,29 +45,34 @@ public class WattAiToolSelector implements ToolSelector {
     public WattAiToolSelector(String baseUrl, String bearerKey,
                               int minTools, double confidenceThreshold, int topK,
                               int connectTimeoutMs, int readTimeoutMs) {
-        this.baseUrl = baseUrl;
         this.minTools = minTools;
         this.confidenceThreshold = confidenceThreshold;
         this.topK = topK;
+        boolean usable = bearerKey != null && !bearerKey.isBlank()
+                && baseUrl != null && !baseUrl.isBlank();
+        this.configured = usable;
+        if (!usable) {
+            log.warn("wattai 路由未启用：api-key 或 base-url 为空");
+            this.restClient = null;
+            return;
+        }
         java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(connectTimeoutMs))
                 .build();
         org.springframework.http.client.JdkClientHttpRequestFactory factory =
                 new org.springframework.http.client.JdkClientHttpRequestFactory(httpClient);
         factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
-        RestClient.Builder builder = RestClient.builder()
+        this.restClient = RestClient.builder()
                 .requestFactory(factory)
                 .baseUrl(baseUrl)
-                .defaultHeader("Accept", MediaType.APPLICATION_JSON_VALUE);
-        if (bearerKey != null && !bearerKey.isBlank()) {
-            builder.defaultHeader("Authorization", "Bearer " + bearerKey);
-        }
-        this.restClient = builder.build();
+                .defaultHeader("Accept", MediaType.APPLICATION_JSON_VALUE)
+                .defaultHeader("Authorization", "Bearer " + bearerKey)
+                .build();
     }
 
     @Override
     public Optional<List<ToolCallback>> select(String userText, List<ToolCallback> allTools) {
-        if (allTools.size() < minTools) {
+        if (!configured || disabled || allTools.size() < minTools) {
             return Optional.empty();
         }
         try {
@@ -78,6 +85,20 @@ public class WattAiToolSelector implements ToolSelector {
                     .filter(t -> t.getToolDefinition().name().equals(decision.argmax()))
                     .toList();
             return hit.isEmpty() ? Optional.empty() : Optional.of(hit);
+        } catch (org.springframework.web.client.RestClientResponseException e) {
+            int status = e.getStatusCode().value();
+            if (status == 429) {
+                // 限流是临时状态，下次仍值得尝试
+                log.warn("wattai 限流（HTTP 429），本次弃权");
+            } else if (status >= 400 && status < 500) {
+                // 401/403 凭证错误、404 地址错误：重试不会成功，禁用节点
+                disabled = true;
+                log.error("wattai 请求被拒绝（HTTP {}），已停用该路由节点，"
+                        + "请检查 platform.agent.wattai 的 api-key 与 base-url", status);
+            } else {
+                log.warn("wattai routing failed (HTTP {}), abstain to next handler", status);
+            }
+            return Optional.empty();
         } catch (Exception e) {
             log.warn("wattai routing failed, abstain to next handler: {}", e.getMessage());
             return Optional.empty();
