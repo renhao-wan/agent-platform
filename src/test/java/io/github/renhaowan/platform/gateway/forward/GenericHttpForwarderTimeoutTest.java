@@ -2,6 +2,7 @@ package io.github.renhaowan.platform.gateway.forward;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -48,33 +49,59 @@ class GenericHttpForwarderTimeoutTest {
         return new GenericHttpForwarder(properties);
     }
 
-    private ToolDefinition tool(String path) {
+    private ToolDefinition tool(String method, String path) {
         ToolDefinition tool = new ToolDefinition();
-        tool.setHttpMethod("GET");
+        tool.setHttpMethod(method);
         tool.setUrlTemplate("http://localhost:" + port + path);
         return tool;
     }
 
     @Test
-    void slowResponseExceedingReadTimeoutBecomesFailedResult() {
+    void readTimeoutOnReadIsUnknownButSafeToRetry() {
         server.stubFor(get(urlEqualTo("/slow"))
                 .willReturn(aResponse().withStatus(200).withBody("{\"ok\":true}").withFixedDelay(1500)));
 
-        var result = forwarderWithTimeouts(2000, 200).forward(tool("/slow"), null, null);
+        var result = forwarderWithTimeouts(2000, 200).forward(tool("GET", "/slow"), null, null);
 
         assertThat(result.success()).isFalse();
-        assertThat(result.error()).contains("timed out");
+        assertThat(result.unknown()).isTrue();
+        assertThat(result.error()).contains("结果未知").contains("可安全重试");
     }
 
     @Test
-    void serverNeverRespondingBecomesFailedResult() {
+    void readTimeoutOnWriteIsUnknownAndMustNotRetryBlindly() {
+        server.stubFor(post(urlEqualTo("/slow-write"))
+                .willReturn(aResponse().withStatus(200).withBody("{\"ok\":true}").withFixedDelay(1500)));
+
+        var result = forwarderWithTimeouts(2000, 200).forward(tool("POST", "/slow-write"), null, null);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.unknown()).isTrue();
+        assertThat(result.error()).contains("结果未知").contains("不要直接重试").contains("先调用查询类工具");
+    }
+
+    @Test
+    void connectionDroppedAfterRequestIsUnknown() {
         server.stubFor(get(urlEqualTo("/hang"))
                 .willReturn(aResponse().withFault(Fault.EMPTY_RESPONSE)));
 
-        var result = forwarderWithTimeouts(2000, 500).forward(tool("/hang"), null, null);
+        var result = forwarderWithTimeouts(2000, 500).forward(tool("GET", "/hang"), null, null);
 
         assertThat(result.success()).isFalse();
-        assertThat(result.error()).isNotBlank();
+        assertThat(result.unknown()).isTrue();
+        assertThat(result.error()).contains("结果未知");
+    }
+
+    @Test
+    void gatewayTimeoutOnWriteIsUnknown() {
+        server.stubFor(post(urlEqualTo("/gateway-timeout"))
+                .willReturn(aResponse().withStatus(504)));
+
+        var result = forwarderWithTimeouts(2000, 2000).forward(tool("POST", "/gateway-timeout"), null, null);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.unknown()).isTrue();
+        assertThat(result.error()).contains("504").contains("不要直接重试");
     }
 
     @Test
@@ -82,7 +109,7 @@ class GenericHttpForwarderTimeoutTest {
         server.stubFor(get(urlEqualTo("/plain"))
                 .willReturn(aResponse().withStatus(200).withBody("<html>service up</html>")));
 
-        var result = forwarderWithTimeouts(2000, 2000).forward(tool("/plain"), null, null);
+        var result = forwarderWithTimeouts(2000, 2000).forward(tool("GET", "/plain"), null, null);
 
         assertThat(result.success()).isTrue();
         assertThat(result.body()).isEqualTo("<html>service up</html>");
@@ -93,7 +120,7 @@ class GenericHttpForwarderTimeoutTest {
         server.stubFor(get(urlEqualTo("/big"))
                 .willReturn(aResponse().withStatus(200).withBody("x".repeat(10000))));
 
-        var result = forwarderWithTimeouts(2000, 2000).forward(tool("/big"), null, null);
+        var result = forwarderWithTimeouts(2000, 2000).forward(tool("GET", "/big"), null, null);
 
         assertThat(result.body().length()).isEqualTo(GenericHttpForwarder.MAX_BODY_CHARS);
     }

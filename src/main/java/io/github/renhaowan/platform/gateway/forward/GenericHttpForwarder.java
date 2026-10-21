@@ -4,8 +4,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.renhaowan.platform.gateway.registry.entity.ToolDefinition;
+import java.net.ConnectException;
+import java.net.NoRouteToHostException;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.net.http.HttpClient;
+import java.net.http.HttpConnectTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -23,6 +27,10 @@ import org.springframework.web.client.RestClient;
  * 拼装规则：url_template 的 {param} 占位符从 arguments 取值（URL 编码）；
  * GET/DELETE/非 body 方法的其余参数拼 query string；POST/PUT/PATCH 的其余参数作为 JSON body。
  * 后端响应截断 8KB（防打爆模型上下文）；非 2xx 与异常均转为 isError 结果交给模型决策。
+ * <p>
+ * 传输层按三态处理：成功、明确失败（请求未送达或后端明确拒绝）、结果未知
+ * （读超时/连接建立后中断，请求可能已执行）。未知态对写操作提示先查询确认，
+ * 避免模型把"响应丢了"当成"没执行"而直接重试。
  */
 @Component
 public class GenericHttpForwarder {
@@ -51,7 +59,11 @@ public class GenericHttpForwarder {
         this.restClient = RestClient.builder().requestFactory(factory).build();
     }
 
-    public record ForwardResult(boolean success, int status, String body, String error) {
+    public record ForwardResult(boolean success, int status, String body, String error, boolean unknown) {
+        /** 明确结果（成功或确定失败），用于后端给出非 2xx 响应的场景。 */
+        public ForwardResult(boolean success, int status, String body, String error) {
+            this(success, status, body, error, false);
+        }
     }
 
     /**
@@ -97,13 +109,77 @@ public class GenericHttpForwarder {
             return spec.exchange((request, response) -> {
                 int status = response.getStatusCode().value();
                 String body = new String(response.getBody().readAllBytes(), StandardCharsets.UTF_8);
-                boolean success = status >= 200 && status < 300;
-                return new ForwardResult(success, status, truncate(body),
-                        success ? null : "backend responded " + status);
+                return httpResult(tool.getHttpMethod(), status, body);
             });
         } catch (Exception e) {
-            return new ForwardResult(false, 0, null, e.getClass().getSimpleName() + ": " + e.getMessage());
+            return transportFailure(tool.getHttpMethod(), e);
         }
+    }
+
+    private ForwardResult httpResult(String method, int status, String body) {
+        boolean success = status >= 200 && status < 300;
+        String truncated = truncate(body);
+        if (success) {
+            return new ForwardResult(true, status, truncated, null, false);
+        }
+        // 502/504 来自网关或超时：上游可能已经执行，不能当成明确失败
+        if (status == 502 || status == 504) {
+            return new ForwardResult(false, status, truncated,
+                    "结果未知（backend responded " + status + "）：" + retryGuidance(method), true);
+        }
+        return new ForwardResult(false, status, truncated, "backend responded " + status, false);
+    }
+
+    /**
+     * 传输失败分两类：连接阶段失败可确认请求未送达；读超时与连接建立后的中断
+     * 无法确认业务系统是否已经执行，必须按"结果未知"回喂。
+     */
+    private ForwardResult transportFailure(String method, Exception e) {
+        String reason = e.getClass().getSimpleName() + ": " + e.getMessage();
+        if (isDefinitelyNotDelivered(e)) {
+            return new ForwardResult(false, 0, null,
+                    "请求未送达（" + reason + "），可稍后重试", false);
+        }
+        if (!isTransportError(e)) {
+            // 请求还没发出去就失败了（URL 非法、HTTP 方法非法、序列化失败）：
+            // 不存在"上游可能已执行"的可能，不能按结果未知让模型去查询。
+            return new ForwardResult(false, 0, null, "调用未发出（" + reason + "）", false);
+        }
+        return new ForwardResult(false, 0, null,
+                "结果未知（" + reason + "）：" + retryGuidance(method), true);
+    }
+
+    /** 只有 IO 链上的失败才存在"请求可能已写出"的问题；本地构造错误一律不算。 */
+    private static boolean isTransportError(Throwable error) {
+        for (Throwable t = error; t != null; t = t.getCause()) {
+            if (t instanceof java.io.IOException) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String retryGuidance(String method) {
+        return isReadOnly(method)
+                ? "该操作只读，可安全重试"
+                : "请求可能已在业务系统执行，不要直接重试，请先调用查询类工具核实状态";
+    }
+
+    /** 连接超时、拒绝、DNS 失败、路由不可达都发生在请求写出之前。 */
+    private static boolean isDefinitelyNotDelivered(Throwable error) {
+        for (Throwable t = error; t != null; t = t.getCause()) {
+            if (t instanceof HttpConnectTimeoutException
+                    || t instanceof ConnectException
+                    || t instanceof UnknownHostException
+                    || t instanceof NoRouteToHostException) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isReadOnly(String method) {
+        return "GET".equalsIgnoreCase(method) || "HEAD".equalsIgnoreCase(method);
     }
 
     /** 判断工具的 inputSchema 是否采用 body 包装（导入规则：requestBody → properties.body）。 */
@@ -170,6 +246,14 @@ public class GenericHttpForwarder {
     }
 
     private String truncate(String body) {
-        return body.length() <= MAX_BODY_CHARS ? body : body.substring(0, MAX_BODY_CHARS);
+        if (body.length() <= MAX_BODY_CHARS) {
+            return body;
+        }
+        int end = MAX_BODY_CHARS;
+        // 截断点落在 emoji 等代理对中间时会留下孤立的高位代理，回退一个字符
+        if (Character.isHighSurrogate(body.charAt(end - 1))) {
+            end--;
+        }
+        return body.substring(0, end);
     }
 }
