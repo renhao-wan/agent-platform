@@ -120,7 +120,7 @@ KnowledgeSearchService/KnowledgeSearchTool
 - `common/ApiResponse.java`：统一响应包装 `{code, message, data}`。
 - `common/GlobalExceptionHandler.java`：参数校验 400、NoResourceFound 404（防吞）、其余 500。
 - `web/PingController.java`：健康探针。
-- `resources/static/index.html`：单页控制台（fetch 流解析 SSE，8 类事件渲染，确认按钮，工具调用耗时与回合/会话 token 统计）。拥有 `admin:console` 权限的账号登录后多出「管理台」入口（直连无权端点仍 403），抽屉内分四个 tab：**契约来源**（状态、对账明细、增删改与立即对账）、**工具目录**（按来源分组、搜索/过滤、人工启停）、**知识检索**（以指定角色跑真实检索，观察权限过滤与命中分数）、**角色权限**（角色列表与权限矩阵，覆盖式保存）。
+- `resources/static/`：单页控制台，同源静态资源、随 jar 一起部署。按职责拆成 `index.html`（结构）、`styles.css`、`js/core.js`（全局状态与通用工具）、`js/chat.js`（登录/会话/确认/SSE）、`js/admin.js`（管理台）、`js/boot.js`（启动判断）；普通 `<script>` 按序加载、共享全局作用域，不引入构建工具链（fetch 流解析 SSE，8 类事件渲染，确认按钮，工具调用耗时与回合/会话 token 统计）。拥有 `admin:console` 权限的账号登录后多出「管理台」入口（直连无权端点仍 403），抽屉内分四个 tab：**契约来源**（状态、对账明细、增删改与立即对账）、**工具目录**（按来源分组、搜索/过滤、人工启停）、**知识检索**（以指定角色跑真实检索，观察权限过滤与命中分数）、**角色权限**（角色列表与权限矩阵，覆盖式保存）。
 - `resources/schema.sql`：9 张表幂等建表（IF NOT EXISTS + information_schema 守卫的 ALTER）。`chat_message.tool_arguments` 保存 TOOL 消息的调用参数（审计用），存量库由守卫 ALTER 补列。
 - `resources/prompts/system.md`：系统提示词（含动态日期占位符）。
 - `knowledge/`：5 份制度语料（4 份 `public` + 1 份 `admin:policy`）+ 评估题库；镜像内带一份，compose 另把宿主目录只读挂到 `/app/knowledge`，改文档后重启或 reindex 即生效，不必重建镜像。
