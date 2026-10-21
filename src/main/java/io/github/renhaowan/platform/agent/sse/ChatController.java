@@ -136,7 +136,8 @@ public class ChatController {
                     emitter.complete();
                 } catch (Exception e) {
                     log.error("agent loop failed, session {}", sessionKey, e);
-                    events.error("内部错误：" + e.getMessage());
+                    // 异常细节只进日志：SQL、类名、上游地址不该出现在客户端
+                    events.error("内部错误，请稍后重试");
                     events.done();
                     emitter.complete();
                 } finally {
