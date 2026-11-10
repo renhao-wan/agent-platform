@@ -62,7 +62,7 @@ platform:
     # 配置不再覆盖它；工具定义本身永远由契约推导，管理端只读（只能启停）。
     #
     # GATEWAY_BACKEND_HOST 是唯一的拓扑开关：平台跑在容器里时由 docker-compose 覆盖成
-    # host.docker.internal——两个仓库各自一份 compose、各占一个 docker 网络，容器解析不到
+    # host.docker.internal。两个仓库各自一份 compose、各占一个 docker 网络，容器解析不到
     # 兄弟栈的服务名，只能经宿主机发布端口过去。
     # 列表留空 = 配置来源全部视为已移除（软下线）；ADMIN 来源不受影响，仍参与对账。
     sources:
@@ -91,7 +91,7 @@ platform:
     llm-connect-timeout-ms: ${LLM_CONNECT_TIMEOUT_MS:5000}
     llm-read-timeout-ms: ${LLM_READ_TIMEOUT_MS:120000}
     # 工具路由责任链（决策 04）：节点按 routing-handlers 顺序逐环尝试，弃权/异常传下一环，链尾兜底全量直通。
-    # 触发阈值：工具数达到 routing-tool-count-threshold 才启用路由——当前个位数工具规模下整链休眠，
+    # 触发阈值：工具数达到 routing-tool-count-threshold 才启用路由；当前个位数工具规模下整链休眠，
     # 对主流程零开销；工具规模化后自动武装，无需改代码。本地想提前体验把阈值调到 4 以下即可。
     routing-handlers: wattai   # 逗号分隔按序尝试；当前支持 wattai（jev/本地语义路由为预留扩展位）；置空 = 不路由
     routing-tool-count-threshold: 20

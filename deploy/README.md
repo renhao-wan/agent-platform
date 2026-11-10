@@ -1,6 +1,6 @@
 # 演示环境部署
 
-> **当前未启用。** 两个仓库的 deploy workflow 只支持手动触发，服务器尚未初始化。
+> 当前未启用。两个仓库的 deploy workflow 只支持手动触发，服务器尚未初始化。
 > 启用时按本文完成服务器初始化、`.env` 与 GitHub Secret，再到 Actions 手动运行。
 
 一台云服务器（大陆）跑两套 compose，公网只暴露 80/443，Caddy 做入口与 Basic Auth。有域名后自动启用 HTTPS；暂时没有域名时用 `http://服务器IP/`。
@@ -19,9 +19,9 @@ GitHub Actions（两个仓库各一份，流程相同）
 
 ## 1. 服务器初始化
 
-安全组入站只开 **22（限定来源 IP）和 80**；有域名后再加 443。
+安全组入站只开 22（限定来源 IP）和 80；有域名后再加 443。
 
-> Docker 发布端口会直接写 iptables，**绕过 ufw/firewalld**；网络边界必须落在云安全组。
+> Docker 发布端口会直接写 iptables，绕过 ufw/firewalld；网络边界必须落在云安全组。
 
 ```bash
 curl -fsSL https://get.docker.com | sh -s -- --mirror Aliyun
@@ -62,7 +62,7 @@ docker run --rm caddy:2-alpine caddy hash-password --plaintext '换成强密码'
 
 ## 3. GHCR 可见性
 
-两个仓库首次推送镜像后，到 GitHub → Packages 把两个包设为 **public**：
+两个仓库首次推送镜像后，到 GitHub → Packages 把两个包设为 public：
 
 - `agent-platform`
 - `business-systems/meeting-booking`
@@ -73,7 +73,7 @@ docker run --rm caddy:2-alpine caddy hash-password --plaintext '换成强密码'
 
 ## 4. GitHub Secret
 
-**两个仓库都要配**（Settings → Secrets and variables → Actions）：
+两个仓库都要配（Settings → Secrets and variables → Actions）：
 
 | 名称 | 用途 |
 |---|---|
@@ -131,7 +131,7 @@ docker exec -i agent-platform-mysql mysql -uroot -proot agent_platform \
 
 ## 8. 边界
 
-- 这是**单实例演示环境**：没有多副本、共享确认状态、工具级限流与审计配额。
+- 这是单实例演示环境：没有多副本、共享确认状态、工具级限流与审计配额。
 - Basic Auth 挡的是陌生访问，不替代平台自身的 RBAC；公开演示前仍要改种子密码，并在 LLM 供应商侧设置额度上限。
 - 没有域名时 Basic Auth 走明文 HTTP，只适合临时验证；有域名后尽快切 HTTPS。
 - 两个仓库各自独立发布；平台先于业务系统启动时，契约对账会在下一轮自动补齐。
